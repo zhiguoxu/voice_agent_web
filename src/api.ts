@@ -1,4 +1,32 @@
 export const CONVERSATIONS_API_BASE = "/api/conversations";
+export const LOGS_API_BASE = "/api/logs";
+
+export interface LogEntry {
+  seq?: number;
+  source?: string;
+  time: string;
+  level: string;
+  msg: string;
+  device_sn: string;
+  trace_id: string;
+  file: string;
+  module: string;
+  function: string;
+  line: number;
+  name: string;
+}
+
+export async function fetchRecentLogs(
+  params: { limit?: number; level?: string } = {}
+): Promise<LogEntry[]> {
+  const sp = new URLSearchParams();
+  sp.set("limit", String(params.limit ?? 200));
+  if (params.level) sp.set("level", params.level);
+  const res = await fetch(`${LOGS_API_BASE}/recent?${sp}`);
+  if (!res.ok) throw new Error("Failed to fetch recent logs");
+  const data = await res.json();
+  return data.items ?? [];
+}
 
 export interface Session {
   id: number;

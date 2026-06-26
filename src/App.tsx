@@ -18,6 +18,7 @@ import { useDebounce } from "./useDebounce";
 import { TimeRangePicker, type TimeRange } from "./TimeRangePicker";
 import { LatencyChart } from "./LatencyChart";
 import { DeviceControl } from "./DeviceControl";
+import { LogMonitor } from "./LogMonitor";
 import "./App.css";
 
 function formatTime(iso: string | null) {
@@ -31,7 +32,7 @@ type ConfirmState = {
 } | null;
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<"conversations" | "deviceControl">("conversations");
+  const [activeTab, setActiveTab] = useState<"conversations" | "deviceControl" | "logs">("conversations");
   
   /* ── 从 URL 读取初始筛选条件 ── */
   const initParams = new URLSearchParams(window.location.search);
@@ -241,6 +242,12 @@ export default function App() {
       if (!await showConfirm("该设备当前在线，不能删除会话。\n确定要清除该会话的所有对话记录？")) return;
       try {
         await clearSessionTurns(s.id);
+        // 清除后该会话已无对话，置空首末时间使按钮回到禁用态
+        setSessions((prev) =>
+          prev.map((x) =>
+            x.id === s.id ? { ...x, first_turn_at: null, last_turn_at: null } : x
+          )
+        );
         if (selectedSession?.id === s.id) {
           setTurns([]);
           setSelectedTurn(null);
@@ -363,6 +370,19 @@ export default function App() {
               setTurnsCursor(result.next_cursor);
               setRealtimeTurn(null);
               scrollTurnsToBottom();
+              // 该在线会话刚产生对话，更新列表中的首末对话时间，
+              // 使「截断新建 / 清除」按钮及时从禁用变为可点
+              if (result.items.length > 0) {
+                const newest = result.items[0].created_at;
+                const oldest = result.items[result.items.length - 1].created_at;
+                setSessions((prev) =>
+                  prev.map((x) =>
+                    x.id === selectedSession.id
+                      ? { ...x, first_turn_at: x.first_turn_at ?? oldest, last_turn_at: newest }
+                      : x
+                  )
+                );
+              }
            } else if (data.event === "error") {
               // 异常时清除实时卡片
               setRealtimeTurn(null);
@@ -458,11 +478,17 @@ export default function App() {
           >
             对话分析
           </button>
-          <button 
+          <button
             className={`main-tab ${activeTab === 'deviceControl' ? 'active' : ''}`}
             onClick={() => setActiveTab('deviceControl')}
           >
             设备动作下发
+          </button>
+          <button
+            className={`main-tab ${activeTab === 'logs' ? 'active' : ''}`}
+            onClick={() => setActiveTab('logs')}
+          >
+            后端日志
           </button>
         </div>
       </header>
@@ -556,7 +582,8 @@ export default function App() {
                       <button
                         className="session-action-btn new-session"
                         onClick={(e) => handleForceNewSession(e, s)}
-                        title="强制开启新 Session（清空上下文）"
+                        disabled={!s.first_turn_at}
+                        title={s.first_turn_at ? "截断当前会话并新建（清空上下文）" : "当前会话暂无对话，无需新建"}
                       >
                         🔄
                       </button>
@@ -564,7 +591,8 @@ export default function App() {
                     <button
                       className={`session-delete-btn ${s.is_online ? "clear-only" : ""}`}
                       onClick={(e) => handleDeleteSession(e, s)}
-                      title={s.is_online ? "清除对话记录" : "删除会话"}
+                      disabled={s.is_online && !s.first_turn_at}
+                      title={s.is_online ? (s.first_turn_at ? "清除对话记录" : "当前会话暂无对话") : "删除会话"}
                     >
                       {s.is_online ? "🧹" : "🗑️"}
                     </button>
@@ -1035,8 +1063,10 @@ export default function App() {
         </div>
       )}
       </>
-      ) : (
+      ) : activeTab === 'deviceControl' ? (
         <DeviceControl sessions={sessions} />
+      ) : (
+        <LogMonitor />
       )}
       {/* Custom Confirm Dialog */}
       {confirmState && (
