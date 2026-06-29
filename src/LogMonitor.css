@@ -252,6 +252,24 @@
   flex-shrink: 0;
 }
 
+/* 位置定长：固定宽度（宽度由内联 ch 单位给出），溢出隐藏保持列对齐 */
+.log-loc.fixed {
+  display: inline-block;
+  overflow: hidden;
+  white-space: nowrap;
+  box-sizing: content-box;
+}
+
+.log-loc-len {
+  width: 48px;
+  flex-shrink: 0;
+}
+
+.log-sep {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
 .log-sn {
   color: var(--cyan);
   flex-shrink: 0;
