@@ -470,7 +470,10 @@ export default function App() {
   return (
     <div className="app">
       <header className="header">
-        <h1>🎙️ 控制台</h1>
+        <h1>
+          🎙️ 控制台
+          <span className="app-version" title="前端版本">v{__APP_VERSION__}</span>
+        </h1>
         <div className="main-tabs">
           <button 
             className={`main-tab ${activeTab === 'conversations' ? 'active' : ''}`}

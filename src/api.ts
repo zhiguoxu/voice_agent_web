@@ -28,6 +28,11 @@ export async function fetchRecentLogs(
   return data.items ?? [];
 }
 
+export async function clearBackendLogs(): Promise<void> {
+  const res = await fetch(LOGS_API_BASE, { method: "DELETE" });
+  if (!res.ok) throw new Error("Failed to clear backend logs");
+}
+
 export interface Session {
   id: number;
   device_sn: string;

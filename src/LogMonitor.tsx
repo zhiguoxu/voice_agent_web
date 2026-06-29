@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { fetchRecentLogs, LOGS_API_BASE, type LogEntry } from "./api";
+import { fetchRecentLogs, clearBackendLogs, LOGS_API_BASE, type LogEntry } from "./api";
 import "./LogMonitor.css";
 
 const LEVELS = ["TRACE", "DEBUG", "INFO", "SUCCESS", "WARNING", "ERROR", "CRITICAL"];
@@ -124,6 +124,8 @@ export function LogMonitor() {
   const clearLogs = () => {
     pendingRef.current = [];
     setLogs([]);
+    // 联动清空后端内存日志缓冲，避免下次刷新/切换级别时历史日志被重新拉回
+    clearBackendLogs().catch(() => {});
   };
 
   const jumpToBottom = () => {
@@ -216,7 +218,7 @@ export function LogMonitor() {
         <button className="log-btn" onClick={jumpToBottom} title="滚到底部并恢复自动跟随">
           ↓ 底部
         </button>
-        <button className="log-btn danger" onClick={clearLogs} title="清空前端缓存">
+        <button className="log-btn danger" onClick={clearLogs} title="清空前端 + 后端日志缓存">
           🧹 清空
         </button>
       </div>
