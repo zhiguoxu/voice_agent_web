@@ -17,6 +17,13 @@ export function LogMonitor() {
   const [live, setLive] = useState(() => localStorage.getItem("logLive") !== "false");
   const [search, setSearch] = useState("");
   const [wrap, setWrap] = useState(() => localStorage.getItem("logWrap") === "true");
+  const [showSn, setShowSn] = useState(() => localStorage.getItem("logShowSn") !== "false");
+  const [showDate, setShowDate] = useState(() => localStorage.getItem("logShowDate") !== "false");
+  const [locFixed, setLocFixed] = useState(() => localStorage.getItem("logLocFixed") === "true");
+  const [locLen, setLocLen] = useState(() => {
+    const n = parseInt(localStorage.getItem("logLocLen") || "", 10);
+    return Number.isFinite(n) && n > 0 ? n : 30;
+  });
 
   /* ── 日志缓存 ── */
   const [logs, setLogs] = useState<LogEntry[]>([]);
@@ -110,7 +117,7 @@ export function LogMonitor() {
           l.msg.toLowerCase().includes(kw) ||
           l.trace_id.toLowerCase().includes(kw) ||
           l.device_sn.toLowerCase().includes(kw) ||
-          l.file.toLowerCase().includes(kw)
+          `${l.name}:${l.function}:${l.line}`.toLowerCase().includes(kw)
       );
     }
     // 按时间戳混合排序（time 为定宽 "YYYY-MM-DD HH:mm:ss.SSS"，可直接字典序比较）；
@@ -208,6 +215,58 @@ export function LogMonitor() {
           换行
         </label>
 
+        <label className="log-checkbox">
+          <input
+            type="checkbox"
+            checked={showSn}
+            onChange={(e) => {
+              setShowSn(e.target.checked);
+              localStorage.setItem("logShowSn", String(e.target.checked));
+            }}
+          />
+          显示SN
+        </label>
+
+        <label className="log-checkbox">
+          <input
+            type="checkbox"
+            checked={showDate}
+            onChange={(e) => {
+              setShowDate(e.target.checked);
+              localStorage.setItem("logShowDate", String(e.target.checked));
+            }}
+          />
+          显示日期
+        </label>
+
+        <label className="log-checkbox">
+          <input
+            type="checkbox"
+            checked={locFixed}
+            onChange={(e) => {
+              setLocFixed(e.target.checked);
+              localStorage.setItem("logLocFixed", String(e.target.checked));
+            }}
+          />
+          位置定长
+        </label>
+        {locFixed && (
+          <input
+            className="log-loc-len"
+            type="number"
+            min={4}
+            max={120}
+            value={locLen}
+            title="位置最大显示字符数，超出则截断前部、保留后部"
+            onChange={(e) => {
+              const n = parseInt(e.target.value, 10);
+              const v = Number.isFinite(n) && n > 0 ? n : 30;
+              setLocLen(v);
+              localStorage.setItem("logLocLen", String(v));
+            }}
+          />
+        )}
+
         <span className="log-count">
           {filtered.length}
           {search && ` / ${logs.length}`} 条
@@ -233,16 +292,40 @@ export function LogMonitor() {
         ) : (
           filtered.map((l, i) => (
             <div key={l.seq ?? `${l.time}-${i}`} className={`log-row level-${l.level}`}>
-              <span className="log-time">{l.time}</span>
+              {/* time 为定宽 "YYYY-MM-DD HH:mm:ss.SSS"；关闭「显示日期」时只取时间部分 */}
+              <span className="log-time" title={l.time}>
+                {showDate ? l.time : l.time.slice(11)}
+              </span>
               {l.source && (
                 <span className={`log-source src-${l.source}`}>{l.source}</span>
               )}
               <span className={`log-level badge-${l.level}`}>{l.level}</span>
-              <span className="log-loc" title={`${l.name}:${l.function}:${l.line}`}>
-                {l.file}
-              </span>
-              {l.device_sn && <span className="log-sn">{l.device_sn}</span>}
-              {l.trace_id && <span className="log-trace">{l.trace_id}</span>}
+              {/* 位置 name:function:line；开启「位置定长」时截断前部、保留后部，前缀 …，完整值见 tip */}
+              {(() => {
+                const loc = `${l.name}:${l.function}:${l.line}`;
+                const shown =
+                  locFixed && loc.length > locLen ? "…" + loc.slice(loc.length - locLen) : loc;
+                return (
+                  <span
+                    className={`log-loc${locFixed ? " fixed" : ""}`}
+                    style={locFixed ? { width: `${locLen + 1}ch` } : undefined}
+                    title={loc}
+                  >
+                    {shown}
+                  </span>
+                );
+              })()}
+              {/* device_sn / trace_id 用竖线包裹，与控制台格式一致（即使为空也保留分隔位）；
+                  device_sn 可由工具栏「显示SN」开关控制是否展示 */}
+              {showSn && (
+                <>
+                  <span className="log-sep">|</span>
+                  <span className="log-sn">{l.device_sn}</span>
+                </>
+              )}
+              <span className="log-sep">|</span>
+              <span className="log-trace">{l.trace_id}</span>
+              <span className="log-sep">|</span>
               <span className="log-msg">{l.msg}</span>
             </div>
           ))
