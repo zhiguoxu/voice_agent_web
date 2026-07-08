@@ -16,6 +16,11 @@ export function LatencyChart({ turn }: { turn: Turn }) {
     turn.t_subagent_done || 0,
     turn.t_bert_done || 0,
     turn.t_asr_done || 0,
+    turn.t_stateless_start || 0,
+    turn.t_memory_done || 0,
+    turn.t_names_done || 0,
+    turn.t_identity_done || 0,
+    turn.t_history_done || 0,
   );
   if (tEnd <= t0) return <div className="empty-media">暂无完整耗时数据</div>;
 
@@ -41,6 +46,18 @@ export function LatencyChart({ turn }: { turn: Turn }) {
   if (turn.t_asr_done && turn.t_vad_end && turn.t_asr_done - turn.t_vad_end > 0.001) {
     phases.push({ label: "ASR识别", start: turn.t_vad_end, end: turn.t_asr_done, color: "var(--purple)" });
   }
+
+  // 上下文准备阶段（chat 入口 → chat_stateless 入口）：历史查询与身份识别并发，
+  // 之后依次是名字查询、记忆召回。低于 1ms 的退化阶段（如功能未启用）不展示。
+  const pushIfVisible = (label: string, start: number | null, end: number | null, color: string) => {
+    if (start && end && end - start > 0.001) phases.push({ label, start, end, color });
+  };
+  pushIfVisible("历史查询", turn.t_agent_start, turn.t_history_done, "var(--blue)");
+  pushIfVisible("身份识别", turn.t_agent_start, turn.t_identity_done, "var(--purple)");
+  const ctxGatherDone = Math.max(turn.t_history_done || 0, turn.t_identity_done || 0) || null;
+  pushIfVisible("名字查询", ctxGatherDone, turn.t_names_done, "var(--cyan)");
+  pushIfVisible("记忆召回", turn.t_names_done, turn.t_memory_done, "var(--green)");
+  pushIfVisible("请求构造", turn.t_memory_done, turn.t_stateless_start, "var(--orange)");
 
   if (turn.t_bert_start && turn.t_bert_done) {
     phases.push({ label: "BERT调用", start: turn.t_bert_start, end: turn.t_bert_done, color: "var(--red)" });

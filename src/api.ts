@@ -62,6 +62,11 @@ export interface Turn {
   t_vad_end: number | null;
   t_asr_done: number | null;
   t_agent_start: number | null;
+  t_history_done: number | null;
+  t_identity_done: number | null;
+  t_names_done: number | null;
+  t_memory_done: number | null;
+  t_stateless_start: number | null;
   t_bert_start: number | null;
   t_bert_done: number | null;
   bert_confidence: number | null;
@@ -188,6 +193,11 @@ export interface ReplayResult {
   subagent_name: string | null;
   timing: {
     t_agent_start?: number | null;
+    t_history_done?: number | null;
+    t_identity_done?: number | null;
+    t_names_done?: number | null;
+    t_memory_done?: number | null;
+    t_stateless_start?: number | null;
     t_bert_start?: number | null;
     t_bert_done?: number | null;
     bert_confidence?: number | null;
