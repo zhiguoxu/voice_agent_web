@@ -98,8 +98,13 @@ export function LatencyChart({ turn }: { turn: Turn }) {
           {phases.map((p, idx) => {
             if (!p.start || !p.end) return null;
             const { left, width } = toPercent(p.start, p.end);
+            // 悬浮提示: 相对本轮起点的精确起止时间。短阶段(毫秒级)在长轮次
+            // 的横轴上会被压成亚像素小块, 悬浮是唯一能读出真实区间的途径。
+            const startMs = (p.start - t0) * 1000;
+            const endMs = (p.end - t0) * 1000;
+            const hoverTitle = `${p.label}: ${startMs.toFixed(1)}ms → ${endMs.toFixed(1)}ms（耗时 ${(endMs - startMs).toFixed(1)}ms）`;
             return (
-              <div key={idx} className="latency-row" data-tooltip={!p.tooltip ? undefined : undefined}>
+              <div key={idx} className="latency-row">
                 <div className="latency-label">
                   <div>
                     {p.label}
@@ -119,9 +124,9 @@ export function LatencyChart({ turn }: { turn: Turn }) {
                   </div>
                   <span className="latency-val">{formatMs(p.start, p.end)}</span>
                 </div>
-                <div className="latency-bar-track">
-                  <div 
-                    className="latency-bar-fill" 
+                <div className="latency-bar-track" title={hoverTitle}>
+                  <div
+                    className="latency-bar-fill"
                     style={{ left, width, backgroundColor: p.color, opacity: p.label === 'LLM生成' ? 0.3 : 1 }}
                   />
                 </div>
