@@ -1,5 +1,8 @@
-export const CONVERSATIONS_API_BASE = "/api/conversations";
-export const LOGS_API_BASE = "/api/logs";
+// 后端按前缀分流（vite dev proxy 与生产 nginx 同规则）：
+//   /api/voice/*  → voice_server(:8017)，代理层去掉 /voice 前缀
+//   /api/agent/*  → agent_server(:8018)，原样透传（agent_server 本身就是 /api/agent 前缀）
+export const CONVERSATIONS_API_BASE = "/api/voice/conversations";
+export const LOGS_API_BASE = "/api/voice/logs";
 
 export interface LogEntry {
   seq?: number;
@@ -50,6 +53,8 @@ export interface Turn {
   id: number;
   trace_id: string;
   query: string;
+  speaker_id: string | null;
+  speaker_name: string | null;
   reply_text: string | null;
   intent_source: string | null;
   intent_name: string | null;
@@ -253,12 +258,58 @@ export async function forceNewSession(sessionId: number): Promise<{ new_session_
   return res.json();
 }
 
+export interface RosterMember {
+  person_id: string;
+  name: string | null;
+  aliases: string[];
+  role: string | null;
+  gender: string | null;
+  birth_year: number | null;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface RosterRelation {
+  subject_id: string;
+  relation: string;
+  object_id: string;
+  created_at: string | null;
+}
+
+export interface RosterData {
+  enabled: boolean;
+  members: RosterMember[];
+  relations: RosterRelation[];
+  prompt_block: string;
+}
+
+// 记忆相关接口在 agent_server 上（/api/agent/* 由代理层直达 agent_server，
+// 与 voice_server 无关）
+export async function fetchRoster(): Promise<RosterData> {
+  const res = await fetch("/api/agent/roster");
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || "Failed to fetch roster");
+  }
+  return res.json();
+}
+
+export async function deleteRosterMember(personId: string): Promise<void> {
+  const res = await fetch(`/api/agent/roster/${encodeURIComponent(personId)}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || "Failed to delete roster member");
+  }
+}
+
 export async function sendAction(
   device_sn: string,
   device_type_id: string,
   action_id: number
 ): Promise<void> {
-  const res = await fetch("/api/action/send", {
+  const res = await fetch("/api/voice/action/send", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ device_sn, device_type_id, action_id }),
@@ -274,7 +325,7 @@ export async function sendMqttCommand(
   device_type_id: string,
   payload: object
 ): Promise<void> {
-  const res = await fetch("/api/device/cmd/mqtt", {
+  const res = await fetch("/api/voice/device/cmd/mqtt", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ device_sn, device_type_id, payload }),

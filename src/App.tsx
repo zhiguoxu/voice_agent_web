@@ -9,6 +9,7 @@ import {
   replayTurn,
   testSessionInput,
   forceNewSession,
+  fetchRoster,
   type Session,
   type Turn,
   type ReplayResult,
@@ -19,6 +20,7 @@ import { TimeRangePicker, type TimeRange } from "./TimeRangePicker";
 import { LatencyChart } from "./LatencyChart";
 import { DeviceControl } from "./DeviceControl";
 import { LogMonitor } from "./LogMonitor";
+import { RosterView } from "./RosterView";
 import "./App.css";
 
 function formatTime(iso: string | null) {
@@ -31,8 +33,50 @@ type ConfirmState = {
   resolve: (ok: boolean) => void;
 } | null;
 
+/** speaker_id → 展示名。名字不落库（可改名），从花名册现查；agent_server 不可达时降级为只显示裸 id。 */
+function useSpeakerNames() {
+  const [names, setNames] = useState<Record<string, string>>({});
+  const loadingRef = useRef(false);
+  const reload = useCallback(async () => {
+    if (loadingRef.current) return;
+    loadingRef.current = true;
+    try {
+      const roster = await fetchRoster();
+      const map: Record<string, string> = {};
+      for (const m of roster.members) {
+        const n = m.name || m.aliases[0];
+        if (n) map[m.person_id] = n;
+      }
+      setNames(map);
+    } catch {
+      /* 花名册拉不到只影响名字展示，不打扰主流程 */
+    } finally {
+      loadingRef.current = false;
+    }
+  }, []);
+  useEffect(() => { reload(); }, [reload]);
+  return { speakerNames: names, reloadSpeakerNames: reload };
+}
+
+/** query 行右侧的说话人标识：名称 (speaker_id)；没名字只显示裸 id。
+ *  与 query 同行右对齐、不收缩——query 过长时自行换行，徽章位置和空间不受挤压。
+ *  名称优先用轮次里的当时快照（speaker_name，便于追溯），老数据没快照时退化为按花名册现查。 */
+function SpeakerBadge({ speakerId, speakerName, names }: {
+  speakerId: string | null | undefined;
+  speakerName: string | null | undefined;
+  names: Record<string, string>;
+}) {
+  if (!speakerId) return null;
+  const name = speakerName || names[speakerId];
+  return (
+    <span className={`speaker-badge ${name ? "" : "unnamed"}`} title={`speaker_id: ${speakerId}`}>
+      {name ? `${name} (${speakerId})` : speakerId}
+    </span>
+  );
+}
+
 export default function App() {
-  const [activeTab, setActiveTab] = useState<"conversations" | "deviceControl" | "logs">("conversations");
+  const [activeTab, setActiveTab] = useState<"conversations" | "deviceControl" | "logs" | "roster">("conversations");
   
   /* ── 从 URL 读取初始筛选条件 ── */
   const initParams = new URLSearchParams(window.location.search);
@@ -88,6 +132,9 @@ export default function App() {
 
   /* ── Trace lookup loading ── */
   const [traceLoading, setTraceLoading] = useState(false);
+
+  /* ── 说话人名字映射（花名册现查） ── */
+  const { speakerNames, reloadSpeakerNames } = useSpeakerNames();
 
   /* ── Replay modal ── */
   const [replayOpen, setReplayOpen] = useState(false);
@@ -302,6 +349,8 @@ export default function App() {
     setSelectedSession(s);
     setSelectedTurn(null);
     loadTurns(s.id);
+    // 顺手刷新名字映射：期间可能有人报了名字/改了名
+    reloadSpeakerNames();
   };
 
   /* ── Trace lookup ── */
@@ -356,11 +405,13 @@ export default function App() {
           } else if (data.event === "reply_chunk") {
              setRealtimeTurn(prev => prev ? { ...prev, reply_text: (prev.reply_text || "") + data.text } : null);
           } else if (data.event === "intent") {
-             setRealtimeTurn(prev => prev ? { 
-               ...prev, 
-               intent_source: data.source, 
+             setRealtimeTurn(prev => prev ? {
+               ...prev,
+               intent_source: data.source,
                intent_name: data.name,
-               command_type: data.command 
+               command_type: data.command,
+               speaker_id: data.speaker_id ?? null,
+               speaker_name: data.speaker_name ?? null,
              } : null);
            } else if (data.event === "done") {
               // done 表示 persist 已完成，DB 数据已就绪，直接拉取
@@ -492,6 +543,12 @@ export default function App() {
             onClick={() => setActiveTab('logs')}
           >
             后端日志
+          </button>
+          <button
+            className={`main-tab ${activeTab === 'roster' ? 'active' : ''}`}
+            onClick={() => setActiveTab('roster')}
+          >
+            家庭花名册
           </button>
         </div>
       </header>
@@ -696,8 +753,9 @@ export default function App() {
                     onClick={() => setSelectedTurn(t)}
                   >
                     <div className="turn-query">
-                      <span className="turn-icon">👤</span> 
+                      <span className="turn-icon">👤</span>
                       <span className="turn-text">{t.query || "(无输入)"}</span>
+                      <SpeakerBadge speakerId={t.speaker_id} speakerName={t.speaker_name} names={speakerNames} />
                     </div>
                     <div className="turn-reply">
                       <span className="turn-icon">🤖</span> 
@@ -748,8 +806,9 @@ export default function App() {
                 {realtimeTurn && (
                   <div className="turn-card live-turn">
                     <div className="turn-query">
-                      <span className="turn-icon">👤</span> 
+                      <span className="turn-icon">👤</span>
                       <span className="turn-text">{realtimeTurn.query || "(正在输入...)"}</span>
+                      <SpeakerBadge speakerId={realtimeTurn.speaker_id} speakerName={realtimeTurn.speaker_name} names={speakerNames} />
                     </div>
                     <div className="turn-reply">
                       <span className="turn-icon">🤖</span> 
@@ -872,6 +931,30 @@ export default function App() {
               <section className="detail-section">
                 <h4>ℹ️ 元信息</h4>
                 <div className="meta-grid">
+                  <div className="meta-intent-row">
+                    <label>说话人</label>
+                    <span>
+                      {selectedTurn.speaker_id ? (
+                        <>
+                          {(selectedTurn.speaker_name || speakerNames[selectedTurn.speaker_id]) && (
+                            <b className="speaker-detail-name" title="说话时刻的名字快照">
+                              {selectedTurn.speaker_name || speakerNames[selectedTurn.speaker_id]}
+                            </b>
+                          )}
+                          <code title="person_id（身份识别服务提供）">{selectedTurn.speaker_id}</code>
+                          {selectedTurn.speaker_name &&
+                            speakerNames[selectedTurn.speaker_id] &&
+                            speakerNames[selectedTurn.speaker_id] !== selectedTurn.speaker_name && (
+                            <span className="speaker-renamed" title="花名册里的当前名字与当时不同">
+                              现名: {speakerNames[selectedTurn.speaker_id]}
+                            </span>
+                          )}
+                        </>
+                      ) : (
+                        <span className="speaker-unknown">未识别</span>
+                      )}
+                    </span>
+                  </div>
                   <div className="meta-intent-row">
                     <label>意图</label>
                     <span>
@@ -1068,6 +1151,8 @@ export default function App() {
       </>
       ) : activeTab === 'deviceControl' ? (
         <DeviceControl sessions={sessions} />
+      ) : activeTab === 'roster' ? (
+        <RosterView />
       ) : (
         <LogMonitor />
       )}

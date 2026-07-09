@@ -656,6 +656,49 @@ body {
     word-break: break-word;
 }
 
+/* ── 说话人标识（多人对话）：与 query 同行右对齐，格式「名称 (speaker_id)」。
+   flex-shrink:0 保证 query 过长换行时徽章空间不被挤压 ── */
+.speaker-badge {
+    flex-shrink: 0;
+    align-self: flex-start;
+    padding: 1px 8px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--cyan);
+    background: rgba(34, 211, 238, 0.1);
+    border: 1px solid rgba(34, 211, 238, 0.25);
+    border-radius: 999px;
+    max-width: 280px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    cursor: default;
+}
+
+.speaker-badge.unnamed {
+    color: var(--text-muted);
+    background: var(--bg-card-hover);
+    border-color: var(--border);
+    font-weight: 400;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+}
+
+.speaker-detail-name {
+    color: var(--cyan);
+    margin-right: 8px;
+}
+
+.speaker-unknown {
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+.speaker-renamed {
+    margin-left: 8px;
+    font-size: 11px;
+    color: var(--orange);
+}
+
 .turn-footer {
     display: flex;
     align-items: center;

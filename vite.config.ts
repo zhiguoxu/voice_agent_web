@@ -10,9 +10,17 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      '/api': {
+      // 与生产 nginx 同规则的前缀分流：
+      //   /api/agent/* → agent_server，原样透传（记忆/花名册等调试接口都在这个前缀下）
+      //   /api/voice/* → voice_server，去掉 /voice 前缀（后端路由仍是 /api/conversations 等）
+      '/api/agent': {
+        target: 'http://124.220.147.121:8018',
+        changeOrigin: true,
+      },
+      '/api/voice': {
         target: 'http://124.220.147.121:8017',
         changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/voice/, '/api'),
       }
     }
   }
