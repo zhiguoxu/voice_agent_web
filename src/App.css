@@ -1190,6 +1190,31 @@ body {
     position: relative;
 }
 
+/* 悬浮立即显示的精确起止时间提示（原生 title 有 ~1s 浏览器内置延迟，不可配） */
+.latency-row[data-hover]::after {
+    content: attr(data-hover);
+    position: absolute;
+    left: 0;
+    bottom: calc(100% + 4px);
+    padding: 4px 8px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    font-size: 11px;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    color: var(--text-primary);
+    white-space: nowrap;
+    z-index: 10;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.1s;
+}
+
+.latency-row[data-hover]:hover::after {
+    opacity: 1;
+}
+
 .latency-detail-btn {
     margin-left: 6px;
     background: var(--bg-secondary);
