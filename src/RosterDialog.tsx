@@ -4,7 +4,7 @@ import {
   addRosterRelation, deleteRosterRelation,
   type RosterData, type RosterMember, type RosterRelation,
 } from "./api";
-import "./RosterView.css";
+import "./RosterDialog.css";
 
 /* 角色/性别的展示映射：兜底显示原始值，方便发现抽取出的脏数据 */
 const ROLE_LABELS: Record<string, string> = {
