@@ -717,6 +717,7 @@ export default function App() {
               <div className="content-header">
                 <h2>
                   会话 #{selectedSession.id} — {selectedSession.device_sn}
+                  <span className="header-user">👤 {selectedSession.user_id || "-"}</span>
                 </h2>
                 <div className="content-header-actions">
                   {selectedSession.is_online && (
