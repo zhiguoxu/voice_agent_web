@@ -20,7 +20,7 @@ import { TimeRangePicker, type TimeRange } from "./TimeRangePicker";
 import { LatencyChart } from "./LatencyChart";
 import { DeviceControl } from "./DeviceControl";
 import { LogMonitor } from "./LogMonitor";
-import { RosterView } from "./RosterView";
+import { RosterDialog } from "./RosterDialog";
 import { ConfigView } from "./ConfigView";
 import "./App.css";
 
@@ -34,15 +34,20 @@ type ConfirmState = {
   resolve: (ok: boolean) => void;
 } | null;
 
-/** speaker_id → 展示名。名字不落库（可改名），从花名册现查；agent_server 不可达时降级为只显示裸 id。 */
-function useSpeakerNames() {
+/** speaker_id → 展示名。名字不落库（可改名），从当前会话设备所属家庭的花名册现查
+ *  （多家庭同库，按 device_sn 取本家）；agent_server 不可达时降级为只显示裸 id。 */
+function useSpeakerNames(deviceSn: string | null | undefined) {
   const [names, setNames] = useState<Record<string, string>>({});
   const loadingRef = useRef(false);
   const reload = useCallback(async () => {
+    if (!deviceSn) {
+      setNames({});
+      return;
+    }
     if (loadingRef.current) return;
     loadingRef.current = true;
     try {
-      const roster = await fetchRoster();
+      const roster = await fetchRoster(deviceSn);
       const map: Record<string, string> = {};
       for (const m of roster.members) {
         const n = m.name || m.aliases[0];
@@ -54,7 +59,7 @@ function useSpeakerNames() {
     } finally {
       loadingRef.current = false;
     }
-  }, []);
+  }, [deviceSn]);
   useEffect(() => { reload(); }, [reload]);
   return { speakerNames: names, reloadSpeakerNames: reload };
 }
@@ -77,7 +82,9 @@ function SpeakerBadge({ speakerId, speakerName, names }: {
 }
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<"conversations" | "deviceControl" | "logs" | "roster" | "config">("conversations");
+  const [activeTab, setActiveTab] = useState<"conversations" | "deviceControl" | "logs" | "config">("conversations");
+  /* 家庭花名册对话框：按会话设备打开（多家庭同库，只看该设备所属家庭） */
+  const [rosterDeviceSn, setRosterDeviceSn] = useState<string | null>(null);
   
   /* ── 从 URL 读取初始筛选条件 ── */
   const initParams = new URLSearchParams(window.location.search);
@@ -134,8 +141,8 @@ export default function App() {
   /* ── Trace lookup loading ── */
   const [traceLoading, setTraceLoading] = useState(false);
 
-  /* ── 说话人名字映射（花名册现查） ── */
-  const { speakerNames, reloadSpeakerNames } = useSpeakerNames();
+  /* ── 说话人名字映射（按当前会话设备的家庭花名册现查） ── */
+  const { speakerNames, reloadSpeakerNames } = useSpeakerNames(selectedSession?.device_sn);
 
   /* ── Replay modal ── */
   const [replayOpen, setReplayOpen] = useState(false);
@@ -546,12 +553,6 @@ export default function App() {
             后端日志
           </button>
           <button
-            className={`main-tab ${activeTab === 'roster' ? 'active' : ''}`}
-            onClick={() => setActiveTab('roster')}
-          >
-            家庭花名册
-          </button>
-          <button
             className={`main-tab ${activeTab === 'config' ? 'active' : ''}`}
             onClick={() => setActiveTab('config')}
           >
@@ -718,6 +719,13 @@ export default function App() {
                 <h2>
                   会话 #{selectedSession.id} — {selectedSession.device_sn}
                   <span className="header-user">👤 {selectedSession.user_id || "-"}</span>
+                  <button
+                    className="roster-open-btn"
+                    title="查看/编辑该设备所属家庭的花名册"
+                    onClick={() => setRosterDeviceSn(selectedSession.device_sn)}
+                  >
+                    👨‍👩‍👧‍👦 花名册
+                  </button>
                 </h2>
                 <div className="content-header-actions">
                   {selectedSession.is_online && (
@@ -1159,12 +1167,20 @@ export default function App() {
       </>
       ) : activeTab === 'deviceControl' ? (
         <DeviceControl sessions={sessions} />
-      ) : activeTab === 'roster' ? (
-        <RosterView />
       ) : activeTab === 'config' ? (
         <ConfigView />
       ) : (
         <LogMonitor />
+      )}
+      {/* 家庭花名册对话框（按设备所属家庭）；关闭时刷新说话人名字映射（可能刚改过名） */}
+      {rosterDeviceSn && (
+        <RosterDialog
+          deviceSn={rosterDeviceSn}
+          onClose={() => {
+            setRosterDeviceSn(null);
+            reloadSpeakerNames();
+          }}
+        />
       )}
       {/* Custom Confirm Dialog */}
       {confirmState && (

@@ -284,9 +284,9 @@ export interface RosterData {
 }
 
 // 记忆相关接口在 agent_server 上（/api/agent/* 由代理层直达 agent_server，
-// 与 voice_server 无关）
-export async function fetchRoster(): Promise<RosterData> {
-  const res = await fetch("/api/agent/roster");
+// 与 voice_server 无关）。花名册按设备所属家庭获取（多家庭同库，不做全库 dump）。
+export async function fetchRoster(deviceSn: string): Promise<RosterData> {
+  const res = await fetch(`/api/agent/roster?device_sn=${encodeURIComponent(deviceSn)}`);
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
     throw new Error(data.detail || "Failed to fetch roster");
@@ -301,6 +301,61 @@ export async function deleteRosterMember(personId: string): Promise<void> {
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
     throw new Error(data.detail || "Failed to delete roster member");
+  }
+}
+
+/** 成员属性编辑载荷：显式传 null 表示清空该字段，省略表示不动 */
+export interface RosterMemberPatch {
+  name?: string | null;
+  aliases?: string[];
+  role?: string | null;
+  gender?: string | null;
+  birth_year?: number | null;
+}
+
+export async function updateRosterMember(
+  personId: string, deviceSn: string, patch: RosterMemberPatch,
+): Promise<void> {
+  const res = await fetch(`/api/agent/roster/${encodeURIComponent(personId)}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ device_sn: deviceSn, ...patch }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || "Failed to update roster member");
+  }
+}
+
+export async function addRosterRelation(
+  deviceSn: string, subjectId: string, relation: string, objectId: string,
+): Promise<void> {
+  const res = await fetch("/api/agent/roster/relations", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      device_sn: deviceSn, subject_id: subjectId, relation, object_id: objectId,
+    }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || "Failed to add roster relation");
+  }
+}
+
+export async function deleteRosterRelation(
+  deviceSn: string, subjectId: string, relation: string, objectId: string,
+): Promise<void> {
+  const res = await fetch("/api/agent/roster/relations/delete", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      device_sn: deviceSn, subject_id: subjectId, relation, object_id: objectId,
+    }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || "Failed to delete roster relation");
   }
 }
 
