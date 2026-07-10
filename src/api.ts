@@ -359,6 +359,73 @@ export async function deleteRosterRelation(
   }
 }
 
+/** 记忆条目（B/A 类同构；B 类 key 非空，A 类 key 为空） */
+export interface MemoryItem {
+  id: number;
+  key: string | null;
+  value: string | null;
+  is_extremum: boolean;
+  content: string;        // 已把 {person_id} 渲染成名字
+  content_raw: string;    // 库里原文（占位符形式），排查用
+  mem_type: string;       // personal | household
+  subjects: { person_id: string; name: string }[];
+  speaker: string | null;
+  session_id: number;
+  status: string;         // active | superseded
+  superseded_by: number | null;
+  due_at: string | null;  // 仅 schedule kind
+  created_at: string | null;
+}
+
+/** key 注册表节点元数据（树节点的中文名与 kind 标签） */
+export interface MemoryKeyMeta {
+  name: string;
+  kind: string;           // state | event | schedule
+}
+
+export interface MemoryBTreeData {
+  enabled: boolean;
+  items: MemoryItem[];
+  key_meta: Record<string, MemoryKeyMeta>;
+}
+
+export interface MemoryAPage {
+  enabled: boolean;
+  items: MemoryItem[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+/** B 类记忆全量（每家条数有界），树由前端按 key 点分路径构建 */
+export async function fetchMemoryBTree(
+  deviceSn: string, includeSuperseded: boolean,
+): Promise<MemoryBTreeData> {
+  const sp = new URLSearchParams({ device_sn: deviceSn });
+  if (includeSuperseded) sp.set("include_superseded", "true");
+  const res = await fetch(`/api/agent/memory/b_tree?${sp}`);
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || "Failed to fetch B memories");
+  }
+  return res.json();
+}
+
+/** A 类记忆分页（最新在前；A 类随对话量线性增长，不全量拉取） */
+export async function fetchMemoryAItems(
+  deviceSn: string, page: number, pageSize: number,
+): Promise<MemoryAPage> {
+  const sp = new URLSearchParams({
+    device_sn: deviceSn, page: String(page), page_size: String(pageSize),
+  });
+  const res = await fetch(`/api/agent/memory/a_items?${sp}`);
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || "Failed to fetch A memories");
+  }
+  return res.json();
+}
+
 /** 后端配置查询接口的统一响应（voice_server / agent_server 同构） */
 export interface ServiceConfig {
   service: string;

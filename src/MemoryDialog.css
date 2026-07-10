@@ -1,0 +1,182 @@
+/* ── 记忆查询对话框（复用 RosterDialog.css 的外壳/表格样式，这里只放增量） ── */
+
+/* B 类 key 树 */
+.memory-tree {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.memory-key-node {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-secondary);
+  overflow: hidden;
+}
+
+.memory-key-node summary {
+  padding: 8px 12px;
+  cursor: pointer;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.memory-key-node summary:hover {
+  background: var(--bg-card-hover);
+}
+
+.memory-key-name {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.memory-key-path {
+  font-size: 12px;
+  color: var(--cyan);
+  background: rgba(34, 211, 238, 0.08);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.memory-key-count {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--text-muted);
+  background: var(--bg-card-hover);
+  padding: 1px 8px;
+  border-radius: 8px;
+}
+
+/* 子树缩进：子节点与条目挂在 body 里逐层内缩 */
+.memory-key-body {
+  padding: 4px 8px 8px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-top: 1px solid var(--border);
+}
+
+.memory-item {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 6px 10px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  flex-wrap: wrap;
+}
+
+.memory-item.superseded {
+  opacity: 0.55;
+}
+
+.memory-item.superseded .memory-item-content,
+.memory-item.superseded .memory-item-value {
+  text-decoration: line-through;
+}
+
+.memory-item-subjects {
+  color: var(--purple);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.memory-item-value {
+  color: var(--text-primary);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.memory-item-content {
+  color: var(--text-secondary);
+  min-width: 0;
+  flex: 1;
+}
+
+.memory-item-due {
+  color: var(--orange);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.memory-item-time {
+  margin-left: auto;
+  color: var(--text-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+/* 徽标 */
+.memory-badge {
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.memory-badge.extremum {
+  margin-left: 4px;
+  color: var(--red);
+  background: rgba(248, 113, 113, 0.12);
+}
+
+.memory-badge.household {
+  color: var(--cyan);
+  background: rgba(34, 211, 238, 0.1);
+}
+
+.memory-badge.kind-event {
+  color: var(--green);
+  background: rgba(52, 211, 153, 0.1);
+}
+
+.memory-badge.kind-schedule {
+  color: var(--orange);
+  background: rgba(251, 191, 36, 0.1);
+}
+
+.memory-badge.superseded-tag {
+  color: var(--text-muted);
+  background: var(--bg-card-hover);
+}
+
+/* 「含已失效」开关（B 类节标题右侧） */
+.memory-superseded-toggle {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: normal;
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+}
+
+/* A 类分页表 */
+.memory-a-table {
+  white-space: normal;
+}
+
+.memory-a-content {
+  min-width: 320px;
+}
+
+.memory-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  margin-top: 12px;
+}
+
+.memory-page-info {
+  font-size: 12px;
+  color: var(--text-muted);
+}

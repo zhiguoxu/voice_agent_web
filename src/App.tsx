@@ -21,6 +21,7 @@ import { LatencyChart } from "./LatencyChart";
 import { DeviceControl } from "./DeviceControl";
 import { LogMonitor } from "./LogMonitor";
 import { RosterDialog } from "./RosterDialog";
+import { MemoryDialog } from "./MemoryDialog";
 import { ConfigView } from "./ConfigView";
 import "./App.css";
 
@@ -85,6 +86,8 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<"conversations" | "deviceControl" | "logs" | "config">("conversations");
   /* 家庭花名册对话框：按会话设备打开（多家庭同库，只看该设备所属家庭） */
   const [rosterDeviceSn, setRosterDeviceSn] = useState<string | null>(null);
+  /* 记忆查询对话框：同上按设备所属家庭（B 类 key 树 + A 类分页表） */
+  const [memoryDeviceSn, setMemoryDeviceSn] = useState<string | null>(null);
   
   /* ── 从 URL 读取初始筛选条件 ── */
   const initParams = new URLSearchParams(window.location.search);
@@ -726,6 +729,13 @@ export default function App() {
                   >
                     👨‍👩‍👧‍👦 花名册
                   </button>
+                  <button
+                    className="roster-open-btn"
+                    title="查看该设备所属家庭的记忆条目（B 类 key 树 + A 类分页表）"
+                    onClick={() => setMemoryDeviceSn(selectedSession.device_sn)}
+                  >
+                    🧠 记忆查询
+                  </button>
                 </h2>
                 <div className="content-header-actions">
                   {selectedSession.is_online && (
@@ -1180,6 +1190,13 @@ export default function App() {
             setRosterDeviceSn(null);
             reloadSpeakerNames();
           }}
+        />
+      )}
+      {/* 记忆查询对话框（按设备所属家庭，只读） */}
+      {memoryDeviceSn && (
+        <MemoryDialog
+          deviceSn={memoryDeviceSn}
+          onClose={() => setMemoryDeviceSn(null)}
         />
       )}
       {/* Custom Confirm Dialog */}
