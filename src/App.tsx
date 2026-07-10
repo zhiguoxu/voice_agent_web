@@ -21,6 +21,7 @@ import { LatencyChart } from "./LatencyChart";
 import { DeviceControl } from "./DeviceControl";
 import { LogMonitor } from "./LogMonitor";
 import { RosterView } from "./RosterView";
+import { ConfigView } from "./ConfigView";
 import "./App.css";
 
 function formatTime(iso: string | null) {
@@ -76,7 +77,7 @@ function SpeakerBadge({ speakerId, speakerName, names }: {
 }
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<"conversations" | "deviceControl" | "logs" | "roster">("conversations");
+  const [activeTab, setActiveTab] = useState<"conversations" | "deviceControl" | "logs" | "roster" | "config">("conversations");
   
   /* ── 从 URL 读取初始筛选条件 ── */
   const initParams = new URLSearchParams(window.location.search);
@@ -549,6 +550,12 @@ export default function App() {
             onClick={() => setActiveTab('roster')}
           >
             家庭花名册
+          </button>
+          <button
+            className={`main-tab ${activeTab === 'config' ? 'active' : ''}`}
+            onClick={() => setActiveTab('config')}
+          >
+            系统配置
           </button>
         </div>
       </header>
@@ -1153,6 +1160,8 @@ export default function App() {
         <DeviceControl sessions={sessions} />
       ) : activeTab === 'roster' ? (
         <RosterView />
+      ) : activeTab === 'config' ? (
+        <ConfigView />
       ) : (
         <LogMonitor />
       )}

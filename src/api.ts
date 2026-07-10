@@ -304,6 +304,32 @@ export async function deleteRosterMember(personId: string): Promise<void> {
   }
 }
 
+/** 后端配置查询接口的统一响应（voice_server / agent_server 同构） */
+export interface ServiceConfig {
+  service: string;
+  version: string;
+  env: string;
+  config: Record<string, unknown>;
+}
+
+export async function fetchVoiceConfig(): Promise<ServiceConfig> {
+  const res = await fetch("/api/voice/config");
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || "Failed to fetch voice_server config");
+  }
+  return res.json();
+}
+
+export async function fetchAgentConfig(): Promise<ServiceConfig> {
+  const res = await fetch("/api/agent/config");
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || "Failed to fetch agent_server config");
+  }
+  return res.json();
+}
+
 export async function sendAction(
   device_sn: string,
   device_type_id: string,
