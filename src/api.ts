@@ -17,6 +17,8 @@ export interface LogEntry {
   function: string;
   line: number;
   name: string;
+  /** 异常堆栈全文（仅 logger.exception 记录的日志携带） */
+  exc?: string;
 }
 
 export async function fetchRecentLogs(

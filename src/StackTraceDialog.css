@@ -1,0 +1,222 @@
+/* ── 异常堆栈对话框（复用 RosterDialog.css 的外壳，这里只放增量） ── */
+
+.stack-dialog {
+  width: min(960px, 100%);
+}
+
+/* 标题栏按钮：解析/原始切换、复制 */
+.stack-toggle-btn {
+  padding: 4px 12px;
+  font-size: 12px;
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.stack-toggle-btn:hover:not(:disabled) {
+  background: var(--bg-card-hover);
+  color: var(--text-primary);
+}
+
+.stack-toggle-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.stack-toggle-btn:first-of-type {
+  margin-left: auto;
+}
+
+/* ── 异常概要：类型徽标 + 消息 ── */
+.stack-summary {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 12px 16px;
+  background: rgba(248, 113, 113, 0.08);
+  border: 1px solid rgba(248, 113, 113, 0.35);
+  border-radius: var(--radius-sm);
+  margin-bottom: 10px;
+}
+
+.stack-exc-type {
+  font-family: "SF Mono", Consolas, monospace;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--red);
+  flex-shrink: 0;
+}
+
+.stack-exc-msg {
+  font-family: "SF Mono", Consolas, monospace;
+  font-size: 13px;
+  color: var(--text-primary);
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+
+/* 触发这条日志的消息原文 */
+.stack-log-msg {
+  font-size: 12px;
+  color: var(--text-secondary);
+  padding: 0 4px 12px;
+  word-break: break-word;
+}
+
+/* ── 链式异常段 ── */
+.stack-cause {
+  font-size: 12px;
+  color: var(--orange);
+  padding: 12px 4px 8px;
+  font-weight: 600;
+}
+
+.stack-seg-exc {
+  font-family: "SF Mono", Consolas, monospace;
+  font-size: 12px;
+  color: var(--red);
+  padding: 8px 12px;
+  margin-top: 6px;
+  background: rgba(248, 113, 113, 0.06);
+  border-left: 3px solid var(--red);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ── 调用帧列表：外层调用 → 抛出点，竖向时间线 ── */
+.stack-frames {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.stack-frame {
+  display: flex;
+  gap: 10px;
+  padding: 8px 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+/* 库代码帧弱化，项目帧一眼可辨 */
+.stack-frame.lib {
+  opacity: 0.55;
+}
+
+.stack-frame.raise-site {
+  border-color: rgba(248, 113, 113, 0.5);
+  background: rgba(248, 113, 113, 0.05);
+  opacity: 1;
+}
+
+.stack-frame-index {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--bg-card);
+  border-radius: 50%;
+}
+
+.stack-frame.raise-site .stack-frame-index {
+  color: #fff;
+  background: var(--red);
+}
+
+.stack-frame-main {
+  min-width: 0;
+  flex: 1;
+}
+
+.stack-frame-loc {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-family: "SF Mono", Consolas, monospace;
+  font-size: 12px;
+}
+
+/* 目录弱化、文件名:行号醒目 */
+.stack-frame-dir {
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 40ch;
+  direction: rtl; /* 目录过长时截前部、保留靠近文件名的后部 */
+}
+
+.stack-frame-file {
+  color: var(--cyan);
+  font-weight: 600;
+}
+
+.stack-frame-func {
+  color: var(--purple);
+}
+
+.stack-frame-func::before {
+  content: "in ";
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.stack-tag {
+  font-size: 10px;
+  padding: 0 6px;
+  border-radius: 4px;
+  font-weight: 600;
+}
+
+.lib-tag {
+  color: var(--text-muted);
+  background: var(--bg-card);
+}
+
+.raise-tag {
+  color: var(--red);
+  background: rgba(248, 113, 113, 0.15);
+}
+
+.stack-frame-code {
+  margin-top: 4px;
+  padding: 6px 10px;
+  background: var(--bg-primary);
+  border-radius: 4px;
+  font-family: "SF Mono", Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-primary);
+  overflow-x: auto;
+  white-space: pre;
+}
+
+/* 3.11+ 的 ~~~^^^ 定位标记行 */
+.stack-frame-code .code-anchor {
+  color: var(--red);
+}
+
+/* ── 原始文本视图 ── */
+.stack-raw {
+  padding: 12px 16px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-family: "SF Mono", Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  word-break: break-word;
+}

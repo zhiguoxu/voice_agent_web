@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { fetchRecentLogs, clearBackendLogs, LOGS_API_BASE, type LogEntry } from "./api";
+import { StackTraceDialog } from "./StackTraceDialog";
 import "./LogMonitor.css";
 
 const LEVELS = ["TRACE", "DEBUG", "INFO", "SUCCESS", "WARNING", "ERROR", "CRITICAL"];
@@ -28,6 +29,9 @@ export function LogMonitor() {
   /* ── 日志缓存 ── */
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [connected, setConnected] = useState(false);
+
+  /* ── 异常堆栈对话框（点击带堆栈日志行的「堆栈」按钮打开） ── */
+  const [stackEntry, setStackEntry] = useState<LogEntry | null>(null);
 
   /* ── 滚动控制 ── */
   const listRef = useRef<HTMLDivElement>(null);
@@ -327,10 +331,23 @@ export function LogMonitor() {
               <span className="log-trace">{l.trace_id}</span>
               <span className="log-sep">|</span>
               <span className="log-msg">{l.msg}</span>
+              {l.exc && (
+                <button
+                  className="log-exc-btn"
+                  onClick={() => setStackEntry(l)}
+                  title="查看异常堆栈"
+                >
+                  堆栈
+                </button>
+              )}
             </div>
           ))
         )}
       </div>
+
+      {stackEntry && (
+        <StackTraceDialog entry={stackEntry} onClose={() => setStackEntry(null)} />
+      )}
     </div>
   );
 }
