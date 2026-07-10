@@ -64,7 +64,9 @@ function RecordRow({ record }: { record: RecalledMemory }) {
             {record.score.toFixed(3)}
           </span>
         )}
-        <span className="recall-mid" title="memory_id">#{record.memory_id}</span>
+        <span className="recall-mid" title="记忆条目在记忆库(memory_items)中的行 ID，非排名；列表顺序即召回排名">
+          id:{record.memory_id}
+        </span>
         {record.subject_names.length > 0 && (
           <span className="recall-subjects">{record.subject_names.join("、")}</span>
         )}
