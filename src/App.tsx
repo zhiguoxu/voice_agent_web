@@ -22,6 +22,7 @@ import { DeviceControl } from "./DeviceControl";
 import { LogMonitor } from "./LogMonitor";
 import { RosterDialog } from "./RosterDialog";
 import { MemoryDialog } from "./MemoryDialog";
+import { MemoryRecallPanel } from "./MemoryRecallPanel";
 import { ConfigView } from "./ConfigView";
 import "./App.css";
 
@@ -157,7 +158,7 @@ export default function App() {
   /* ── Resize Detail Panel ── */
   const [detailWidth, setDetailWidth] = useState(() => {
     const saved = localStorage.getItem("detailWidth");
-    return saved ? parseInt(saved, 10) : 340;
+    return saved ? Math.max(parseInt(saved, 10), 380) : 380;
   });
 
   /* ── Custom confirm dialog ── */
@@ -189,7 +190,7 @@ export default function App() {
       if (!isResizing.current) return;
       // 向左拖拽时，clientX 变小，面板宽度增加
       const deltaX = startX - moveEvent.clientX;
-      const newWidth = Math.max(340, Math.min(800, startWidth + deltaX));
+      const newWidth = Math.max(380, Math.min(800, startWidth + deltaX));
       setDetailWidth(newWidth);
     };
 
@@ -1021,6 +1022,11 @@ export default function App() {
                     </span>
                   </div>
                 </div>
+              </section>
+
+              <section className="detail-section">
+                <h4>🧠 记忆召回</h4>
+                <MemoryRecallPanel recall={selectedTurn.memory_recall} names={speakerNames} />
               </section>
 
               {selectedTurn.chat_request && (

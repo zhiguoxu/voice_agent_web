@@ -389,8 +389,8 @@ body {
 
 /* ── Sidebar (Sessions) ── */
 .sidebar {
-    width: 300px;
-    min-width: 300px;
+    width: 260px;
+    min-width: 260px;
     border-right: 1px solid var(--border);
     display: flex;
     flex-direction: column;
@@ -767,8 +767,8 @@ body {
 }
 
 .detail-panel {
-    width: 340px;
-    min-width: 340px;
+    width: 380px;
+    min-width: 380px;
     max-width: 800px;
     border-left: 1px solid var(--border);
     background: var(--bg-secondary);

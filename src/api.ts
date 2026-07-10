@@ -51,6 +51,50 @@ export interface Session {
   is_online: boolean;
 }
 
+/** 记忆检索计划（family_memory.RecallPlan，查询理解的输出） */
+export interface RecallPlan {
+  subjects: string[];
+  key: string | null;
+  scope: string;
+  extremum: boolean;
+  reverse: boolean;
+  negate: boolean;
+  temporal: string;
+  confidence: string;
+  topic: string;
+}
+
+/** 一条召回的记忆条目（family_memory.RecalledMemory；succ 为变更链后继） */
+export interface RecalledMemory {
+  memory_id: number;
+  content: string;
+  mem_type: string;
+  subjects: string[];
+  subject_names: string[];
+  tag: { key: string; value: string; is_extremum: boolean } | null;
+  status: string;
+  succ: RecalledMemory | null;
+  chain_open: boolean;
+  superseded_at: string | null;
+  created_at: string | null;
+  due_at: string | null;
+  /** 召回打分（与查询向量点积/字面兜底）；链后继补回的行无分 */
+  score: number | null;
+}
+
+/** 一轮对话的记忆召回过程记录（family_memory.RecallTrace，调试用） */
+export interface MemoryRecall {
+  query: string;
+  asker_id: string | null;
+  plan: RecallPlan | null;
+  records: RecalledMemory[];
+  block: string;
+  plan_ms: number | null;
+  search_ms: number | null;
+  total_ms: number | null;
+  error: string | null;
+}
+
 export interface Turn {
   id: number;
   trace_id: string;
@@ -87,6 +131,8 @@ export interface Turn {
   tool_arguments: string | null;
   tool_results: string | null;
   chat_request: { query: string; history: { role: string; content: string }[]; system_prompt: string | null; image_url: string | null; llm: { model: string; base_url: string } | null } | null;
+  /** 本轮记忆召回过程记录；记忆未启用/老数据无此字段时为空 */
+  memory_recall: MemoryRecall | null;
   t_llm_start: number | null;
   t_llm_first_token: number | null;
   t_first_token: number | null;

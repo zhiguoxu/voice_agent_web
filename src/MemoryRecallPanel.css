@@ -1,0 +1,165 @@
+/* 轮次详情面板 —「记忆召回」区块 */
+
+.recall-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.recall-empty {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.recall-error {
+    font-size: 12px;
+    color: var(--red);
+    background: rgba(248, 113, 113, 0.08);
+    border: 1px solid rgba(248, 113, 113, 0.25);
+    border-radius: 6px;
+    padding: 6px 8px;
+    word-break: break-all;
+}
+
+/* ── 检索计划 chips ── */
+.recall-plan {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.recall-chip {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 20px;
+    background: var(--bg-card);
+    color: var(--text);
+}
+
+.recall-chip.subjects { color: var(--blue); }
+.recall-chip.key { font-family: 'SF Mono', 'Fira Code', monospace; color: var(--green); }
+.recall-chip.flag { color: var(--orange); }
+.recall-chip.fallback {
+    color: var(--orange);
+    border: 1px dashed rgba(251, 191, 36, 0.5);
+}
+.recall-chip.low { color: var(--red); }
+
+.recall-timing {
+    display: flex;
+    gap: 12px;
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+/* ── 命中条目 ── */
+.recall-records {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.recall-record {
+    background: var(--bg-card);
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 12px;
+}
+
+.recall-record-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 4px;
+}
+
+.recall-pool {
+    font-size: 10px;
+    font-weight: 700;
+    width: 16px;
+    height: 16px;
+    line-height: 16px;
+    text-align: center;
+    border-radius: 4px;
+    flex-shrink: 0;
+}
+
+.recall-pool.b { background: rgba(52, 211, 153, 0.15); color: var(--green); }
+.recall-pool.a { background: rgba(96, 165, 250, 0.15); color: var(--blue); }
+
+.recall-score {
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 11px;
+    color: var(--accent);
+}
+
+.recall-mid {
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 10px;
+    color: var(--text-muted);
+}
+
+.recall-subjects {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-left: auto;
+}
+
+.recall-content {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 6px;
+    padding: 2px 0;
+    line-height: 1.5;
+}
+
+.recall-content.superseded { color: var(--text-muted); }
+
+.recall-chain-step {
+    font-size: 10px;
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0 4px;
+    flex-shrink: 0;
+}
+
+.recall-tag {
+    font-size: 11px;
+    background: rgba(52, 211, 153, 0.08);
+    color: var(--green);
+    padding: 1px 6px;
+    border-radius: 4px;
+}
+
+.recall-due { font-size: 11px; color: var(--orange); }
+
+.recall-status {
+    font-size: 10px;
+    color: var(--orange);
+    border: 1px solid rgba(251, 191, 36, 0.4);
+    border-radius: 4px;
+    padding: 0 4px;
+}
+
+/* ── 注入块原文 ── */
+.recall-block summary {
+    font-size: 12px;
+    color: var(--text-muted);
+    cursor: pointer;
+    user-select: none;
+}
+
+.recall-block pre {
+    margin-top: 6px;
+    padding: 8px 10px;
+    background: var(--bg-card);
+    border-radius: 8px;
+    font-size: 11px;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-break: break-all;
+    max-height: 240px;
+    overflow-y: auto;
+}
