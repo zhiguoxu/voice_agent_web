@@ -10,6 +10,7 @@ import {
   testSessionInput,
   forceNewSession,
   fetchRoster,
+  fetchExtractedTraces,
   type Session,
   type Turn,
   type ReplayResult,
@@ -22,6 +23,7 @@ import { DeviceControl } from "./DeviceControl";
 import { LogMonitor } from "./LogMonitor";
 import { RosterDialog } from "./RosterDialog";
 import { MemoryDialog } from "./MemoryDialog";
+import { MemoryIngestDialog } from "./MemoryIngestDialog";
 import { MemoryRecallPanel } from "./MemoryRecallPanel";
 import { ConfigView } from "./ConfigView";
 import "./App.css";
@@ -89,6 +91,13 @@ export default function App() {
   const [rosterDeviceSn, setRosterDeviceSn] = useState<string | null>(null);
   /* 记忆查询对话框：同上按设备所属家庭（B 类 key 树 + A 类分页表） */
   const [memoryDeviceSn, setMemoryDeviceSn] = useState<string | null>(null);
+  /* 抽取记录对话框：记忆抽取/应用运行日志（每次批处理一行，含触发原因与过程回放）。
+     traceId 给定时是轮次行入口（只看该轮所在批次），否则是全家庭列表入口 */
+  const [ingestDialog, setIngestDialog] = useState<
+    { deviceSn: string; sessionId?: number; traceId?: string } | null>(null);
+  /* 当前会话中已进入过抽取批次的轮次 trace 集合（轮次行「已抽取/未抽取」标记）。
+     记忆系统未启用时为 null，轮次行不显示任何抽取标记 */
+  const [extractedTraces, setExtractedTraces] = useState<Set<string> | null>(null);
   
   /* ── 从 URL 读取初始筛选条件 ── */
   const initParams = new URLSearchParams(window.location.search);
@@ -275,6 +284,25 @@ export default function App() {
       setTurnsLoading(false);
     }
   }, [scrollTurnsToBottom]);
+
+  /* ── 当前会话的「已抽取」trace 集合 ──
+     随选中会话变化拉取；轮次重新加载（刷新按钮/实时流落库）时也会因
+     loadTurns 触发的重渲染在下次切会话时更新，这里额外跟随 turns 长度刷新，
+     让「静默超时抽取完成后手动刷新轮次」能看到标记变化。失败静默（调试辅助
+     信息，不打扰主流程）。 */
+  useEffect(() => {
+    if (!selectedSession) {
+      setExtractedTraces(null);
+      return;
+    }
+    let stale = false;
+    fetchExtractedTraces(selectedSession.device_sn, selectedSession.id)
+      .then((d) => {
+        if (!stale) setExtractedTraces(d.enabled ? new Set(d.trace_ids) : null);
+      })
+      .catch(() => { if (!stale) setExtractedTraces(null); });
+    return () => { stale = true; };
+  }, [selectedSession, turns.length]);
 
   /* ── Load more turns (prepend older) ── */
   const loadMoreTurns = async () => {
@@ -737,6 +765,13 @@ export default function App() {
                   >
                     🧠 记忆查询
                   </button>
+                  <button
+                    className="roster-open-btn"
+                    title="查看该设备所属家庭的记忆抽取/应用运行日志（触发原因、LLM 输出、写入统计）"
+                    onClick={() => setIngestDialog({ deviceSn: selectedSession.device_sn })}
+                  >
+                    📋 抽取记录
+                  </button>
                 </h2>
                 <div className="content-header-actions">
                   {selectedSession.is_online && (
@@ -801,6 +836,29 @@ export default function App() {
                         <span className="badge tool">🔧 {t.tool_names}</span>
                       )}
                       <span className="trace">trace: {t.trace_id || "-"}</span>
+                      {extractedTraces && (
+                        t.trace_id && extractedTraces.has(t.trace_id) ? (
+                          <button
+                            className="turn-ingest-btn"
+                            title="这轮对话已进入抽取批次，点击查看对应的抽取记录（可能与同批其他轮次一起抽取）"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setIngestDialog({
+                                deviceSn: selectedSession.device_sn,
+                                sessionId: selectedSession.id,
+                                traceId: t.trace_id,
+                              });
+                            }}
+                          >
+                            📋 已抽取
+                          </button>
+                        ) : (
+                          <span className="badge not-extracted"
+                                title="这轮对话尚未进入任何抽取批次（可能还在缓冲中，攒满批或静默超时后触发）">
+                            未抽取
+                          </span>
+                        )
+                      )}
                       <span className="turn-time">{formatTime(t.created_at)}</span>
                       <button
                         className="turn-delete-btn"
@@ -1203,6 +1261,15 @@ export default function App() {
         <MemoryDialog
           deviceSn={memoryDeviceSn}
           onClose={() => setMemoryDeviceSn(null)}
+        />
+      )}
+      {/* 抽取记录对话框（记忆抽取/应用运行日志；轮次行入口带 traceId 只看该轮所在批次） */}
+      {ingestDialog && (
+        <MemoryIngestDialog
+          deviceSn={ingestDialog.deviceSn}
+          sessionId={ingestDialog.sessionId}
+          traceId={ingestDialog.traceId}
+          onClose={() => setIngestDialog(null)}
         />
       )}
       {/* Custom Confirm Dialog */}

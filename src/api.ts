@@ -474,6 +474,88 @@ export async function fetchMemoryAItems(
   return res.json();
 }
 
+/** 抽取运行日志里的一轮输入（speaker 已渲染成展示名，speaker_id 保留供排查） */
+export interface IngestTurn {
+  turn_id: string;
+  speaker_id: string | null;
+  speaker: string;
+  text: string;
+  is_robot: boolean;
+  /** 全链路追踪号，与对话记录 Turn.trace_id 对应（旧数据/未传时为空） */
+  trace_id?: string | null;
+}
+
+/** 护栏后的记忆草稿（content 已渲染成名字，content_raw 是库里原文） */
+export interface IngestDraft {
+  from_turn: string | number | null;
+  content: string;
+  content_raw: string;
+  mem_type: string;
+  subjects: { person_id: string; name: string }[];
+  tag: { key: string; value: string; is_extremum: boolean; negate: boolean } | null;
+}
+
+/** 一次记忆抽取+应用运行（一次 flush 批处理 = 一行，行内自带完整过程快照） */
+export interface MemoryIngestRun {
+  id: number;
+  session_id: number;
+  trigger: string;        // batch_full | idle_timeout | session_switch | shutdown
+  status: string;         // ok | empty | error
+  error: string | null;
+  model_count: number;    // 模型给出条数（护栏前）
+  draft_count: number;    // 护栏后条数
+  stats: Record<string, number> | null;  // apply_drafts 写入统计
+  extract_ms: number;
+  apply_ms: number;
+  created_at: string | null;
+  new_turns: IngestTurn[];
+  context_turns: IngestTurn[];
+  llm_raw: string | null;
+  drafts: IngestDraft[];
+}
+
+export interface MemoryIngestRunPage {
+  enabled: boolean;
+  items: MemoryIngestRun[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+/** 抽取运行日志分页（最新在前；行内含全部细节，点开无需二次请求）。
+ * traceId 给定时只返回抽取源包含该轮的运行（配 sessionId 缩小命中，不分页）。 */
+export async function fetchMemoryIngestRuns(
+  deviceSn: string, page: number, pageSize: number,
+  opts?: { sessionId?: number; traceId?: string },
+): Promise<MemoryIngestRunPage> {
+  const sp = new URLSearchParams({
+    device_sn: deviceSn, page: String(page), page_size: String(pageSize),
+  });
+  if (opts?.sessionId != null) sp.set("session_id", String(opts.sessionId));
+  if (opts?.traceId) sp.set("trace_id", opts.traceId);
+  const res = await fetch(`/api/agent/memory/ingest_runs?${sp}`);
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || "Failed to fetch memory ingest runs");
+  }
+  return res.json();
+}
+
+/** 一个会话中已进入过抽取批次的轮次 trace_id 集合（轮次行「已抽取/未抽取」标记用） */
+export async function fetchExtractedTraces(
+  deviceSn: string, sessionId: number,
+): Promise<{ enabled: boolean; trace_ids: string[] }> {
+  const sp = new URLSearchParams({
+    device_sn: deviceSn, session_id: String(sessionId),
+  });
+  const res = await fetch(`/api/agent/memory/extracted_traces?${sp}`);
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || "Failed to fetch extracted traces");
+  }
+  return res.json();
+}
+
 /** 后端配置查询接口的统一响应（voice_server / agent_server 同构） */
 export interface ServiceConfig {
   service: string;

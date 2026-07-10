@@ -1,0 +1,139 @@
+/* ── 抽取记录对话框（复用 MemoryDialog.css 的树节点/条目/分页样式，这里只放增量） ── */
+
+.ingest-runs {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ingest-summary-text {
+  color: var(--text-secondary);
+  font-size: 12px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 状态徽标 */
+.memory-badge.ingest-status-ok {
+  color: var(--green);
+  background: rgba(52, 211, 153, 0.1);
+}
+
+.memory-badge.ingest-status-empty {
+  color: var(--text-muted);
+  background: var(--bg-card-hover);
+}
+
+.memory-badge.ingest-status-error {
+  color: var(--red);
+  background: rgba(248, 113, 113, 0.12);
+}
+
+.memory-badge.ingest-trigger {
+  color: var(--purple);
+  background: rgba(167, 139, 250, 0.1);
+}
+
+/* 过程回放 */
+.ingest-run-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.ingest-section-title {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  color: var(--text-primary);
+  font-weight: 600;
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+.ingest-timing {
+  margin-left: auto;
+  color: var(--text-muted);
+  font-weight: normal;
+}
+
+.ingest-section summary {
+  cursor: pointer;
+  user-select: none;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 0;
+}
+
+/* 对话轮次列表 */
+.ingest-turns {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ingest-turns.muted {
+  opacity: 0.6;
+}
+
+.ingest-turn {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 10px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.ingest-turn.robot {
+  opacity: 0.7;
+}
+
+/* 从轮次行进入时高亮该轮（同批其他轮次一并展示，靠高亮区分） */
+.ingest-turn.hit {
+  border-color: var(--purple);
+  background: rgba(167, 139, 250, 0.08);
+}
+
+.ingest-turn-id {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.ingest-turn-speaker {
+  color: var(--purple);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.ingest-turn-text {
+  color: var(--text-secondary);
+  min-width: 0;
+  flex: 1;
+}
+
+/* LLM 原始输出 */
+.ingest-llm-raw {
+  margin: 4px 0 0;
+  padding: 8px 10px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.ingest-drafts {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}

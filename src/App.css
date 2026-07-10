@@ -752,6 +752,29 @@ body {
     margin-left: auto;
 }
 
+/* 轮次「已抽取」按钮（点击查看该轮所在抽取批次）与「未抽取」标记 */
+.turn-ingest-btn {
+    background: rgba(167, 139, 250, 0.1);
+    color: var(--purple);
+    border: none;
+    border-radius: 20px;
+    cursor: pointer;
+    font-size: 10px;
+    padding: 2px 8px;
+    font-weight: 500;
+    flex-shrink: 0;
+    transition: background 0.2s;
+}
+
+.turn-ingest-btn:hover {
+    background: rgba(167, 139, 250, 0.25);
+}
+
+.badge.not-extracted {
+    background: var(--bg-card-hover);
+    color: var(--text-muted);
+}
+
 .resize-handle {
     width: 4px;
     cursor: col-resize;
