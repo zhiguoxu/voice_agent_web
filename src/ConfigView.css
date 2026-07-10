@@ -248,3 +248,152 @@
 .cfg-raw summary:hover {
   color: var(--text-primary);
 }
+
+/* ── BERT 意图识别面板 ── */
+
+.cfg-intent-card {
+  margin-bottom: 16px;
+}
+
+.cfg-intent-card h3 .roster-refresh {
+  margin-left: 0;
+}
+
+.cfg-badge.health.ok,
+.cfg-badge.hit.ok {
+  background: rgba(74, 222, 128, 0.12);
+  color: var(--green, #4ade80);
+}
+
+.cfg-badge.health.down,
+.cfg-badge.hit.down {
+  background: rgba(248, 113, 113, 0.12);
+  color: var(--red);
+}
+
+.cfg-intent-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 16px;
+}
+
+.cfg-intent-meta code {
+  color: var(--cyan);
+  font-size: 12px;
+}
+
+.cfg-intent-labels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.cfg-intent-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-family: monospace;
+  color: var(--text-primary);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  padding: 3px 10px 3px 4px;
+  border-radius: 12px;
+}
+
+.cfg-intent-label-id {
+  font-size: 11px;
+  color: var(--purple);
+  background: var(--accent-soft);
+  min-width: 20px;
+  text-align: center;
+  padding: 1px 4px;
+  border-radius: 8px;
+}
+
+.cfg-intent-test {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.cfg-intent-test input {
+  flex: 1;
+  max-width: 520px;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--text-primary);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  outline: none;
+}
+
+.cfg-intent-test input:focus {
+  border-color: var(--purple);
+}
+
+.cfg-intent-test button {
+  padding: 8px 20px;
+  font-size: 13px;
+  color: var(--text-primary);
+  background: var(--accent-soft);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.cfg-intent-test button:hover:not(:disabled) {
+  background: var(--bg-card-active);
+}
+
+.cfg-intent-test button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.cfg-intent-results {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cfg-intent-result {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 8px 14px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+}
+
+.cfg-intent-query {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.cfg-intent-arrow {
+  color: var(--text-muted);
+}
+
+.cfg-intent-raw {
+  font-family: monospace;
+  color: var(--text-primary);
+}
+
+.cfg-intent-final {
+  color: var(--text-secondary);
+  margin-left: auto;
+}
+
+.cfg-intent-final code {
+  color: var(--cyan);
+}

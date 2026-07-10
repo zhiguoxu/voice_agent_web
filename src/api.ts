@@ -330,6 +330,46 @@ export async function fetchAgentConfig(): Promise<ServiceConfig> {
   return res.json();
 }
 
+/** BERT 意图分类的 label_map 与服务状态 */
+export interface IntentLabels {
+  labels: Record<string, string>;
+  count: number;
+  base_url: string;
+  confidence_threshold: number;
+  healthy: boolean;
+}
+
+export interface IntentClassifyResult {
+  query: string;
+  label: string;
+  confidence: number;
+  confidence_threshold: number;
+  hit: boolean;
+  final_intent: string;
+}
+
+export async function fetchIntentLabels(): Promise<IntentLabels> {
+  const res = await fetch("/api/agent/intent/labels");
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || "Failed to fetch intent labels");
+  }
+  return res.json();
+}
+
+export async function classifyIntent(text: string): Promise<IntentClassifyResult> {
+  const res = await fetch("/api/agent/intent/classify", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || "Failed to classify intent");
+  }
+  return res.json();
+}
+
 export async function sendAction(
   device_sn: string,
   device_type_id: string,
