@@ -45,6 +45,26 @@
 }
 .recall-chip.low { color: var(--red); }
 
+/* 双塔原始 top 候选（调试行）: 整行独占一行, 排在计划徽签之后 */
+.recall-candidates {
+    flex-basis: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--text-muted);
+}
+.recall-candidate {
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: var(--bg-card);
+}
+.recall-candidate.dropped {
+    text-decoration: line-through;
+    opacity: 0.55;
+}
+
 .recall-timing {
     display: flex;
     gap: 12px;

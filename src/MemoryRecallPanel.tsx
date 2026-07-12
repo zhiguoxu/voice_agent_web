@@ -32,8 +32,8 @@ function PlanChips({ plan, extremumFallback, names }: {
       <span className="recall-chip subjects" title={`检索主体（person_id: ${plan.subjects.join(", ") || "无"}）`}>
         主体: {plan.subjects.length ? plan.subjects.map((p) => personLabel(p, names)).join("、") : "—"}
       </span>
-      <span className="recall-chip key" title="命中的 key 注册表节点（空 = 纯语义 A 类检索）">
-        key: {plan.key ? `${plan.key}${plan.scope === "prefix" ? "/*" : ""}` : "—"}
+      <span className="recall-chip key" title="命中的 key 注册表节点（可多个；root 按子树展开，叶子取正负镜像对；空 = 纯语义 A 类检索）">
+        key: {plan.keys?.length ? plan.keys.join("、") : "—"}
       </span>
       {plan.extremum && <span className="recall-chip flag" title="“最X”类查询：只取极值条目">极值</span>}
       {extremumFallback && (
@@ -43,9 +43,19 @@ function PlanChips({ plan, extremumFallback, names }: {
         </span>
       )}
       {plan.reverse && <span className="recall-chip flag" title="“谁…”反查：不按主体过滤，答案在命中条目的主体里">反查</span>}
-      {plan.negate && <span className="recall-chip flag" title="否定/忌口：取 .not 镜像 key">否定</span>}
       {plan.temporal === "history" && <span className="recall-chip flag" title="“以前/曾经”：放开已失效的旧记忆">历史</span>}
       {plan.confidence === "low" && <span className="recall-chip low" title="主体消解不确定">低置信</span>}
+      {plan.key_candidates && plan.key_candidates.length > 0 && (
+        <div className="recall-candidates"
+             title="双塔原始 top5 候选（服务端 key + 余弦相似度）。keys 才是检索结论；划线 = 归一到本地注册表时被滤掉（key 集合错位/非法）。keys 为空但这里有值 = 模型弃权（带内无卡或 none 第一）">
+          双塔:
+          {plan.key_candidates.map((c) => (
+            <span key={c.raw} className={`recall-candidate ${c.key ? "" : "dropped"}`}>
+              {c.raw}{c.key && c.key !== c.raw ? `→${c.key}` : ""} {c.score.toFixed(3)}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

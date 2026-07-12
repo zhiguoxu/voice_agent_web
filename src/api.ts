@@ -52,13 +52,22 @@ export interface Session {
 }
 
 /** 记忆检索计划（family_memory.RecallPlan，查询理解的输出） */
+/** 双塔 top 候选（纯调试）：服务端原始 key + 余弦，key 为归一到注册表的结果（null = 被滤掉） */
+export interface KeyCandidate {
+  raw: string;
+  score: number;
+  key: string | null;
+}
+
 export interface RecallPlan {
   subjects: string[];
-  key: string | null;
-  scope: string;
+  /** 相关 key 集合（可含 root，召回端按注册表展开；空 = 纯语义 A 类检索）。
+   *  升级前落库的旧 trace 无此字段（当时是单数 key + scope，均已裁撤）。 */
+  keys?: string[];
+  /** 双塔原始 top5 候选（仅双塔被实际调用且有应答的轮次非空；旧 trace 无此字段） */
+  key_candidates?: KeyCandidate[];
   extremum: boolean;
   reverse: boolean;
-  negate: boolean;
   temporal: string;
   confidence: string;
   topic: string;
