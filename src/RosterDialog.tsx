@@ -108,7 +108,7 @@ export function RosterDialog({ deviceSn, onClose }: { deviceSn: string; onClose:
     setPendingDelete(null);
     setDeleting(personId);
     try {
-      await deleteRosterMember(personId);
+      await deleteRosterMember(personId, deviceSn);
       await load();
     } catch (e: any) {
       setError(`删除失败: ${e.message || String(e)}`);

@@ -355,10 +355,14 @@ export async function fetchRoster(deviceSn: string): Promise<RosterData> {
   return res.json();
 }
 
-export async function deleteRosterMember(personId: string): Promise<void> {
-  const res = await fetch(`/api/agent/roster/${encodeURIComponent(personId)}`, {
-    method: "DELETE",
-  });
+/** 删除花名册成员，同时联动删除 person_id 底库里此人的人脸（device_sn 定位底库） */
+export async function deleteRosterMember(
+  personId: string, deviceSn: string,
+): Promise<void> {
+  const res = await fetch(
+    `/api/agent/roster/${encodeURIComponent(personId)}?device_sn=${encodeURIComponent(deviceSn)}`,
+    { method: "DELETE" },
+  );
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
     throw new Error(data.detail || "Failed to delete roster member");
@@ -424,10 +428,13 @@ export async function deleteRosterRelation(
 export interface FaceRegisterResult {
   success: boolean;
   /** 尽量透传 person_id 原始状态。成功: registered(新入库) | already_known
-   *  (人已在库，细节看 message)；前置检查失败: person_id_disabled | busy |
-   *  stream_off | duplicate_name；探测轮全部失败: 透传最后一次的失败码
-   *  (camera_offline | no_target | no_face | low_face_quality 等，兜底
-   *  enroll_failed)；其他: internal_error */
+   *  (人已在库，细节看 message)；前置检查失败: person_id_disabled |
+   *  memory_disabled | busy | person_id_unreachable(服务查询失败，非摄像头
+   *  问题) | stream_off | duplicate_name；探测失败(透传失败码): 3 轮均失败时
+   *  透传最后一次 (camera_offline | no_target | no_face | low_face_quality
+   *  等，兜底 enroll_failed)，服务调用失败则立即中止 (error | disabled)；
+   *  其他: name_save_failed (人脸已入库但名字没写上，重试注册可自愈，
+   *  person_id 有值) | internal_error */
   status: string;
   message: string;
   person_id: string | null;

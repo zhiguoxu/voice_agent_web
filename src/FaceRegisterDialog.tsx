@@ -78,7 +78,7 @@ export function FaceRegisterDialog({ deviceSn, onClose }: {
           </div>
           {submitting && (
             <div className="face-register-result running">
-              ⏳ 注册进行中（最长约 1 分钟）……请让用户按设备语音提示注视 mini 头部
+              ⏳ 注册进行中（典型几十秒，最长约一分半）……请让用户按设备语音提示注视 mini 头部
             </div>
           )}
           {result && (
