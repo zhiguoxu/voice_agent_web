@@ -420,6 +420,36 @@ export async function deleteRosterRelation(
   }
 }
 
+/** 人脸注册的最终结果（接口同步执行完整个流程，成功时必有 person_id） */
+export interface FaceRegisterResult {
+  success: boolean;
+  /** 尽量透传 person_id 原始状态。成功: registered(新入库) | already_known
+   *  (人已在库，细节看 message)；前置检查失败: person_id_disabled | busy |
+   *  stream_off | duplicate_name；探测轮全部失败: 透传最后一次的失败码
+   *  (camera_offline | no_target | no_face | low_face_quality 等，兜底
+   *  enroll_failed)；其他: internal_error */
+  status: string;
+  message: string;
+  person_id: string | null;
+}
+
+/** 触发一次引导式人脸注册。同步接口：阻塞到流程结束（最多 3 轮 × 每轮 4 次
+ *  带质量门槛的注册探测，通常几十秒），期间设备会语音引导用户；返回最终结果。 */
+export async function registerFace(
+  deviceSn: string, name: string,
+): Promise<FaceRegisterResult> {
+  const res = await fetch("/api/agent/face/register", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ device_sn: deviceSn, name }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || "触发人脸注册失败");
+  }
+  return res.json();
+}
+
 /** 记忆条目（B/A 类同构；B 类 key 非空，A 类 key 为空） */
 export interface MemoryItem {
   id: number;

@@ -24,6 +24,7 @@ import { LogMonitor } from "./LogMonitor";
 import { RosterDialog } from "./RosterDialog";
 import { MemoryDialog } from "./MemoryDialog";
 import { MemoryIngestDialog } from "./MemoryIngestDialog";
+import { FaceRegisterDialog } from "./FaceRegisterDialog";
 import { MemoryRecallPanel } from "./MemoryRecallPanel";
 import { ConfigView } from "./ConfigView";
 import "./App.css";
@@ -95,6 +96,8 @@ export default function App() {
      traceId 给定时是轮次行入口（只看该轮所在批次），否则是全家庭列表入口 */
   const [ingestDialog, setIngestDialog] = useState<
     { deviceSn: string; sessionId?: number; traceId?: string } | null>(null);
+  /* 注册人脸对话框：输入人名后触发该设备的引导式人脸注册（结果以设备播报为准） */
+  const [faceRegDeviceSn, setFaceRegDeviceSn] = useState<string | null>(null);
   /* 当前会话中已进入过抽取批次的轮次 trace 集合（轮次行「已抽取/未抽取」标记）。
      记忆系统未启用时为 null，轮次行不显示任何抽取标记 */
   const [extractedTraces, setExtractedTraces] = useState<Set<string> | null>(null);
@@ -772,6 +775,13 @@ export default function App() {
                   >
                     📋 抽取记录
                   </button>
+                  <button
+                    className="roster-open-btn"
+                    title="触发该设备的引导式人脸注册（需摄像头拉流中，注册过程由设备语音引导）"
+                    onClick={() => setFaceRegDeviceSn(selectedSession.device_sn)}
+                  >
+                    📷 注册人脸
+                  </button>
                 </h2>
                 <div className="content-header-actions">
                   {selectedSession.is_online && (
@@ -1270,6 +1280,13 @@ export default function App() {
           sessionId={ingestDialog.sessionId}
           traceId={ingestDialog.traceId}
           onClose={() => setIngestDialog(null)}
+        />
+      )}
+      {/* 注册人脸对话框（触发后流程在后台进行，结果由设备语音播报） */}
+      {faceRegDeviceSn && (
+        <FaceRegisterDialog
+          deviceSn={faceRegDeviceSn}
+          onClose={() => setFaceRegDeviceSn(null)}
         />
       )}
       {/* Custom Confirm Dialog */}

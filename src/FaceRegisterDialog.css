@@ -1,0 +1,62 @@
+/* ── 注册人脸对话框（复用 roster-dialog 外壳，缩小为表单尺寸） ── */
+.roster-dialog.face-register-dialog {
+  width: min(440px, 100%);
+}
+
+.face-register-hint {
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.7;
+  margin-bottom: 16px;
+}
+
+.face-register-form {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.face-register-form .roster-input {
+  flex: 1;
+  padding: 8px 10px;
+  font-size: 14px;
+}
+
+.face-register-form .roster-save-btn {
+  padding: 8px 16px;
+  font-size: 13px;
+}
+
+.face-register-result {
+  margin-top: 14px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.face-register-result.ok {
+  background: rgba(52, 199, 89, 0.12);
+  color: var(--text-primary);
+  border: 1px solid rgba(52, 199, 89, 0.4);
+}
+
+.face-register-result.fail {
+  background: rgba(255, 69, 58, 0.1);
+  color: var(--text-primary);
+  border: 1px solid rgba(255, 69, 58, 0.4);
+}
+
+.face-register-result.running {
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+}
+
+.face-register-pid {
+  margin-top: 6px;
+  font-family: monospace;
+  font-size: 12px;
+  color: var(--text-muted);
+  user-select: all;
+}
