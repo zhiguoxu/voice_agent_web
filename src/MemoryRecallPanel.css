@@ -44,6 +44,12 @@
     border: 1px dashed rgba(251, 191, 36, 0.5);
 }
 .recall-chip.low { color: var(--red); }
+/* 上下文融合从上文继承的 key（本轮没扣出，沿用最近一次扣出的）: 降色 + 虚线下划线 */
+.recall-key-inherited {
+    opacity: 0.6;
+    text-decoration: underline dashed;
+    text-underline-offset: 2px;
+}
 
 /* 双塔原始 top 候选（调试行）: 整行独占一行, 排在计划徽签之后 */
 .recall-candidates {

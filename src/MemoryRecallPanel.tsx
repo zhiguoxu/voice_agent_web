@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import type { MemoryRecall, RecalledMemory, RecallPlan } from "./api";
 import "./MemoryRecallPanel.css";
 
@@ -22,6 +23,14 @@ function personLabel(pid: string, names: Record<string, string>) {
   return names[pid] ? `${names[pid]}` : pid;
 }
 
+/** 融合后的 key 是否出自本轮：own_keys 里有它本身或它的后代即算（祖先塌缩
+ *  可能把本轮叶子并进继承来的祖先，此时该祖先仍覆盖本轮结果，不算纯继承）。
+ *  旧 trace 无 own_keys 字段（当时 keys 恒为本轮自身结果）→ 全按本轮展示。 */
+function keyIsOwn(plan: RecallPlan, k: string): boolean {
+  if (!plan.own_keys) return true;
+  return plan.own_keys.some((o) => o === k || o.startsWith(k + "."));
+}
+
 function PlanChips({ plan, extremumFallback, names }: {
   plan: RecallPlan;
   extremumFallback: boolean;
@@ -32,8 +41,17 @@ function PlanChips({ plan, extremumFallback, names }: {
       <span className="recall-chip subjects" title={`检索主体（person_id: ${plan.subjects.join(", ") || "无"}）`}>
         主体: {plan.subjects.length ? plan.subjects.map((p) => personLabel(p, names)).join("、") : "—"}
       </span>
-      <span className="recall-chip key" title="命中的 key 注册表节点（可多个；root 按子树展开，叶子取正负镜像对；空 = 纯语义 A 类检索）">
-        key: {plan.keys?.length ? plan.keys.join("、") : "—"}
+      <span className="recall-chip key" title="命中的 key 注册表节点（可多个；root 按子树展开，叶子取正负镜像对；空 = 纯语义 A 类检索）。虚线下划线 = 上下文融合从上文继承的 key">
+        key: {plan.keys?.length ? plan.keys.map((k, i) => (
+          <Fragment key={k}>
+            {i > 0 && "、"}
+            <span className={keyIsOwn(plan, k) ? "" : "recall-key-inherited"}
+                  title={keyIsOwn(plan, k) ? undefined
+                    : "从上文继承：本轮 query 没扣出这个 key，是上下文融合并入的最近一次扣出结果（联想式过召，交模型分辨）"}>
+              {k}
+            </span>
+          </Fragment>
+        )) : "—"}
       </span>
       {plan.extremum && <span className="recall-chip flag" title="“最X”类查询：只取极值条目">极值</span>}
       {extremumFallback && (

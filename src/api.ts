@@ -64,6 +64,10 @@ export interface RecallPlan {
   /** 相关 key 集合（可含 root，召回端按注册表展开；空 = 纯语义 A 类检索）。
    *  升级前落库的旧 trace 无此字段（当时是单数 key + scope，均已裁撤）。 */
   keys?: string[];
+  /** 本轮 query 自身解出的 key（未融合）。keys 中不被 own_keys 覆盖的项 =
+   *  上下文融合从上文继承的 key（本轮没扣出时并入最近一次扣出的，2026-07 起）；
+   *  升级前落库的旧 trace 无此字段（当时 keys 恒为本轮自身结果）。 */
+  own_keys?: string[];
   /** 双塔原始 top5 候选（仅双塔被实际调用且有应答的轮次非空；旧 trace 无此字段） */
   key_candidates?: KeyCandidate[];
   extremum: boolean;
