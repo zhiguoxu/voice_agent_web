@@ -604,7 +604,7 @@ export default function App() {
           <div className="filter-bar">
         <div className="filter-group">
           <label>设备 SN</label>
-          <div className="input-wrap">
+          <div className="input-wrap sn">
             <input
               type="text"
               placeholder="精确匹配"

@@ -170,6 +170,12 @@ body {
     width: 160px;
 }
 
+/* 设备 SN 是 18 位编码（如 0125MH00100056125），需要更宽的输入框 */
+.input-wrap.sn,
+.input-wrap.sn input {
+    width: 185px;
+}
+
 .filter-group input:focus {
     border-color: var(--accent);
 }
