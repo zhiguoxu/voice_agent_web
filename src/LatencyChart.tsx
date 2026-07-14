@@ -14,6 +14,7 @@ export function LatencyChart({ turn }: { turn: Turn }) {
     turn.t_tool_execute_done || 0,
     turn.t_llm_tool_done || 0,
     turn.t_subagent_done || 0,
+    turn.t_emote_action_done || 0,
     turn.t_bert_done || 0,
     turn.t_asr_done || 0,
     turn.t_stateless_start || 0,
@@ -66,6 +67,18 @@ export function LatencyChart({ turn }: { turn: Turn }) {
   if (turn.t_subagent_start && turn.t_subagent_done) {
     const label = turn.subagent_name ? `${turn.subagent_name}调用` : "Agent调用";
     phases.push({ label, start: turn.t_subagent_start, end: turn.t_subagent_done, color: "var(--blue)" });
+  }
+
+  // 动作/表情生成：与 LLM 生成并行的后台任务，条形与主链路重叠属正常。
+  // 只有 start 没有 done 时不渲染，两种正常成因（数据性质而非 bug）：
+  //   1. 落库数据：任务是 fire-and-forget，比本轮持久化晚结束则 done 未写入；
+  //   2. 复现数据：done 事件在主流式结束时快照 timing，任务未跑完则快照里无 done。
+  if (turn.t_emote_action_start && turn.t_emote_action_done) {
+    const sent = [
+      turn.emote_action_sent ? `动作: ${turn.emote_action_sent}` : null,
+      turn.emote_face_sent ? `表情: ${turn.emote_face_sent}` : null,
+    ].filter(Boolean).join('\n');
+    phases.push({ label: "动作表情生成", start: turn.t_emote_action_start, end: turn.t_emote_action_done, color: "var(--purple)", tooltip: sent || undefined });
   }
 
   if (turn.t_llm_tool_start && turn.t_llm_tool_done) {

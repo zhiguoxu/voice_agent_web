@@ -136,6 +136,12 @@ export interface Turn {
   bert_confidence: number | null;
   t_subagent_start: number | null;
   t_subagent_done: number | null;
+  /** 动作/表情生成（emote_action）：与主链路并行的后台任务；本轮先落库时 done 可能为空 */
+  t_emote_action_start: number | null;
+  t_emote_action_done: number | null;
+  /** 下发的动作/表情, 如 "59(开心挥手)"; 未下发为空 */
+  emote_action_sent: string | null;
+  emote_face_sent: string | null;
   t_llm_tool_start: number | null;
   t_llm_tool_done: number | null;
   t_tool_execute_start: number | null;
@@ -269,6 +275,10 @@ export interface ReplayResult {
     bert_confidence?: number | null;
     t_subagent_start?: number | null;
     t_subagent_done?: number | null;
+    t_emote_action_start?: number | null;
+    t_emote_action_done?: number | null;
+    emote_action_sent?: string | null;
+    emote_face_sent?: string | null;
     t_llm_tool_start?: number | null;
     t_llm_tool_done?: number | null;
     t_tool_execute_start?: number | null;
