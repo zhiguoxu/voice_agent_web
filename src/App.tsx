@@ -607,7 +607,7 @@ export default function App() {
           <div className="input-wrap sn">
             <input
               type="text"
-              placeholder="精确匹配"
+              placeholder="支持部分匹配"
               value={filterSn}
               disabled={isLoading}
               onChange={(e) => setFilterSn(e.target.value)}
