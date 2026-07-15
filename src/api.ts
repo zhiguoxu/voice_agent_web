@@ -41,6 +41,8 @@ export async function clearBackendLogs(): Promise<void> {
 export interface Session {
   id: number;
   device_sn: string;
+  /** 设备显示名称（控制台起的好记名字），未命名为 null */
+  device_name?: string | null;
   user_id: string;
   device_type_id: string;
   location: string | null;
@@ -725,6 +727,25 @@ export async function sendAction(
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
     throw new Error(data.detail || "Failed to send action");
+  }
+}
+
+/** 设置设备显示名称（空串清除）。名称是设备档案属性，同设备所有会话共用 */
+export async function updateDeviceName(
+  deviceSn: string,
+  name: string
+): Promise<void> {
+  const res = await fetch(
+    `/api/voice/device/${encodeURIComponent(deviceSn)}/name`,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    }
+  );
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || "Failed to update device name");
   }
 }
 

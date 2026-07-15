@@ -9,6 +9,7 @@ import {
   replayTurn,
   testSessionInput,
   forceNewSession,
+  updateDeviceName,
   fetchRoster,
   fetchExtractedTraces,
   type Session,
@@ -366,6 +367,32 @@ export default function App() {
     }
   };
 
+  /* ── 设备显示名称：名称挂在设备档案上，同设备的所有会话一起更新 ── */
+  const handleRenameDevice = async (e: React.MouseEvent, s: Session) => {
+    e.stopPropagation();
+    const input = window.prompt(
+      `设备 ${s.device_sn} 的显示名称（留空清除）：`,
+      s.device_name ?? ""
+    );
+    if (input === null) return; // 取消
+    const name = input.trim();
+    try {
+      await updateDeviceName(s.device_sn, name);
+      setSessions((prev) =>
+        prev.map((x) =>
+          x.device_sn === s.device_sn ? { ...x, device_name: name || null } : x
+        )
+      );
+      setSelectedSession((prev) =>
+        prev && prev.device_sn === s.device_sn
+          ? { ...prev, device_name: name || null }
+          : prev
+      );
+    } catch (err: any) {
+      alert(`设置设备名称失败: ${err.message}`);
+    }
+  };
+
   const handleForceNewSession = async (e: React.MouseEvent, s: Session) => {
     e.stopPropagation();
     if (!await showConfirm("确定要为该设备开启一个新 Session 吗？\n当前 Session 的对话记录会保留，后续对话将在新 Session 中进行，LLM 上下文从零开始。")) return;
@@ -678,9 +705,17 @@ export default function App() {
                 <div className="session-header-row">
                   <div className="session-sn">
                     <span className={`online-dot ${s.is_online ? "online" : ""}`} title={s.is_online ? "在线" : "离线"} />
-                    {s.device_sn}
+                    {s.device_name || s.device_sn}
+                    {s.device_name && <span className="device-sn-sub">{s.device_sn}</span>}
                   </div>
                   <div className="session-actions">
+                    <button
+                      className="session-action-btn"
+                      onClick={(e) => handleRenameDevice(e, s)}
+                      title="设置设备显示名称"
+                    >
+                      ✏️
+                    </button>
                     {s.is_online && (
                       <button
                         className="session-action-btn new-session"
@@ -752,7 +787,11 @@ export default function App() {
             <>
               <div className="content-header">
                 <h2>
-                  会话 #{selectedSession.id} — {selectedSession.device_sn}
+                  会话 #{selectedSession.id} — {
+                    selectedSession.device_name
+                      ? `${selectedSession.device_name} (${selectedSession.device_sn})`
+                      : selectedSession.device_sn
+                  }
                   <span className="header-user">👤 {selectedSession.user_id || "-"}</span>
                   <button
                     className="roster-open-btn"
