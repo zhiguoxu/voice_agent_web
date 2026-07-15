@@ -642,6 +642,36 @@ export async function fetchAgentConfig(): Promise<ServiceConfig> {
   return res.json();
 }
 
+/** 提示词模板里会被程序替换的一个占位符 */
+export interface PromptPlaceholder {
+  name: string;   // 含花括号, 如 {memory}
+  note: string;   // 注入什么、什么时机注入
+}
+
+/** 一个 LLM 提示词模板的元信息与原文（GET /api/agent/prompts） */
+export interface PromptTemplateInfo {
+  key: string;
+  title: string;
+  usage: string;
+  source: string;              // 来源文件（仓库相对路径）
+  source_kind: string;         // yaml=改配置即可调整 | code=写死在代码里
+  model: string | null;        // 使用该提示词的 LLM 模型名（未接入为 null）
+  placeholders: PromptPlaceholder[];
+  template: string;            // 模板原文（占位符未填充）
+  /** 启动时一次性渲染后的实际提示词（仅码表类静态占位符的模板有） */
+  rendered: string | null;
+}
+
+export async function fetchPrompts(): Promise<PromptTemplateInfo[]> {
+  const res = await fetch("/api/agent/prompts");
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || "Failed to fetch prompts");
+  }
+  const data = await res.json();
+  return data.prompts ?? [];
+}
+
 /** BERT 意图分类的 label_map 与服务状态 */
 export interface IntentLabels {
   labels: Record<string, string>;

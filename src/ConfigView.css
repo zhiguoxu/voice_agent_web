@@ -397,3 +397,162 @@
 .cfg-intent-final code {
   color: var(--cyan);
 }
+
+/* ── 提示词配置面板 ── */
+
+.cfg-prompt-card {
+  margin-bottom: 16px;
+}
+
+.cfg-prompt-card h3 .roster-refresh {
+  margin-left: 0;
+}
+
+.cfg-prompt-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cfg-prompt-item {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-secondary);
+}
+
+.cfg-prompt-item summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 10px 14px;
+  cursor: pointer;
+  user-select: none;
+  font-size: 13px;
+}
+
+.cfg-prompt-item summary:hover {
+  background: var(--bg-card-hover);
+}
+
+.cfg-prompt-title {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.cfg-prompt-summary-badges {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cfg-badge.kind-yaml {
+  background: rgba(34, 211, 238, 0.1);
+  color: var(--cyan);
+}
+
+.cfg-badge.kind-code {
+  background: rgba(251, 191, 36, 0.12);
+  color: var(--yellow, #fbbf24);
+}
+
+.cfg-badge.model {
+  font-family: monospace;
+  font-weight: normal;
+}
+
+.cfg-prompt-len {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.cfg-prompt-body {
+  padding: 4px 14px 14px;
+  border-top: 1px solid var(--border);
+}
+
+.cfg-prompt-usage {
+  margin: 10px 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
+.cfg-prompt-placeholders {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.cfg-prompt-placeholder {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* 占位符高亮：占位符表与模板正文里同款色块，扫一眼就能对上号 */
+.cfg-ph {
+  font-family: monospace;
+  font-size: 12px;
+  color: var(--purple);
+  background: var(--accent-soft);
+  padding: 0 5px;
+  border-radius: 5px;
+  white-space: nowrap;
+}
+
+.cfg-prompt-viewtabs {
+  display: inline-flex;
+  gap: 0;
+  margin-bottom: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.cfg-prompt-viewtabs button {
+  padding: 5px 14px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  background: var(--bg-card);
+  border: none;
+  cursor: pointer;
+}
+
+.cfg-prompt-viewtabs button + button {
+  border-left: 1px solid var(--border);
+}
+
+.cfg-prompt-viewtabs button.active {
+  color: var(--purple);
+  background: var(--accent-soft);
+}
+
+.cfg-prompt-pre {
+  margin: 0;
+  padding: 12px;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--text-primary);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 480px;
+  overflow-y: auto;
+}
+
+.cfg-prompt-source {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.cfg-prompt-source code {
+  color: var(--text-secondary);
+}

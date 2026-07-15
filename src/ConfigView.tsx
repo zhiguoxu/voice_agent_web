@@ -8,6 +8,7 @@ import {
   type IntentLabels,
   type IntentClassifyResult,
 } from "./api";
+import { PromptsPanel } from "./PromptsPanel";
 import "./ConfigView.css";
 
 /* 顶层配置段的中文标题：帮助非开发同学快速定位；没收录的段直接显示原始字段名 */
@@ -104,6 +105,7 @@ function ServiceCard({
   data,
   error,
   loading,
+  hideSections,
 }: {
   icon: string;
   title: string;
@@ -111,12 +113,15 @@ function ServiceCard({
   data: ServiceConfig | null;
   error: string | null;
   loading: boolean;
+  /** 不在分段区展示的顶层段（已有专门面板承接的，如 prompt；原始 JSON 里仍保留） */
+  hideSections?: string[];
 }) {
   const scalarEntries = data
     ? Object.entries(data.config).filter(([, v]) => !isPlainObject(v) && !Array.isArray(v))
     : [];
   const sectionEntries = data
-    ? Object.entries(data.config).filter(([, v]) => isPlainObject(v) || Array.isArray(v))
+    ? Object.entries(data.config).filter(
+        ([k, v]) => (isPlainObject(v) || Array.isArray(v)) && !hideSections?.includes(k))
     : [];
 
   return (
@@ -344,6 +349,7 @@ export function ConfigView() {
         </button>
       </div>
       <IntentPanel />
+      <PromptsPanel />
       <div className="cfg-grid">
         <ServiceCard
           icon="🎙️"
@@ -360,6 +366,7 @@ export function ConfigView() {
           data={agent}
           error={agentError}
           loading={loading}
+          hideSections={["prompt"]}
         />
       </div>
     </div>
