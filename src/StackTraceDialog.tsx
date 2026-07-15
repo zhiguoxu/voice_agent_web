@@ -111,7 +111,7 @@ function FrameCard({ frame, index, isLast }: { frame: Frame; index: number; isLa
       <span className="stack-frame-index">{index + 1}</span>
       <div className="stack-frame-main">
         <div className="stack-frame-loc">
-          <span className="stack-frame-dir" title={frame.file}>{dir}</span>
+          <span className="stack-frame-dir" data-tip={frame.file}>{dir}</span>
           <span className="stack-frame-file">{base}:{frame.line}</span>
           <span className="stack-frame-func">{frame.func}</span>
           {lib && <span className="stack-tag lib-tag">库</span>}
@@ -171,14 +171,14 @@ export function StackTraceDialog({ entry, onClose }: { entry: LogEntry; onClose:
             className={`stack-toggle-btn ${showRaw ? "active" : ""}`}
             onClick={() => setShowRaw((v) => !v)}
             disabled={!segments}
-            title={segments ? "在解析视图与原始文本间切换" : "解析失败，仅原始文本"}
+            data-tip={segments ? "在解析视图与原始文本间切换" : "解析失败，仅原始文本"}
           >
             {showRaw ? "解析视图" : "原始文本"}
           </button>
           <button className="stack-toggle-btn" onClick={copyRaw}>
             {copied ? "✓ 已复制" : "📋 复制"}
           </button>
-          <button className="roster-close" onClick={onClose} title="关闭 (Esc)">×</button>
+          <button className="roster-close" onClick={onClose} data-tip="关闭 (Esc)">×</button>
         </h3>
 
         <div className="roster-dialog-body">
@@ -187,7 +187,7 @@ export function StackTraceDialog({ entry, onClose }: { entry: LogEntry; onClose:
             <span className="stack-exc-type">{title.type || "Exception"}</span>
             {title.message && <span className="stack-exc-msg">{title.message}</span>}
           </div>
-          <div className="stack-log-msg" title="触发这条日志的消息">{entry.msg}</div>
+          <div className="stack-log-msg" data-tip="触发这条日志的消息">{entry.msg}</div>
 
           {!segments || showRaw ? (
             <pre className="stack-raw">{raw}</pre>

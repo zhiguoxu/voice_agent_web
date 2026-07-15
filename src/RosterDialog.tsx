@@ -208,7 +208,7 @@ export function RosterDialog({ deviceSn, onClose }: { deviceSn: string; onClose:
 
   const renderEditRow = (m: RosterMember) => (
     <tr key={m.person_id} className="roster-edit-row">
-      <td><code className="roster-pid" title={m.person_id}>{m.person_id}</code></td>
+      <td><code className="roster-pid" data-tip={m.person_id}>{m.person_id}</code></td>
       <td>
         <input className="roster-input" value={draft!.name} placeholder="名字"
                onChange={(e) => setDraft({ ...draft!, name: e.target.value })} />
@@ -256,12 +256,12 @@ export function RosterDialog({ deviceSn, onClose }: { deviceSn: string; onClose:
     if (editingPid === m.person_id && draft) return renderEditRow(m);
     return (
       <tr key={m.person_id}>
-        <td><code className="roster-pid" title={m.person_id}>{m.person_id}</code></td>
+        <td><code className="roster-pid" data-tip={m.person_id}>{m.person_id}</code></td>
         <td className="roster-name">{m.name || <span className="roster-missing">未记名</span>}</td>
         <td>{m.aliases.length > 0 ? m.aliases.join(" / ") : "-"}</td>
         <td>
           {m.role ? (
-            <span className="roster-role" title={m.role}>
+            <span className="roster-role" data-tip={m.role}>
               {ROLE_LABELS[m.role] || m.role}
             </span>
           ) : "-"}
@@ -275,7 +275,7 @@ export function RosterDialog({ deviceSn, onClose }: { deviceSn: string; onClose:
             className="roster-edit-btn"
             onClick={() => startEdit(m)}
             disabled={editingPid !== null}
-            title="编辑成员属性"
+            data-tip="编辑成员属性"
           >
             ✏️
           </button>
@@ -283,7 +283,7 @@ export function RosterDialog({ deviceSn, onClose }: { deviceSn: string; onClose:
             <button
               className="roster-delete-btn confirm"
               onClick={() => confirmDelete(m.person_id)}
-              title="再次点击确认；连带删除该成员参与的全部关系边"
+              data-tip="再次点击确认；连带删除该成员参与的全部关系边"
             >
               确认删除{relationCount(m.person_id) > 0 ? `(含${relationCount(m.person_id)}条关系)` : ""}
             </button>
@@ -292,7 +292,7 @@ export function RosterDialog({ deviceSn, onClose }: { deviceSn: string; onClose:
               className="roster-delete-btn"
               onClick={() => armDelete(m.person_id)}
               disabled={deleting === m.person_id || editingPid !== null}
-              title="删除该成员（会先清理其全部关系边）"
+              data-tip="删除该成员（会先清理其全部关系边）"
             >
               {deleting === m.person_id ? <span className="spinner inline" /> : "🗑️"}
             </button>
@@ -311,7 +311,7 @@ export function RosterDialog({ deviceSn, onClose }: { deviceSn: string; onClose:
           <button className="roster-refresh" onClick={load} disabled={loading}>
             {loading ? <span className="spinner inline" /> : "🔄 刷新"}
           </button>
-          <button className="roster-close" onClick={onClose} title="关闭 (Esc)">×</button>
+          <button className="roster-close" onClick={onClose} data-tip="关闭 (Esc)">×</button>
         </h3>
 
         <div className="roster-dialog-body">
@@ -368,7 +368,7 @@ export function RosterDialog({ deviceSn, onClose }: { deviceSn: string; onClose:
                         className="roster-delete-btn"
                         onClick={() => removeRelation(r)}
                         disabled={relBusy}
-                        title="删除这条关系边"
+                        data-tip="删除这条关系边"
                       >
                         🗑️
                       </button>

@@ -49,7 +49,7 @@ export function FaceRegisterDialog({ deviceSn, onClose }: {
         <h3>
           📷 注册人脸
           <span className="subtitle">设备 {deviceSn}</span>
-          <button className="roster-close" onClick={onClose} title="关闭 (Esc)">×</button>
+          <button className="roster-close" onClick={onClose} data-tip="关闭 (Esc)">×</button>
         </h3>
 
         <div className="roster-dialog-body">

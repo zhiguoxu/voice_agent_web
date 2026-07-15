@@ -54,7 +54,7 @@ function TurnList({ turns, muted, highlightTrace }: {
           key={t.turn_id}
           className={`ingest-turn ${t.is_robot ? "robot" : ""} ${
             highlightTrace && t.trace_id === highlightTrace ? "hit" : ""}`}
-          title={t.trace_id ? `trace: ${t.trace_id}` : undefined}
+          data-tip={t.trace_id ? `trace: ${t.trace_id}` : undefined}
         >
           <code className="ingest-turn-id">{t.turn_id}</code>
           <span className="ingest-turn-speaker">{t.speaker}</span>
@@ -105,7 +105,7 @@ function RunDetail({ run, highlightTrace }: { run: MemoryIngestRun; highlightTra
                   {d.tag.negate && <span className="memory-badge superseded-tag">撤回</span>}
                 </span>
               )}
-              <span className="memory-item-content" title={d.content_raw}>{d.content}</span>
+              <span className="memory-item-content" data-tip={d.content_raw}>{d.content}</span>
               {d.mem_type === "household" && <span className="memory-badge household">全家</span>}
               {d.from_turn != null && (
                 <span className="memory-item-time">来源 {String(d.from_turn)}</span>
@@ -190,7 +190,7 @@ export function MemoryIngestDialog({ deviceSn, sessionId, traceId, onClose }: {
           <button className="roster-refresh" onClick={load} disabled={loading}>
             {loading ? <span className="spinner inline" /> : "🔄 刷新"}
           </button>
-          <button className="roster-close" onClick={onClose} title="关闭 (Esc)">×</button>
+          <button className="roster-close" onClick={onClose} data-tip="关闭 (Esc)">×</button>
         </h3>
 
         <div className="roster-dialog-body">
@@ -221,7 +221,7 @@ export function MemoryIngestDialog({ deviceSn, sessionId, traceId, onClose }: {
                           {run.new_turns.length} 轮 → {run.draft_count} 条草稿
                           {run.stats ? ` · ${statsSummary(run.stats) || "全部跳过"}` : ""}
                         </span>
-                        <span className="memory-item-time" title={`会话 #${run.session_id}`}>
+                        <span className="memory-item-time" data-tip={`会话 #${run.session_id}`}>
                           {formatTime(run.created_at)}
                         </span>
                       </summary>

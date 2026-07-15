@@ -118,7 +118,7 @@ export function LatencyChart({ turn }: { turn: Turn }) {
             const endMs = (p.end - t0) * 1000;
             const hoverTitle = `${p.label}: ${startMs.toFixed(1)}ms → ${endMs.toFixed(1)}ms（耗时 ${(endMs - startMs).toFixed(1)}ms）`;
             return (
-              <div key={idx} className="latency-row" data-hover={hoverTitle}>
+              <div key={idx} className="latency-row" data-tip={hoverTitle}>
                 <div className="latency-label">
                   <div>
                     {p.label}

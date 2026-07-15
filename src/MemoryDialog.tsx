@@ -75,24 +75,24 @@ function ItemRow({ item }: { item: MemoryItem }) {
           {item.is_extremum && <span className="memory-badge extremum">最X</span>}
         </span>
       )}
-      <span className="memory-item-content" title={item.content_raw}>
+      <span className="memory-item-content" data-tip={item.content_raw}>
         {item.content}
       </span>
       {item.mem_type === "household" && (
         <span className="memory-badge household">全家</span>
       )}
       {item.due_at && (
-        <span className="memory-item-due" title="日程失效时刻（过期后召回自动过滤）">
+        <span className="memory-item-due" data-tip="日程失效时刻（过期后召回自动过滤）">
           ⏰ {formatTime(item.due_at)}
         </span>
       )}
       {item.status === "superseded" && (
         <span className="memory-badge superseded-tag"
-              title={item.superseded_by != null ? `被 #${item.superseded_by} 替代` : "已失效（无替代者）"}>
+              data-tip={item.superseded_by != null ? `被 #${item.superseded_by} 替代` : "已失效（无替代者）"}>
           已失效
         </span>
       )}
-      <span className="memory-item-time" title={`条目 #${item.id} · 会话 #${item.session_id}`}>
+      <span className="memory-item-time" data-tip={`条目 #${item.id} · 会话 #${item.session_id}`}>
         {formatTime(item.created_at)}
       </span>
     </div>
@@ -185,7 +185,7 @@ export function MemoryDialog({ deviceSn, onClose }: { deviceSn: string; onClose:
           <button className="roster-refresh" onClick={load} disabled={loading}>
             {loading ? <span className="spinner inline" /> : "🔄 刷新"}
           </button>
-          <button className="roster-close" onClick={onClose} title="关闭 (Esc)">×</button>
+          <button className="roster-close" onClick={onClose} data-tip="关闭 (Esc)">×</button>
         </h3>
 
         <div className="roster-dialog-body">
@@ -248,13 +248,13 @@ export function MemoryDialog({ deviceSn, onClose }: { deviceSn: string; onClose:
                           <tr key={it.id}>
                             <td className="roster-time">{it.id}</td>
                             <td>{subjectNames(it)}</td>
-                            <td className="memory-a-content" title={it.content_raw}>
+                            <td className="memory-a-content" data-tip={it.content_raw}>
                               {it.content}
                             </td>
                             <td>{it.mem_type === "household"
                               ? <span className="memory-badge household">全家</span> : "个人"}</td>
                             <td>{it.speaker || "-"}</td>
-                            <td className="roster-time" title={`会话 #${it.session_id}`}>
+                            <td className="roster-time" data-tip={`会话 #${it.session_id}`}>
                               {formatTime(it.created_at)}
                             </td>
                           </tr>

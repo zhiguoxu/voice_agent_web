@@ -331,7 +331,7 @@ export function DeviceControl({ sessions }: DeviceControlProps) {
               className={`action-btn ${loadingAction === 1000 + idx ? "loading" : ""}`}
               disabled={loadingAction !== null}
               onClick={() => handleSendIntentAction(action, 1000 + idx)}
-              title={`English: ${action.en_name}\nPayload: ${JSON.stringify(action.payload)}`}
+              data-tip={`English: ${action.en_name}\nPayload: ${JSON.stringify(action.payload)}`}
             >
               <span className="action-id" style={{ background: 'var(--bg-card-hover)', color: 'var(--text-primary)', fontSize: '16px' }}>{action.icon}</span>
               <span className="action-name">{action.zh_name}</span>
@@ -349,7 +349,7 @@ export function DeviceControl({ sessions }: DeviceControlProps) {
               className={`action-btn ${loadingAction === action.id ? "loading" : ""}`}
               disabled={loadingAction !== null}
               onClick={() => handleSendAction(action.id)}
-              title={`English: ${action.en_name}\nID: ${action.id}`}
+              data-tip={`English: ${action.en_name}\nID: ${action.id}`}
             >
               <span className="action-id">{action.id}</span>
               <span className="action-name">{action.zh_name}</span>

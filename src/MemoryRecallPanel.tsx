@@ -38,34 +38,34 @@ function PlanChips({ plan, extremumFallback, names }: {
 }) {
   return (
     <div className="recall-plan">
-      <span className="recall-chip subjects" title={`检索主体（person_id: ${plan.subjects.join(", ") || "无"}）`}>
+      <span className="recall-chip subjects" data-tip={`检索主体（person_id: ${plan.subjects.join(", ") || "无"}）`}>
         主体: {plan.subjects.length ? plan.subjects.map((p) => personLabel(p, names)).join("、") : "—"}
       </span>
-      <span className="recall-chip key" title="命中的 key 注册表节点（可多个；root 按子树展开，叶子取正负镜像对；空 = 纯语义 A 类检索）。虚线下划线 = 上下文融合从上文继承的 key">
+      <span className="recall-chip key" data-tip="命中的 key 注册表节点（可多个；root 按子树展开，叶子取正负镜像对；空 = 纯语义 A 类检索）。虚线下划线 = 上下文融合从上文继承的 key">
         key: {plan.keys?.length ? plan.keys.map((k, i) => (
           <Fragment key={k}>
             {i > 0 && "、"}
             <span className={keyIsOwn(plan, k) ? "" : "recall-key-inherited"}
-                  title={keyIsOwn(plan, k) ? undefined
+                  data-tip={keyIsOwn(plan, k) ? undefined
                     : "从上文继承：本轮 query 没扣出这个 key，是上下文融合并入的最近一次扣出结果（联想式过召，交模型分辨）"}>
               {k}
             </span>
           </Fragment>
         )) : "—"}
       </span>
-      {plan.extremum && <span className="recall-chip flag" title="“最X”类查询：只取极值条目">极值</span>}
+      {plan.extremum && <span className="recall-chip flag" data-tip="“最X”类查询：只取极值条目">极值</span>}
       {extremumFallback && (
         <span className="recall-chip fallback"
-              title="没有任何带“最”标志的记录，已放开极值条件按普通同类条目召回；注入块里提示模型不要断言哪个是“最”">
+              data-tip="没有任何带“最”标志的记录，已放开极值条件按普通同类条目召回；注入块里提示模型不要断言哪个是“最”">
           极值回落
         </span>
       )}
-      {plan.reverse && <span className="recall-chip flag" title="“谁…”反查：不按主体过滤，答案在命中条目的主体里">反查</span>}
-      {plan.temporal === "history" && <span className="recall-chip flag" title="“以前/曾经”：放开已失效的旧记忆">历史</span>}
-      {plan.confidence === "low" && <span className="recall-chip low" title="主体消解不确定">低置信</span>}
+      {plan.reverse && <span className="recall-chip flag" data-tip="“谁…”反查：不按主体过滤，答案在命中条目的主体里">反查</span>}
+      {plan.temporal === "history" && <span className="recall-chip flag" data-tip="“以前/曾经”：放开已失效的旧记忆">历史</span>}
+      {plan.confidence === "low" && <span className="recall-chip low" data-tip="主体消解不确定">低置信</span>}
       {plan.key_candidates && plan.key_candidates.length > 0 && (
         <div className="recall-candidates"
-             data-hover={"双塔模型的原始 top5 打分，仅供调试；上方 key: 才是结论\n划线 = 不是合法 key，已被过滤\nkey 为 — 而这里有值 = 模型弃权（没找到足够相关的类别）"}>
+             data-tip={"双塔模型的原始 top5 打分，仅供调试；上方 key: 才是结论\n划线 = 不是合法 key，已被过滤\nkey 为 — 而这里有值 = 模型弃权（没找到足够相关的类别）"}>
           双塔:
           {plan.key_candidates.map((c) => (
             <span key={c.raw} className={`recall-candidate ${c.key ? "" : "dropped"}`}>
@@ -84,15 +84,15 @@ function RecordRow({ record }: { record: RecalledMemory }) {
     <div className="recall-record">
       <div className="recall-record-head">
         <span className={`recall-pool ${record.tag ? "b" : "a"}`}
-              title={record.tag ? "B 池：有 key 的结构化条目（索引命中）" : "A 池：无 key 的条目（语义召回）"}>
+              data-tip={record.tag ? "B 池：有 key 的结构化条目（索引命中）" : "A 池：无 key 的条目（语义召回）"}>
           {record.tag ? "B" : "A"}
         </span>
         {record.score != null && (
-          <span className="recall-score" title="召回打分（与查询向量的点积；嵌入服务故障时为字面覆盖率兜底分）">
+          <span className="recall-score" data-tip="召回打分（与查询向量的点积；嵌入服务故障时为字面覆盖率兜底分）">
             {record.score.toFixed(3)}
           </span>
         )}
-        <span className="recall-mid" title="记忆条目在记忆库(memory_items)中的行 ID，非排名；列表顺序即召回排名">
+        <span className="recall-mid" data-tip="记忆条目在记忆库(memory_items)中的行 ID，非排名；列表顺序即召回排名">
           id:{record.memory_id}
         </span>
         {record.subject_names.length > 0 && (
@@ -110,7 +110,7 @@ function RecordRow({ record }: { record: RecalledMemory }) {
           )}
           {m.due_at && <span className="recall-due">📅 {m.due_at.slice(0, 10)}</span>}
           {m.status !== "active" && (
-            <span className="recall-status" title={m.superseded_at ? `失效于 ${m.superseded_at}` : ""}>已过时</span>
+            <span className="recall-status" data-tip={m.superseded_at ? `失效于 ${m.superseded_at}` : ""}>已过时</span>
           )}
         </div>
       ))}
@@ -133,7 +133,7 @@ export function MemoryRecallPanel({ recall, names }: {
   return (
     <div className="recall-panel">
       {recall.error && (
-        <div className="recall-error" title="召回中途异常，本轮已降级为无记忆注入">⚠️ 召回异常降级：{recall.error}</div>
+        <div className="recall-error" data-tip="召回中途异常，本轮已降级为无记忆注入">⚠️ 召回异常降级：{recall.error}</div>
       )}
 
       {recall.plan ? (

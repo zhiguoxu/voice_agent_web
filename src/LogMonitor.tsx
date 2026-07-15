@@ -155,7 +155,7 @@ export function LogMonitor() {
             setLive(v);
             localStorage.setItem("logLive", String(v));
           }}
-          title={live ? "暂停实时" : "开启实时"}
+          data-tip={live ? "暂停实时" : "开启实时"}
         >
           <span className={`log-live-dot ${live && connected ? "on" : live ? "connecting" : ""}`} />
           {live ? (connected ? "实时中" : "连接中…") : "已暂停"}
@@ -261,7 +261,7 @@ export function LogMonitor() {
             min={4}
             max={120}
             value={locLen}
-            title="位置最大显示字符数，超出则截断前部、保留后部"
+            data-tip="位置最大显示字符数，超出则截断前部、保留后部"
             onChange={(e) => {
               const n = parseInt(e.target.value, 10);
               const v = Number.isFinite(n) && n > 0 ? n : 30;
@@ -278,10 +278,10 @@ export function LogMonitor() {
 
         <div className="log-toolbar-spacer" />
 
-        <button className="log-btn" onClick={jumpToBottom} title="滚到底部并恢复自动跟随">
+        <button className="log-btn" onClick={jumpToBottom} data-tip="滚到底部并恢复自动跟随">
           ↓ 底部
         </button>
-        <button className="log-btn danger" onClick={clearLogs} title="清空前端 + 后端日志缓存">
+        <button className="log-btn danger" onClick={clearLogs} data-tip="清空前端 + 后端日志缓存">
           🧹 清空
         </button>
       </div>
@@ -297,7 +297,7 @@ export function LogMonitor() {
           filtered.map((l, i) => (
             <div key={l.seq ?? `${l.time}-${i}`} className={`log-row level-${l.level}`}>
               {/* time 为定宽 "YYYY-MM-DD HH:mm:ss.SSS"；关闭「显示日期」时只取时间部分 */}
-              <span className="log-time" title={l.time}>
+              <span className="log-time" data-tip={l.time}>
                 {showDate ? l.time : l.time.slice(11)}
               </span>
               {l.source && (
@@ -313,7 +313,7 @@ export function LogMonitor() {
                   <span
                     className={`log-loc${locFixed ? " fixed" : ""}`}
                     style={locFixed ? { width: `${locLen + 1}ch` } : undefined}
-                    title={loc}
+                    data-tip={loc}
                   >
                     {shown}
                   </span>
@@ -335,7 +335,7 @@ export function LogMonitor() {
                 <button
                   className="log-exc-btn"
                   onClick={() => setStackEntry(l)}
-                  title="查看异常堆栈"
+                  data-tip="查看异常堆栈"
                 >
                   堆栈
                 </button>

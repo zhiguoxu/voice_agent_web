@@ -41,7 +41,7 @@ function ConfigValue({ value }: { value: unknown }) {
     return <span className="cfg-null">-</span>;
   }
   if (value === "***") {
-    return <span className="cfg-masked" title="敏感字段，后端已脱敏">🔒 已脱敏</span>;
+    return <span className="cfg-masked" data-tip="敏感字段，后端已脱敏">🔒 已脱敏</span>;
   }
   if (typeof value === "boolean") {
     return <span className={`cfg-bool ${value ? "on" : "off"}`}>{value ? "✔ true" : "✘ false"}</span>;

@@ -81,7 +81,7 @@ function SpeakerBadge({ speakerId, speakerName, names }: {
   if (!speakerId) return null;
   const name = speakerName || names[speakerId];
   return (
-    <span className={`speaker-badge ${name ? "" : "unnamed"}`} title={`speaker_id: ${speakerId}`}>
+    <span className={`speaker-badge ${name ? "" : "unnamed"}`} data-tip={`speaker_id: ${speakerId}`}>
       {name ? `${name} (${speakerId})` : speakerId}
     </span>
   );
@@ -593,7 +593,7 @@ export default function App() {
       <header className="header">
         <h1>
           🎙️ 控制台
-          <span className="app-version" title="前端版本">v{__APP_VERSION__}</span>
+          <span className="app-version" data-tip="前端版本">v{__APP_VERSION__}</span>
         </h1>
         <div className="main-tabs">
           <button 
@@ -684,7 +684,7 @@ export default function App() {
             setFilterOnline(val);
             localStorage.setItem("filterOnline", String(val));
           }}
-          title={filterOnline ? "显示全部会话" : "仅显示在线会话"}
+          data-tip={filterOnline ? "显示全部会话" : "仅显示在线会话"}
         >
           <span className={`online-dot ${filterOnline ? "online" : ""}`} />
           在线
@@ -704,7 +704,7 @@ export default function App() {
               >
                 <div className="session-header-row">
                   <div className="session-sn">
-                    <span className={`online-dot ${s.is_online ? "online" : ""}`} title={s.is_online ? "在线" : "离线"} />
+                    <span className={`online-dot ${s.is_online ? "online" : ""}`} data-tip={s.is_online ? "在线" : "离线"} />
                     {s.device_name || s.device_sn}
                     {s.device_name && <span className="device-sn-sub">{s.device_sn}</span>}
                   </div>
@@ -712,7 +712,7 @@ export default function App() {
                     <button
                       className="session-action-btn"
                       onClick={(e) => handleRenameDevice(e, s)}
-                      title="设置设备显示名称"
+                      data-tip="设置设备显示名称"
                     >
                       ✏️
                     </button>
@@ -721,7 +721,7 @@ export default function App() {
                         className="session-action-btn new-session"
                         onClick={(e) => handleForceNewSession(e, s)}
                         disabled={!s.first_turn_at}
-                        title={s.first_turn_at ? "截断当前会话并新建（清空上下文）" : "当前会话暂无对话，无需新建"}
+                        data-tip={s.first_turn_at ? "截断当前会话并新建（清空上下文）" : "当前会话暂无对话，无需新建"}
                       >
                         🔄
                       </button>
@@ -730,7 +730,7 @@ export default function App() {
                       className={`session-delete-btn ${s.is_online ? "clear-only" : ""}`}
                       onClick={(e) => handleDeleteSession(e, s)}
                       disabled={s.is_online && !s.first_turn_at}
-                      title={s.is_online ? (s.first_turn_at ? "清除对话记录" : "当前会话暂无对话") : "删除会话"}
+                      data-tip={s.is_online ? (s.first_turn_at ? "清除对话记录" : "当前会话暂无对话") : "删除会话"}
                     >
                       {s.is_online ? "🧹" : "🗑️"}
                     </button>
@@ -795,28 +795,28 @@ export default function App() {
                   <span className="header-user">👤 {selectedSession.user_id || "-"}</span>
                   <button
                     className="roster-open-btn"
-                    title="查看/编辑该设备所属家庭的花名册"
+                    data-tip="查看/编辑该设备所属家庭的花名册"
                     onClick={() => setRosterDeviceSn(selectedSession.device_sn)}
                   >
                     👨‍👩‍👧‍👦 花名册
                   </button>
                   <button
                     className="roster-open-btn"
-                    title="查看该设备所属家庭的记忆条目（B 类 key 树 + A 类分页表）"
+                    data-tip="查看该设备所属家庭的记忆条目（B 类 key 树 + A 类分页表）"
                     onClick={() => setMemoryDeviceSn(selectedSession.device_sn)}
                   >
                     🧠 记忆查询
                   </button>
                   <button
                     className="roster-open-btn"
-                    title="查看该设备所属家庭的记忆抽取/应用运行日志（触发原因、LLM 输出、写入统计）"
+                    data-tip="查看该设备所属家庭的记忆抽取/应用运行日志（触发原因、LLM 输出、写入统计）"
                     onClick={() => setIngestDialog({ deviceSn: selectedSession.device_sn })}
                   >
                     📋 抽取记录
                   </button>
                   <button
                     className="roster-open-btn"
-                    title="触发该设备的引导式人脸注册（需摄像头拉流中，注册过程由设备语音引导）"
+                    data-tip="触发该设备的引导式人脸注册（需摄像头拉流中，注册过程由设备语音引导）"
                     onClick={() => setFaceRegDeviceSn(selectedSession.device_sn)}
                   >
                     📷 注册人脸
@@ -826,7 +826,7 @@ export default function App() {
                   {selectedSession.is_online && (
                     <button
                       className={`live-stream-btn ${liveStreamEnabled ? "active" : ""}`}
-                      title="开启后无需刷新即可查看该在线设备的实时对话流"
+                      data-tip="开启后无需刷新即可查看该在线设备的实时对话流"
                       onClick={() => {
                         const val = !liveStreamEnabled;
                         setLiveStreamEnabled(val);
@@ -889,7 +889,7 @@ export default function App() {
                         t.trace_id && extractedTraces.has(t.trace_id) ? (
                           <button
                             className="turn-ingest-btn"
-                            title="这轮对话已进入抽取批次，点击查看对应的抽取记录（可能与同批其他轮次一起抽取）"
+                            data-tip="这轮对话已进入抽取批次，点击查看对应的抽取记录（可能与同批其他轮次一起抽取）"
                             onClick={(e) => {
                               e.stopPropagation();
                               setIngestDialog({
@@ -903,7 +903,7 @@ export default function App() {
                           </button>
                         ) : (
                           <span className="badge not-extracted"
-                                title="这轮对话尚未进入任何抽取批次（可能还在缓冲中，攒满批或静默超时后触发）">
+                                data-tip="这轮对话尚未进入任何抽取批次（可能还在缓冲中，攒满批或静默超时后触发）">
                             未抽取
                           </span>
                         )
@@ -911,7 +911,7 @@ export default function App() {
                       <span className="turn-time">{formatTime(t.created_at)}</span>
                       <button
                         className="turn-delete-btn"
-                        title="删除这条对话记录"
+                        data-tip="删除这条对话记录"
                         onClick={async (e) => {
                           e.stopPropagation();
                           if (!await showConfirm("确定删除这条对话记录？")) return;
@@ -1051,7 +1051,7 @@ export default function App() {
               <div className="detail-title-row">
                 <h3>轮次详情</h3>
                 {selectedTurn.trace_id && (
-                  <code className="detail-trace-id" title={selectedTurn.trace_id}>
+                  <code className="detail-trace-id" data-tip={selectedTurn.trace_id}>
                     {selectedTurn.trace_id}
                   </code>
                 )}
@@ -1071,15 +1071,15 @@ export default function App() {
                       {selectedTurn.speaker_id ? (
                         <>
                           {(selectedTurn.speaker_name || speakerNames[selectedTurn.speaker_id]) && (
-                            <b className="speaker-detail-name" title="说话时刻的名字快照">
+                            <b className="speaker-detail-name" data-tip="说话时刻的名字快照">
                               {selectedTurn.speaker_name || speakerNames[selectedTurn.speaker_id]}
                             </b>
                           )}
-                          <code title="person_id（身份识别服务提供）">{selectedTurn.speaker_id}</code>
+                          <code data-tip="person_id（身份识别服务提供）">{selectedTurn.speaker_id}</code>
                           {selectedTurn.speaker_name &&
                             speakerNames[selectedTurn.speaker_id] &&
                             speakerNames[selectedTurn.speaker_id] !== selectedTurn.speaker_name && (
-                            <span className="speaker-renamed" title="花名册里的当前名字与当时不同">
+                            <span className="speaker-renamed" data-tip="花名册里的当前名字与当时不同">
                               现名: {speakerNames[selectedTurn.speaker_id]}
                             </span>
                           )}
@@ -1094,7 +1094,7 @@ export default function App() {
                     <span>
                       {selectedTurn.intent_source === "llm" && selectedTurn.intent_name ? (
                         <>
-                          <code title="BERT 判定意图">
+                          <code data-tip="BERT 判定意图">
                             bert: {selectedTurn.intent_name}
                             {selectedTurn.bert_confidence != null && (
                               <span className="bert-conf">{(selectedTurn.bert_confidence * 100).toFixed(1)}%</span>
@@ -1109,7 +1109,7 @@ export default function App() {
                           {selectedTurn.intent_name && (
                             <>
                               <span className="intent-arrow">›</span>
-                              <code title="原始意图 (BERT/规则)">
+                              <code data-tip="原始意图 (BERT/规则)">
                                 {selectedTurn.intent_name}
                                 {selectedTurn.bert_confidence != null && (
                                   <span className="bert-conf">{(selectedTurn.bert_confidence * 100).toFixed(1)}%</span>
@@ -1123,7 +1123,7 @@ export default function App() {
                       {selectedTurn.command_type && selectedTurn.command_type !== selectedTurn.intent_name && (
                         <>
                           <span className="intent-arrow">›</span>
-                          <code title="最终执行指令">{selectedTurn.command_type}</code>
+                          <code data-tip="最终执行指令">{selectedTurn.command_type}</code>
                         </>
                       )}
                     </span>
