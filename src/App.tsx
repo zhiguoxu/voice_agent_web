@@ -221,8 +221,13 @@ export default function App() {
     document.body.style.userSelect = "none";
   }, [detailWidth]);
 
+  /* 会话查询序号：筛选框在加载中不锁输入，连续输入会并发多个查询，
+     只认最新序号的响应，过期的直接丢弃 */
+  const sessionsReqSeq = useRef(0);
+
   /* ── Load sessions (fresh, resets list) ── */
   const loadSessions = useCallback(async () => {
+    const seq = ++sessionsReqSeq.current;
     setSessionsLoading(true);
     try {
       const data = await fetchSessions({
@@ -232,11 +237,12 @@ export default function App() {
         end_time: timeRange.end || undefined,
         page_size: 20,
       });
+      if (seq !== sessionsReqSeq.current) return;
       setSessions(data.items);
       setSessionsHasMore(data.has_more);
       setSessionsCursor(data.next_cursor);
     } finally {
-      setSessionsLoading(false);
+      if (seq === sessionsReqSeq.current) setSessionsLoading(false);
     }
   }, [debouncedSn, debouncedUser, timeRange.start, timeRange.end]);
 
@@ -247,6 +253,7 @@ export default function App() {
   /* ── Load more sessions (append) ── */
   const loadMoreSessions = async () => {
     if (!sessionsHasMore || sessionsCursor == null) return;
+    const seq = ++sessionsReqSeq.current;
     setSessionsLoading(true);
     try {
       const data = await fetchSessions({
@@ -257,11 +264,13 @@ export default function App() {
         cursor: sessionsCursor,
         page_size: 20,
       });
+      // 翻页期间筛选条件变了会触发新查询，本次追加已过期，丢弃
+      if (seq !== sessionsReqSeq.current) return;
       setSessions((prev) => [...prev, ...data.items]);
       setSessionsHasMore(data.has_more);
       setSessionsCursor(data.next_cursor);
     } finally {
-      setSessionsLoading(false);
+      if (seq === sessionsReqSeq.current) setSessionsLoading(false);
     }
   };
 
@@ -636,7 +645,6 @@ export default function App() {
               type="text"
               placeholder="支持部分匹配"
               value={filterSn}
-              disabled={isLoading}
               onChange={(e) => setFilterSn(e.target.value)}
             />
             {filterSn && <button className="input-clear" onClick={() => setFilterSn("")}>×</button>}
@@ -649,7 +657,6 @@ export default function App() {
               type="text"
               placeholder="用户 ID"
               value={filterUser}
-              disabled={isLoading}
               onChange={(e) => setFilterUser(e.target.value)}
             />
             {filterUser && <button className="input-clear" onClick={() => setFilterUser("")}>×</button>}
@@ -662,7 +669,6 @@ export default function App() {
               type="text"
               placeholder="回车直接查询"
               value={filterTrace}
-              disabled={isLoading}
               onChange={(e) => setFilterTrace(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter") handleTraceLookup();
