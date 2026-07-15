@@ -65,7 +65,7 @@ function PlanChips({ plan, extremumFallback, names }: {
       {plan.confidence === "low" && <span className="recall-chip low" title="主体消解不确定">低置信</span>}
       {plan.key_candidates && plan.key_candidates.length > 0 && (
         <div className="recall-candidates"
-             title="双塔原始 top5 候选（服务端 key + 余弦相似度）。keys 才是检索结论；划线 = 归一到本地注册表时被滤掉（key 集合错位/非法）。keys 为空但这里有值 = 模型弃权（带内无卡或 none 第一）">
+             data-hover={"双塔模型的原始 top5 打分，仅供调试；上方 key: 才是结论\n划线 = 不是合法 key，已被过滤\nkey 为 — 而这里有值 = 模型弃权（没找到足够相关的类别）"}>
           双塔:
           {plan.key_candidates.map((c) => (
             <span key={c.raw} className={`recall-candidate ${c.key ? "" : "dropped"}`}>
