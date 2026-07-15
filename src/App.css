@@ -395,8 +395,8 @@ body {
 
 /* ── Sidebar (Sessions) ── */
 .sidebar {
-    width: 260px;
-    min-width: 260px;
+    width: 270px;
+    min-width: 270px;
     border-right: 1px solid var(--border);
     display: flex;
     flex-direction: column;
@@ -466,13 +466,6 @@ body {
     display: flex;
     align-items: center;
     gap: 6px;
-}
-
-/* 已命名设备在名称后附带的小号 SN */
-.device-sn-sub {
-    font-size: 11px;
-    font-weight: 400;
-    color: var(--text-muted);
 }
 
 .online-dot {

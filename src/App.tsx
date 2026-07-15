@@ -712,7 +712,6 @@ export default function App() {
                   <div className="session-sn">
                     <span className={`online-dot ${s.is_online ? "online" : ""}`} data-tip={s.is_online ? "在线" : "离线"} />
                     {s.device_name || s.device_sn}
-                    {s.device_name && <span className="device-sn-sub">{s.device_sn}</span>}
                   </div>
                   <div className="session-actions">
                     <button
