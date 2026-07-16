@@ -395,8 +395,8 @@ body {
 
 /* ── Sidebar (Sessions) ── */
 .sidebar {
-    width: 270px;
-    min-width: 270px;
+    width: 300px;
+    min-width: 300px;
     border-right: 1px solid var(--border);
     display: flex;
     flex-direction: column;
