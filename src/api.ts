@@ -676,6 +676,7 @@ export interface EditableField {
   hot: boolean;          // true=改完立即生效; false=需重启服务（未标注的字段保守按 false）
   description: string;   // 中文说明（未标注的字段为空串）
   sensitive: boolean;    // 敏感字段（密钥/密码类）：可编辑但值不回显
+  device_override_count: number;  // 有多少台设备对此项做了设备级定向覆盖
 }
 
 export interface EditableConfig {
@@ -716,6 +717,88 @@ export async function deleteConfigOverride(
     headers: { "X-Config-Edit-Password": password },
   });
   if (!res.ok) await throwHttpError(res, "恢复默认值失败");
+  return res.json();
+}
+
+/* ── 设备级配置覆盖 ──
+   只对指定 device_sn 生效的定向配置修改，其他设备不受影响。
+   可编辑范围 = hot（热生效）标注字段；优先级：设备覆盖 > 全局覆盖 > yaml 原值，
+   删除设备覆盖即回落到全局生效值。 */
+
+const CONFIG_DEVICE_PREFIX: Record<ConfigService, string> = {
+  voice: "/api/voice/config/devices",
+  agent: "/api/agent/config/devices",
+};
+
+/** 设备视角的一个可编辑配置项。值来源三层：设备覆盖 → 全局生效值 → yaml 原值 */
+export interface DeviceEditableField {
+  path: string;
+  value: unknown;         // 该设备的生效值（有设备覆盖用覆盖值；敏感字段为 "***"）
+  global_value: unknown;  // 全局生效值（含全局在线编辑覆盖；敏感字段为 "***"）
+  baseline: unknown;      // yaml 原值（敏感字段为 "***"）
+  overridden: boolean;    // 该设备是否对此项做了定向覆盖
+  description: string;
+  sensitive: boolean;
+}
+
+export interface DeviceEditableConfig {
+  service: string;
+  device_sn: string;
+  items: DeviceEditableField[];
+}
+
+/** 一台有设备级覆盖的设备（防遗忘总览用）。name 为空时展示 device_sn */
+export interface DeviceOverrideSummaryItem {
+  device_sn: string;
+  name: string;
+  override_count: number;
+}
+
+export interface DeviceOverrideSummary {
+  service: string;
+  devices: DeviceOverrideSummaryItem[];
+}
+
+export async function fetchDeviceOverrideSummary(service: ConfigService): Promise<DeviceOverrideSummary> {
+  const res = await fetch(CONFIG_DEVICE_PREFIX[service]);
+  if (!res.ok) await throwHttpError(res, `Failed to fetch ${service} device override summary`);
+  return res.json();
+}
+
+export async function fetchDeviceEditableConfig(
+  service: ConfigService, deviceSn: string,
+): Promise<DeviceEditableConfig> {
+  const res = await fetch(`${CONFIG_DEVICE_PREFIX[service]}/${encodeURIComponent(deviceSn)}/editable`);
+  if (!res.ok) await throwHttpError(res, `Failed to fetch ${service} device editable config`);
+  return res.json();
+}
+
+export async function putDeviceConfigOverride(
+  service: ConfigService, deviceSn: string, path: string, value: unknown, password: string,
+): Promise<OverrideMutationResult> {
+  const res = await fetch(
+    `${CONFIG_DEVICE_PREFIX[service]}/${encodeURIComponent(deviceSn)}/editable/${encodeURIComponent(path)}`,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", "X-Config-Edit-Password": password },
+      body: JSON.stringify({ value }),
+    },
+  );
+  if (!res.ok) await throwHttpError(res, "保存设备覆盖失败");
+  return res.json();
+}
+
+export async function deleteDeviceConfigOverride(
+  service: ConfigService, deviceSn: string, path: string, password: string,
+): Promise<OverrideMutationResult> {
+  const res = await fetch(
+    `${CONFIG_DEVICE_PREFIX[service]}/${encodeURIComponent(deviceSn)}/editable/${encodeURIComponent(path)}`,
+    {
+      method: "DELETE",
+      headers: { "X-Config-Edit-Password": password },
+    },
+  );
+  if (!res.ok) await throwHttpError(res, "删除设备覆盖失败");
   return res.json();
 }
 
