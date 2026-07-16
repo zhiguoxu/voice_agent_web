@@ -23,6 +23,11 @@
   margin-left: auto;
 }
 
+/* 竖排面板（设备级覆盖 / BERT 意图 / 提示词）之间的统一间距 */
+.cfg-container > .cfg-card {
+  margin-bottom: 16px;
+}
+
 /* 宽屏两列并排，窄屏自动落成单列 */
 .cfg-grid {
   display: grid;
@@ -251,10 +256,6 @@
 
 /* ── BERT 意图识别面板 ── */
 
-.cfg-intent-card {
-  margin-bottom: 16px;
-}
-
 .cfg-intent-card h3 .roster-refresh {
   margin-left: 0;
 }
@@ -399,10 +400,6 @@
 }
 
 /* ── 提示词配置面板 ── */
-
-.cfg-prompt-card {
-  margin-bottom: 16px;
-}
 
 .cfg-prompt-card h3 .roster-refresh {
   margin-left: 0;
