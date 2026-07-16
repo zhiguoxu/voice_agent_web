@@ -644,6 +644,75 @@ export async function fetchAgentConfig(): Promise<ServiceConfig> {
   return res.json();
 }
 
+/* ── 配置在线编辑（DB 覆盖层）──
+   编辑后的值存数据库，删除覆盖即恢复 yaml 原值。只有后端白名单里的项可编辑。 */
+
+export type ConfigService = "voice" | "agent";
+
+const CONFIG_EDIT_PREFIX: Record<ConfigService, string> = {
+  voice: "/api/voice/config/editable",
+  agent: "/api/agent/config/editable",
+};
+
+/** 一个可在线编辑的配置项及其当前状态 */
+export interface EditableField {
+  path: string;          // 配置点路径，如 llm.model / prompt.small_talk
+  value: unknown;        // 当前生效值
+  baseline: unknown;     // yaml 原值（删除覆盖后会恢复成它）
+  overridden: boolean;   // 是否被数据库覆盖过
+  hot: boolean;          // true=改完立即生效; false=需重启服务
+  description: string;
+}
+
+export interface EditableConfig {
+  service: string;
+  items: EditableField[];
+}
+
+export interface OverrideMutationResult {
+  path: string;
+  value: unknown;        // 生效后的值（删除时即恢复出的原值）
+  overridden: boolean;
+  need_restart: boolean;
+}
+
+export async function fetchEditableConfig(service: ConfigService): Promise<EditableConfig> {
+  const res = await fetch(CONFIG_EDIT_PREFIX[service]);
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || `Failed to fetch ${service} editable config`);
+  }
+  return res.json();
+}
+
+export async function putConfigOverride(
+  service: ConfigService, path: string, value: unknown,
+): Promise<OverrideMutationResult> {
+  const res = await fetch(`${CONFIG_EDIT_PREFIX[service]}/${encodeURIComponent(path)}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ value }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || "保存配置失败");
+  }
+  return res.json();
+}
+
+export async function deleteConfigOverride(
+  service: ConfigService, path: string,
+): Promise<OverrideMutationResult> {
+  const res = await fetch(`${CONFIG_EDIT_PREFIX[service]}/${encodeURIComponent(path)}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || "恢复默认值失败");
+  }
+  return res.json();
+}
+
 /** 提示词模板里会被程序替换的一个占位符 */
 export interface PromptPlaceholder {
   name: string;   // 含花括号, 如 {memory}

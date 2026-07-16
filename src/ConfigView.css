@@ -556,3 +556,151 @@
 .cfg-prompt-source code {
   color: var(--text-secondary);
 }
+
+/* ── 配置在线编辑（DB 覆盖层）── */
+
+/* 保存/恢复后的提示条（非 hot 项提示需要重启） */
+.cfg-notice {
+  padding: 10px 16px;
+  margin-bottom: 16px;
+  font-size: 13px;
+  color: var(--text-primary);
+  background: var(--accent-soft);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+/* 编辑入口默认弱化，悬停该行时提亮 */
+.cfg-edit-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.cfg-edit-btn {
+  padding: 1px 7px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  opacity: 0.55;
+}
+
+.cfg-row.editable:hover .cfg-edit-btn {
+  opacity: 1;
+}
+
+.cfg-edit-btn:hover {
+  color: var(--purple);
+  border-color: var(--purple);
+}
+
+.cfg-edit-btn.revert:hover {
+  color: var(--cyan);
+  border-color: var(--cyan);
+}
+
+.cfg-badge.modified {
+  background: rgba(251, 191, 36, 0.14);
+  color: var(--yellow, #fbbf24);
+}
+
+.cfg-badge.restart {
+  background: rgba(248, 113, 113, 0.12);
+  color: var(--red);
+}
+
+/* 行内编辑器 */
+.cfg-edit-box {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cfg-edit-box input,
+.cfg-edit-box textarea,
+.cfg-edit-box select {
+  width: 100%;
+  padding: 6px 10px;
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--text-primary);
+  background: var(--bg-secondary);
+  border: 1px solid var(--purple);
+  border-radius: var(--radius-sm);
+  outline: none;
+}
+
+.cfg-edit-box textarea {
+  font-family: monospace;
+  font-size: 12px;
+  line-height: 1.7;
+  resize: vertical;
+}
+
+.cfg-edit-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.cfg-edit-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.cfg-edit-save,
+.cfg-edit-cancel {
+  padding: 4px 14px;
+  font-size: 12px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.cfg-edit-save {
+  color: #fff;
+  background: var(--purple);
+  border: 1px solid var(--purple);
+}
+
+.cfg-edit-save:disabled,
+.cfg-edit-cancel:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.cfg-edit-cancel {
+  color: var(--text-secondary);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+}
+
+.cfg-error.inline {
+  display: inline;
+  padding: 0;
+  margin: 0;
+  background: none;
+  border: none;
+}
+
+/* 提示词面板的编辑区 */
+.cfg-prompt-editbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.cfg-edit-box.prompt {
+  margin-bottom: 8px;
+}
+
+.cfg-prompt-override-note {
+  margin-left: 6px;
+  color: var(--yellow, #fbbf24);
+}
