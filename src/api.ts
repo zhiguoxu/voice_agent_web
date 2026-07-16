@@ -645,7 +645,8 @@ export async function fetchAgentConfig(): Promise<ServiceConfig> {
 }
 
 /* ── 配置在线编辑（DB 覆盖层）──
-   编辑后的值存数据库，删除覆盖即恢复 yaml 原值。只有后端白名单里的项可编辑。 */
+   编辑后的值存数据库，删除覆盖即恢复 yaml 原值。全部叶子配置可编辑
+   （锁定项除外），编辑需口令（X-Config-Edit-Password 头，后端校验）。 */
 
 export type ConfigService = "voice" | "agent";
 
@@ -654,14 +655,27 @@ const CONFIG_EDIT_PREFIX: Record<ConfigService, string> = {
   agent: "/api/agent/config/editable",
 };
 
+/** 带 HTTP 状态码的错误（口令错误 401 需要单独识别以重新弹口令框） */
+export interface HttpError extends Error {
+  status?: number;
+}
+
+async function throwHttpError(res: Response, fallback: string): Promise<never> {
+  const data = await res.json().catch(() => ({}));
+  const err = new Error(data.detail || fallback) as HttpError;
+  err.status = res.status;
+  throw err;
+}
+
 /** 一个可在线编辑的配置项及其当前状态 */
 export interface EditableField {
   path: string;          // 配置点路径，如 llm.model / prompt.small_talk
-  value: unknown;        // 当前生效值
-  baseline: unknown;     // yaml 原值（删除覆盖后会恢复成它）
+  value: unknown;        // 当前生效值（敏感字段为 "***"）
+  baseline: unknown;     // yaml 原值（删除覆盖后会恢复成它；敏感字段为 "***"）
   overridden: boolean;   // 是否被数据库覆盖过
-  hot: boolean;          // true=改完立即生效; false=需重启服务
-  description: string;
+  hot: boolean;          // true=改完立即生效; false=需重启服务（未标注的字段保守按 false）
+  description: string;   // 中文说明（未标注的字段为空串）
+  sensitive: boolean;    // 敏感字段（密钥/密码类）：可编辑但值不回显
 }
 
 export interface EditableConfig {
@@ -671,45 +685,37 @@ export interface EditableConfig {
 
 export interface OverrideMutationResult {
   path: string;
-  value: unknown;        // 生效后的值（删除时即恢复出的原值）
+  value: unknown;        // 生效后的值（删除时即恢复出的原值；敏感字段为 "***"）
   overridden: boolean;
   need_restart: boolean;
 }
 
 export async function fetchEditableConfig(service: ConfigService): Promise<EditableConfig> {
   const res = await fetch(CONFIG_EDIT_PREFIX[service]);
-  if (!res.ok) {
-    const data = await res.json().catch(() => ({}));
-    throw new Error(data.detail || `Failed to fetch ${service} editable config`);
-  }
+  if (!res.ok) await throwHttpError(res, `Failed to fetch ${service} editable config`);
   return res.json();
 }
 
 export async function putConfigOverride(
-  service: ConfigService, path: string, value: unknown,
+  service: ConfigService, path: string, value: unknown, password: string,
 ): Promise<OverrideMutationResult> {
   const res = await fetch(`${CONFIG_EDIT_PREFIX[service]}/${encodeURIComponent(path)}`, {
     method: "PUT",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "X-Config-Edit-Password": password },
     body: JSON.stringify({ value }),
   });
-  if (!res.ok) {
-    const data = await res.json().catch(() => ({}));
-    throw new Error(data.detail || "保存配置失败");
-  }
+  if (!res.ok) await throwHttpError(res, "保存配置失败");
   return res.json();
 }
 
 export async function deleteConfigOverride(
-  service: ConfigService, path: string,
+  service: ConfigService, path: string, password: string,
 ): Promise<OverrideMutationResult> {
   const res = await fetch(`${CONFIG_EDIT_PREFIX[service]}/${encodeURIComponent(path)}`, {
     method: "DELETE",
+    headers: { "X-Config-Edit-Password": password },
   });
-  if (!res.ok) {
-    const data = await res.json().catch(() => ({}));
-    throw new Error(data.detail || "恢复默认值失败");
-  }
+  if (!res.ok) await throwHttpError(res, "恢复默认值失败");
   return res.json();
 }
 

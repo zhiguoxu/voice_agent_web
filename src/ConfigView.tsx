@@ -10,6 +10,7 @@ import {
   type ServiceConfig,
   type ConfigService,
   type EditableField,
+  type HttpError,
   type OverrideMutationResult,
   type IntentLabels,
   type IntentClassifyResult,
@@ -43,7 +44,10 @@ function isPlainObject(v: unknown): v is Record<string, unknown> {
 
 /* ── 在线编辑（DB 覆盖层）──
    编辑后的值存数据库并立即生效（非 hot 项重启后生效）；「恢复默认」删除
-   数据库覆盖、回到 yaml 原值。可编辑范围由后端白名单决定。 */
+   数据库覆盖、回到 yaml 原值。全部叶子配置可编辑（后端锁定项除外），
+   保存/恢复前需输入编辑口令（后端校验，口令在本浏览器标签页内记住）。 */
+
+const PW_STORAGE_KEY = "cfg-edit-password";
 
 export type SaveOverrideFn = (path: string, value: unknown) => Promise<OverrideMutationResult>;
 export type RevertOverrideFn = (path: string) => Promise<OverrideMutationResult>;
@@ -79,7 +83,8 @@ function previewValue(v: unknown): string {
   return s.length > 80 ? s.slice(0, 80) + "…" : s;
 }
 
-/** 行内编辑器：标量用 input / 布尔用下拉 / 列表与长文本用 textarea */
+/** 行内编辑器：标量用 input / 布尔用下拉 / 列表与长文本用 textarea /
+    含对象的列表用 JSON / 敏感字段不回显、从空白开始输入 */
 function FieldEditor({
   field,
   onSave,
@@ -89,12 +94,18 @@ function FieldEditor({
   onSave: (value: unknown) => Promise<void>;
   onCancel: () => void;
 }) {
-  const [draft, setDraft] = useState(() => valueToDraft(field.value));
+  const sample = field.baseline;
+  const jsonMode = Array.isArray(sample) && sample.some((v) => isPlainObject(v));
+  const [draft, setDraft] = useState(() => {
+    if (field.sensitive) return "";  // 脱敏字段不回显当前值
+    if (jsonMode) return JSON.stringify(field.value, null, 2);
+    return valueToDraft(field.value);
+  });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const sample = field.baseline;
   const multiline =
+    jsonMode ||
     Array.isArray(sample) ||
     (typeof sample === "string" && (sample.length > LONG_TEXT_THRESHOLD || sample.includes("\n")));
 
@@ -103,7 +114,19 @@ function FieldEditor({
     setSaving(true);
     setError(null);
     try {
-      await onSave(draftToValue(draft, sample));
+      let value: unknown;
+      if (jsonMode) {
+        try {
+          value = JSON.parse(draft);
+        } catch {
+          throw new Error("JSON 解析失败，请检查格式");
+        }
+      } else if (field.sensitive) {
+        value = draft;  // 脱敏字段按字符串原样提交
+      } else {
+        value = draftToValue(draft, sample);
+      }
+      await onSave(value);
     } catch (e: any) {
       setError(e.message || String(e));
       setSaving(false);
@@ -124,7 +147,7 @@ function FieldEditor({
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           rows={Array.isArray(sample) ? Math.max(3, (sample as unknown[]).length + 1) : 10}
-          placeholder={Array.isArray(sample) ? "一行一条" : ""}
+          placeholder={jsonMode ? "JSON 格式" : Array.isArray(sample) ? "一行一条" : ""}
           disabled={saving}
         />
       ) : (
@@ -133,10 +156,13 @@ function FieldEditor({
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && save()}
+          placeholder={field.sensitive ? "当前值已脱敏不回显，输入新值将整体替换" : ""}
           disabled={saving}
         />
       )}
-      {Array.isArray(sample) && <div className="cfg-edit-hint">列表项一行一条，空行忽略</div>}
+      {jsonMode
+        ? <div className="cfg-edit-hint">JSON 格式编辑（列表里含对象）</div>
+        : Array.isArray(sample) && <div className="cfg-edit-hint">列表项一行一条，空行忽略</div>}
       {error && <div className="cfg-error">❌ {error}</div>}
       <div className="cfg-edit-actions">
         <button className="cfg-edit-save" onClick={save} disabled={saving}>
@@ -180,8 +206,17 @@ function EditControls({
           已修改
         </span>
       )}
-      {!field.hot && <span className="cfg-badge restart" data-tip="该项在服务启动时消费，改完需重启对应服务才生效">重启生效</span>}
-      <button className="cfg-edit-btn" data-tip={field.description} onClick={onEdit}>✏️</button>
+      {field.overridden && !field.hot && (
+        <span className="cfg-badge restart" data-tip="该覆盖值需重启对应服务才生效">重启生效</span>
+      )}
+      <button
+        className="cfg-edit-btn"
+        data-tip={
+          (field.description || "在线编辑此配置项（存数据库，可随时恢复默认）") +
+          (field.hot ? "" : "；保存后需重启对应服务生效")
+        }
+        onClick={onEdit}
+      >✏️</button>
       {field.overridden && (
         <button className="cfg-edit-btn revert" data-tip="删除数据库里的覆盖值，恢复 yaml 原值" onClick={revert} disabled={reverting}>
           {reverting ? <span className="spinner inline" /> : "↺"}
@@ -515,6 +550,42 @@ function IntentPanel() {
   );
 }
 
+/** 编辑口令弹窗：promise 化调用（askPassword() 返回用户输入），Enter 确认、取消即拒绝 */
+function PasswordDialog({
+  hint,
+  onSubmit,
+  onCancel,
+}: {
+  hint: string;
+  onSubmit: (pw: string) => void;
+  onCancel: () => void;
+}) {
+  const [pw, setPw] = useState("");
+  return (
+    <div className="cfg-pw-overlay" onClick={onCancel}>
+      <div className="cfg-pw-dialog" onClick={(e) => e.stopPropagation()}>
+        <h4>🔑 编辑口令</h4>
+        <p className="cfg-pw-hint">{hint}</p>
+        <input
+          type="password"
+          autoFocus
+          value={pw}
+          onChange={(e) => setPw(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && pw) onSubmit(pw);
+            if (e.key === "Escape") onCancel();
+          }}
+          placeholder="请输入口令"
+        />
+        <div className="cfg-edit-actions">
+          <button className="cfg-edit-save" onClick={() => pw && onSubmit(pw)} disabled={!pw}>确认</button>
+          <button className="cfg-edit-cancel" onClick={onCancel}>取消</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function ConfigView() {
   const [voice, setVoice] = useState<ServiceConfig | null>(null);
   const [agent, setAgent] = useState<ServiceConfig | null>(null);
@@ -557,6 +628,42 @@ export function ConfigView() {
     return () => clearTimeout(timer);
   }, [notice]);
 
+  /* 口令弹窗（promise 化）：口令记在 sessionStorage（本标签页有效），401 时清掉重弹 */
+  const [pwPrompt, setPwPrompt] = useState<{
+    hint: string;
+    resolve: (pw: string) => void;
+    reject: (e: Error) => void;
+  } | null>(null);
+
+  const askPassword = useCallback((hint: string) => {
+    return new Promise<string>((resolve, reject) => {
+      setPwPrompt({ hint, resolve, reject });
+    });
+  }, []);
+
+  /* 给编辑请求包上口令：无缓存先弹窗要，口令错(401)清缓存重弹，其余错误原样抛给编辑框展示 */
+  const withPassword = useCallback(
+    async <T,>(call: (pw: string) => Promise<T>): Promise<T> => {
+      let pw = sessionStorage.getItem(PW_STORAGE_KEY)
+        ?? await askPassword("修改配置需要口令验证（保存在本标签页，关闭后需重新输入）");
+      for (;;) {
+        try {
+          const result = await call(pw);
+          sessionStorage.setItem(PW_STORAGE_KEY, pw);
+          return result;
+        } catch (e) {
+          if ((e as HttpError).status === 401) {
+            sessionStorage.removeItem(PW_STORAGE_KEY);
+            pw = await askPassword("口令错误，请重新输入");
+            continue;
+          }
+          throw e;
+        }
+      }
+    },
+    [askPassword],
+  );
+
   const makeEditCtx = useCallback(
     (service: ConfigService, fields: Map<string, EditableField> | null): EditCtx | undefined => {
       if (!fields) return undefined;
@@ -564,7 +671,7 @@ export function ConfigView() {
       return {
         fields,
         onSave: async (path, value) => {
-          const r = await putConfigOverride(service, path, value);
+          const r = await withPassword((pw) => putConfigOverride(service, path, value, pw));
           setNotice(r.need_restart
             ? `✅ ${path} 已保存到数据库，重启 ${serverName} 后生效`
             : `✅ ${path} 已保存，立即生效`);
@@ -572,7 +679,7 @@ export function ConfigView() {
           return r;
         },
         onRevert: async (path) => {
-          const r = await deleteConfigOverride(service, path);
+          const r = await withPassword((pw) => deleteConfigOverride(service, path, pw));
           setNotice(r.need_restart
             ? `↩️ ${path} 已恢复 yaml 原值，重启 ${serverName} 后生效`
             : `↩️ ${path} 已恢复 yaml 原值，立即生效`);
@@ -581,7 +688,7 @@ export function ConfigView() {
         },
       };
     },
-    [load],
+    [load, withPassword],
   );
 
   const voiceEdit = makeEditCtx("voice", voiceEditable);
@@ -592,13 +699,20 @@ export function ConfigView() {
       <div className="cfg-toolbar">
         <span className="cfg-hint">
           两个服务当前生效的运行配置（YAML + 环境变量 + 在线编辑覆盖合并后的结果），密钥类字段已脱敏；
-          带 ✏️ 的项可在线编辑（存数据库），「恢复默认」即删除覆盖、回到 yaml 原值
+          带 ✏️ 的项可在线编辑（需口令，存数据库），「恢复默认」即删除覆盖、回到 yaml 原值
         </span>
         <button className="roster-refresh" onClick={load} disabled={loading}>
           {loading ? <span className="spinner inline" /> : "🔄 刷新"}
         </button>
       </div>
       {notice && <div className="cfg-notice">{notice}</div>}
+      {pwPrompt && (
+        <PasswordDialog
+          hint={pwPrompt.hint}
+          onSubmit={(pw) => { pwPrompt.resolve(pw); setPwPrompt(null); }}
+          onCancel={() => { pwPrompt.reject(new Error("已取消")); setPwPrompt(null); }}
+        />
+      )}
       <IntentPanel />
       <PromptsPanel
         editFields={agentEditable ?? undefined}

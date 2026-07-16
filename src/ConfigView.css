@@ -704,3 +704,47 @@
   margin-left: 6px;
   color: var(--yellow, #fbbf24);
 }
+
+/* 编辑口令弹窗 */
+.cfg-pw-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.cfg-pw-dialog {
+  width: 360px;
+  padding: 20px 24px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cfg-pw-dialog h4 {
+  margin: 0;
+  font-size: 15px;
+  color: var(--text-primary);
+}
+
+.cfg-pw-hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.cfg-pw-dialog input {
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--text-primary);
+  background: var(--bg-secondary);
+  border: 1px solid var(--purple);
+  border-radius: var(--radius-sm);
+  outline: none;
+}
