@@ -159,6 +159,124 @@
   user-select: none;
 }
 
+/* ── 记忆清除工具条（三个粒度：单条 / 按成员 / 整设备） ── */
+.memory-erase-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  margin-bottom: 10px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  flex-wrap: wrap;
+}
+
+.memory-erase-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.memory-erase-select {
+  padding: 4px 8px;
+  font-size: 12px;
+  background: var(--bg-card);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.memory-erase-spacer {
+  flex: 1;
+}
+
+/* 工具条上的清除按钮：常显红边（区别于行尾 hover 才明显的 🗑） */
+.memory-erase-btn {
+  padding: 4px 10px;
+  font-size: 12px;
+  background: transparent;
+  color: var(--red);
+  border: 1px solid rgba(248, 113, 113, 0.4);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.memory-erase-btn:hover:not(:disabled) {
+  background: rgba(248, 113, 113, 0.1);
+}
+
+.memory-erase-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.memory-erase-btn.confirm {
+  color: #fff;
+  background: var(--red);
+  border-color: var(--red);
+  font-weight: 600;
+}
+
+/* 清除结果提示条（成功/失败共用，失败常见于“条目在变更历史链上被拒绝”）。
+   吸顶浮动：操作对象可能在长列表深处，提示条随滚动贴在弹窗可视区顶部，
+   删到哪都看得见——因此底色必须不透明（渐变叠底色），否则浮在内容上会透字。 */
+.memory-erase-notice {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  margin-bottom: 10px;
+  font-size: 12px;
+  border-radius: var(--radius-sm);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+
+.memory-erase-notice.ok {
+  color: var(--green);
+  background: linear-gradient(rgba(52, 211, 153, 0.08), rgba(52, 211, 153, 0.08)),
+              var(--bg-card);
+  border: 1px solid rgba(52, 211, 153, 0.25);
+}
+
+.memory-erase-notice.err {
+  color: var(--red);
+  background: linear-gradient(rgba(248, 113, 113, 0.08), rgba(248, 113, 113, 0.08)),
+              var(--bg-card);
+  border: 1px solid rgba(248, 113, 113, 0.25);
+}
+
+.memory-erase-notice-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.memory-erase-notice-close {
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 2px;
+  opacity: 0.7;
+}
+
+.memory-erase-notice-close:hover {
+  opacity: 1;
+}
+
+/* B 类条目行尾的单条删除按钮基础态（复用 roster-delete-btn，行内对齐微调） */
+.memory-item .roster-delete-btn {
+  align-self: center;
+}
+
 /* A 类分页表 */
 .memory-a-table {
   white-space: normal;

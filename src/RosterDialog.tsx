@@ -61,6 +61,8 @@ export function RosterDialog({ deviceSn, onClose }: { deviceSn: string; onClose:
   /* 两步确认删除：第一次点进入待确认态（3 秒内再点才执行），避免误触 */
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
+  /* 删除结果提示（人脸/花名册/记忆三步联动的后端 message） */
+  const [notice, setNotice] = useState<string | null>(null);
   const pendingTimerRef = useRef<number | null>(null);
   /* 行内编辑：同一时刻只编辑一行 */
   const [editingPid, setEditingPid] = useState<string | null>(null);
@@ -107,8 +109,10 @@ export function RosterDialog({ deviceSn, onClose }: { deviceSn: string; onClose:
     if (pendingTimerRef.current) window.clearTimeout(pendingTimerRef.current);
     setPendingDelete(null);
     setDeleting(personId);
+    setNotice(null);
     try {
-      await deleteRosterMember(personId, deviceSn);
+      const r = await deleteRosterMember(personId, deviceSn);
+      setNotice(r.message);
       await load();
     } catch (e: any) {
       setError(`删除失败: ${e.message || String(e)}`);
@@ -283,7 +287,7 @@ export function RosterDialog({ deviceSn, onClose }: { deviceSn: string; onClose:
             <button
               className="roster-delete-btn confirm"
               onClick={() => confirmDelete(m.person_id)}
-              data-tip="再次点击确认；连带删除该成员参与的全部关系边"
+              data-tip="再次点击确认；连带删除该成员参与的全部关系边、底库人脸与其全部记忆（含与他人共享的条目，不可恢复）"
             >
               确认删除{relationCount(m.person_id) > 0 ? `(含${relationCount(m.person_id)}条关系)` : ""}
             </button>
@@ -292,7 +296,7 @@ export function RosterDialog({ deviceSn, onClose }: { deviceSn: string; onClose:
               className="roster-delete-btn"
               onClick={() => armDelete(m.person_id)}
               disabled={deleting === m.person_id || editingPid !== null}
-              data-tip="删除该成员（会先清理其全部关系边）"
+              data-tip="删除该成员：连带删除关系边、底库人脸与其全部记忆"
             >
               {deleting === m.person_id ? <span className="spinner inline" /> : "🗑️"}
             </button>
@@ -316,6 +320,7 @@ export function RosterDialog({ deviceSn, onClose }: { deviceSn: string; onClose:
 
         <div className="roster-dialog-body">
           {error && <div className="roster-error">❌ {error}</div>}
+          {notice && <div className="roster-notice">✅ {notice}</div>}
 
           {roster && !roster.enabled && (
             <div className="roster-disabled">

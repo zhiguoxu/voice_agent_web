@@ -1,7 +1,9 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
-  fetchMemoryBTree, fetchMemoryAItems,
+  fetchMemoryBTree, fetchMemoryAItems, fetchRoster,
+  eraseDeviceMemory, erasePersonMemory, eraseMemoryItem,
   type MemoryBTreeData, type MemoryAPage, type MemoryItem, type MemoryKeyMeta,
+  type RosterMember,
 } from "./api";
 import "./MemoryDialog.css";
 
@@ -65,7 +67,44 @@ function subjectNames(item: MemoryItem): string {
   return item.subjects.map((s) => s.name).join("、") || "-";
 }
 
-function ItemRow({ item }: { item: MemoryItem }) {
+/**
+ * 记忆清除的共享控制器（对话框级唯一实例，经 props 下传）：
+ * 同一时刻只允许一个删除按钮处于“待确认”状态（两步确认，3 秒未确认自动撤防），
+ * 删除请求进行中全体清除按钮禁用，防连点误删。
+ */
+interface EraseControl {
+  armedKey: string | null;   // 待确认的按钮 key（"item-<id>" | "person-<pid>" | "device"）
+  busyKey: string | null;    // 请求进行中的按钮 key
+  arm: (key: string) => void;
+  runItemErase: (memoryId: number) => void;
+}
+
+/** 两步确认删除按钮：第一次点击进入待确认（红色高亮），再点执行。 */
+function EraseBtn({ ctl, k, onRun, tip, label = "🗑", confirmLabel = "确认删除？",
+                    className = "roster-delete-btn", disabled = false }: {
+  ctl: EraseControl;
+  k: string;
+  onRun: () => void;
+  tip: string;
+  label?: string;
+  confirmLabel?: string;
+  className?: string;
+  disabled?: boolean;
+}) {
+  const armed = ctl.armedKey === k;
+  return (
+    <button
+      className={`${className} ${armed ? "confirm" : ""}`}
+      disabled={disabled || ctl.busyKey !== null}
+      data-tip={armed ? undefined : tip}
+      onClick={() => (armed ? onRun() : ctl.arm(k))}
+    >
+      {ctl.busyKey === k ? "删除中…" : armed ? confirmLabel : label}
+    </button>
+  );
+}
+
+function ItemRow({ item, ctl }: { item: MemoryItem; ctl: EraseControl }) {
   return (
     <div className={`memory-item ${item.status === "superseded" ? "superseded" : ""}`}>
       <span className="memory-item-subjects">{subjectNames(item)}</span>
@@ -95,13 +134,17 @@ function ItemRow({ item }: { item: MemoryItem }) {
       <span className="memory-item-time" data-tip={`条目 #${item.id} · 会话 #${item.session_id}`}>
         {formatTime(item.created_at)}
       </span>
+      <EraseBtn ctl={ctl} k={`item-${item.id}`}
+                onRun={() => ctl.runItemErase(item.id)}
+                tip="删除这条记忆（物理删除不可恢复；在变更历史链上的条目会被拒绝）" />
     </div>
   );
 }
 
-function KeyNodeView({ node, keyMeta }: {
+function KeyNodeView({ node, keyMeta, ctl }: {
   node: KeyTreeNode;
   keyMeta: Record<string, MemoryKeyMeta>;
+  ctl: EraseControl;
 }) {
   const meta = keyMeta[node.key];
   return (
@@ -119,9 +162,9 @@ function KeyNodeView({ node, keyMeta }: {
         <span className="memory-key-count">{subtreeCount(node)}</span>
       </summary>
       <div className="memory-key-body">
-        {node.items.map((it) => <ItemRow key={it.id} item={it} />)}
+        {node.items.map((it) => <ItemRow key={it.id} item={it} ctl={ctl} />)}
         {node.children.map((c) => (
-          <KeyNodeView key={c.key} node={c} keyMeta={keyMeta} />
+          <KeyNodeView key={c.key} node={c} keyMeta={keyMeta} ctl={ctl} />
         ))}
       </div>
     </details>
@@ -133,25 +176,38 @@ function KeyNodeView({ node, keyMeta }: {
  * 从会话标题行的「🧠 记忆查询」按钮打开（花名册按钮之后）。
  * B 类（key 非空，走确定性状态机）按 key 层级树展示；
  * A 类（key 为空，纯语义、随对话量线性增长）分页表展示，最新在前。
+ * 记忆清除（三个粒度，均为物理删除不可恢复）：
+ * 单条（行尾 🗑，变更历史链上的条目被引用时后端拒绝并提示）、
+ * 按成员（含与他人共享的条目整条删）、整设备（条目 + 抽取日志全清）。
  */
 export function MemoryDialog({ deviceSn, onClose }: { deviceSn: string; onClose: () => void }) {
   const [bData, setBData] = useState<MemoryBTreeData | null>(null);
   const [aData, setAData] = useState<MemoryAPage | null>(null);
+  const [members, setMembers] = useState<RosterMember[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [includeSuperseded, setIncludeSuperseded] = useState(false);
   const [aPage, setAPage] = useState(1);
 
+  /* ── 记忆清除状态（两步确认 + 结果提示） ── */
+  const [erasePid, setErasePid] = useState("");
+  const [armedKey, setArmedKey] = useState<string | null>(null);
+  const [busyKey, setBusyKey] = useState<string | null>(null);
+  const [notice, setNotice] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+  const armTimerRef = useRef<number | null>(null);
+
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const [b, a] = await Promise.all([
+      const [b, a, roster] = await Promise.all([
         fetchMemoryBTree(deviceSn, includeSuperseded),
         fetchMemoryAItems(deviceSn, aPage, A_PAGE_SIZE),
+        fetchRoster(deviceSn),
       ]);
       setBData(b);
       setAData(a);
+      setMembers(roster.members);
     } catch (e: any) {
       setError(e.message || String(e));
     } finally {
@@ -171,6 +227,50 @@ export function MemoryDialog({ deviceSn, onClose }: { deviceSn: string; onClose:
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
+
+  /* 成功提示几秒后自动消失；失败提示（含“被引用拒绝”的解释）保留到手动关闭或下次操作 */
+  useEffect(() => {
+    if (!notice || notice.kind !== "ok") return;
+    const t = window.setTimeout(() => setNotice(null), 6000);
+    return () => window.clearTimeout(t);
+  }, [notice]);
+
+  const arm = useCallback((key: string) => {
+    setArmedKey(key);
+    if (armTimerRef.current) window.clearTimeout(armTimerRef.current);
+    armTimerRef.current = window.setTimeout(() => setArmedKey(null), 3000);
+  }, []);
+
+  /** 执行一次清除请求：成功/失败都落到 notice 提示条，成功后整体刷新。 */
+  const runErase = useCallback(async (
+    key: string, fn: () => Promise<{ message: string }>,
+  ) => {
+    if (armTimerRef.current) window.clearTimeout(armTimerRef.current);
+    setArmedKey(null);
+    setBusyKey(key);
+    setNotice(null);
+    try {
+      const r = await fn();
+      setNotice({ kind: "ok", text: r.message });
+      await load();
+    } catch (e: any) {
+      setNotice({ kind: "err", text: e.message || String(e) });
+    } finally {
+      setBusyKey(null);
+    }
+  }, [load]);
+
+  const ctl: EraseControl = {
+    armedKey, busyKey, arm,
+    runItemErase: (memoryId) =>
+      runErase(`item-${memoryId}`, () => eraseMemoryItem(deviceSn, memoryId)),
+  };
+
+  const memberLabel = (m: RosterMember) =>
+    m.name || m.aliases[0] || m.person_id;
+  const eraseTarget = members.find((m) => m.person_id === erasePid);
+  const erasePidLabel = erasePid === "family" ? "全家"
+    : eraseTarget ? memberLabel(eraseTarget) : erasePid;
 
   const enabled = bData?.enabled ?? aData?.enabled;
   const tree = bData ? buildKeyTree(bData.items) : [];
@@ -197,6 +297,53 @@ export function MemoryDialog({ deviceSn, onClose }: { deviceSn: string; onClose:
             </div>
           )}
 
+          {enabled && (
+            <div className="memory-erase-bar">
+              <span className="memory-erase-title"
+                    data-tip="三个粒度的记忆清除，均为物理删除、不可恢复（与「已失效」不同——失效行仍保留可回溯）">
+                🧹 记忆清除
+              </span>
+              <select
+                className="memory-erase-select"
+                value={erasePid}
+                onChange={(e) => { setErasePid(e.target.value); setArmedKey(null); }}
+              >
+                <option value="">选择成员…</option>
+                {members.map((m) => (
+                  <option key={m.person_id} value={m.person_id}>{memberLabel(m)}</option>
+                ))}
+                <option value="family">全家（家庭整体条目）</option>
+              </select>
+              <EraseBtn
+                ctl={ctl} k={`person-${erasePid}`} className="memory-erase-btn"
+                disabled={!erasePid}
+                label="清除该成员记忆"
+                confirmLabel={`确认清除${erasePidLabel}的全部记忆？`}
+                tip="删除此人作为主体的全部记忆条目；与他人共同的经历/计划也会整条删除（对方的这份记忆随之消失）。花名册身份与人脸不受影响。"
+                onRun={() => runErase(`person-${erasePid}`,
+                                      () => erasePersonMemory(deviceSn, erasePid))}
+              />
+              <span className="memory-erase-spacer" />
+              <EraseBtn
+                ctl={ctl} k="device" className="memory-erase-btn device"
+                label="清空整个设备记忆"
+                confirmLabel="确认清空？全部记忆与抽取日志将被删除"
+                tip="删除该设备所属家庭的全部记忆条目和抽取运行日志（含对话原文快照），并丢弃未抽取的对话缓冲。花名册与人脸底库不动。"
+                onRun={() => runErase("device", () => eraseDeviceMemory(deviceSn))}
+              />
+            </div>
+          )}
+
+          {notice && (
+            <div className={`memory-erase-notice ${notice.kind}`}>
+              <span className="memory-erase-notice-text">
+                {notice.kind === "ok" ? "✅ " : "⚠️ "}{notice.text}
+              </span>
+              <button className="memory-erase-notice-close"
+                      onClick={() => setNotice(null)} data-tip="关闭提示">×</button>
+            </div>
+          )}
+
           {enabled && bData && (
             <>
               <h4 className="roster-section-title">
@@ -214,7 +361,7 @@ export function MemoryDialog({ deviceSn, onClose }: { deviceSn: string; onClose:
               {tree.length > 0 ? (
                 <div className="memory-tree">
                   {tree.map((n) => (
-                    <KeyNodeView key={n.key} node={n} keyMeta={bData.key_meta} />
+                    <KeyNodeView key={n.key} node={n} keyMeta={bData.key_meta} ctl={ctl} />
                   ))}
                 </div>
               ) : (
@@ -241,6 +388,7 @@ export function MemoryDialog({ deviceSn, onClose }: { deviceSn: string; onClose:
                           <th>归属</th>
                           <th>说话人</th>
                           <th>时间</th>
+                          <th></th>
                         </tr>
                       </thead>
                       <tbody>
@@ -256,6 +404,11 @@ export function MemoryDialog({ deviceSn, onClose }: { deviceSn: string; onClose:
                             <td>{it.speaker || "-"}</td>
                             <td className="roster-time" data-tip={`会话 #${it.session_id}`}>
                               {formatTime(it.created_at)}
+                            </td>
+                            <td>
+                              <EraseBtn ctl={ctl} k={`item-${it.id}`}
+                                        onRun={() => ctl.runItemErase(it.id)}
+                                        tip="删除这条记忆（物理删除不可恢复）" />
                             </td>
                           </tr>
                         ))}

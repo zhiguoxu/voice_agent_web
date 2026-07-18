@@ -369,10 +369,20 @@ export async function fetchRoster(deviceSn: string): Promise<RosterData> {
   return res.json();
 }
 
-/** 删除花名册成员，同时联动删除 person_id 底库里此人的人脸（device_sn 定位底库） */
+/** 花名册成员删除结果（人脸/花名册/记忆三步联动的各自结果） */
+export interface RosterMemberDeleteResult {
+  ok: boolean;
+  roster_deleted: boolean;
+  face_deleted: boolean;
+  memory_deleted_items: number;
+  message: string;
+}
+
+/** 删除花名册成员：联动删除 person_id 底库里此人的人脸（device_sn 定位底库），
+ *  以及此人的全部记忆条目（含与他人共享的条目整条删，物理删除不可恢复）。 */
 export async function deleteRosterMember(
   personId: string, deviceSn: string,
-): Promise<void> {
+): Promise<RosterMemberDeleteResult> {
   const res = await fetch(
     `/api/agent/roster/${encodeURIComponent(personId)}?device_sn=${encodeURIComponent(deviceSn)}`,
     { method: "DELETE" },
@@ -381,6 +391,7 @@ export async function deleteRosterMember(
     const data = await res.json().catch(() => ({}));
     throw new Error(data.detail || "Failed to delete roster member");
   }
+  return res.json();
 }
 
 /** 成员属性编辑载荷：显式传 null 表示清空该字段，省略表示不动 */
@@ -534,6 +545,73 @@ export async function fetchMemoryAItems(
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
     throw new Error(data.detail || "Failed to fetch A memories");
+  }
+  return res.json();
+}
+
+/** 整设备记忆清空结果 */
+export interface DeviceMemoryEraseResult {
+  ok: boolean;
+  deleted_items: number;
+  deleted_ingest_runs: number;
+  message: string;
+}
+
+/** 清空一个设备（家庭）的全部记忆：条目 + 主体索引 + 抽取运行日志，物理删除
+ *  不可恢复。花名册不动（删成员走花名册接口，有人脸底库联动）。 */
+export async function eraseDeviceMemory(
+  deviceSn: string,
+): Promise<DeviceMemoryEraseResult> {
+  const res = await fetch("/api/agent/memory/erase/device", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ device_sn: deviceSn }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || "清空设备记忆失败");
+  }
+  return res.json();
+}
+
+/** 按人记忆清除结果（shared_items：其中与他人共享、被一并删除的条数） */
+export interface PersonMemoryEraseResult {
+  ok: boolean;
+  deleted_items: number;
+  shared_items: number;
+  message: string;
+}
+
+/** 清除一个人的全部记忆条目（含共享条目整条删），物理删除不可恢复。
+ *  personId 传 "family" 可清除「我们家/全家」的家庭整体条目。 */
+export async function erasePersonMemory(
+  deviceSn: string, personId: string,
+): Promise<PersonMemoryEraseResult> {
+  const res = await fetch("/api/agent/memory/erase/person", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ device_sn: deviceSn, person_id: personId }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || "清除人物记忆失败");
+  }
+  return res.json();
+}
+
+/** 删除单条记忆。条目在变更历史链上（被别的记忆引用）时后端 409 拒绝，
+ *  错误信息里带引用者 id。 */
+export async function eraseMemoryItem(
+  deviceSn: string, memoryId: number,
+): Promise<{ ok: boolean; message: string }> {
+  const res = await fetch("/api/agent/memory/erase/item", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ device_sn: deviceSn, memory_id: memoryId }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || "删除记忆失败");
   }
   return res.json();
 }
