@@ -1157,6 +1157,7 @@ export default function App() {
                         device_type_id: selectedSession?.device_type_id ?? "2",
                         session_id: selectedSession?.id ?? 0,
                         location: selectedSession?.location ?? null,
+                        client_ip: selectedSession?.client_ip ?? null,
                         image_url: cr?.image_url ?? null,
                       };
                       setReplayInput(JSON.stringify(replayData, null, 2));
