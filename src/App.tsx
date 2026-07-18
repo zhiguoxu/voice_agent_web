@@ -743,7 +743,9 @@ export default function App() {
                 </div>
                 <div className="session-meta">
                   <span>👤 {s.user_id || "-"}</span>
-                  <span>📍 {s.location || "-"}</span>
+                  <span data-tip={s.client_ip ? `客户端 IP: ${s.client_ip}` : undefined}>
+                    📍 {s.location || s.client_ip || "-"}
+                  </span>
                 </div>
                 <div className="session-time">
                   {s.first_turn_at ? (

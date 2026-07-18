@@ -45,6 +45,8 @@ export interface Session {
   device_name?: string | null;
   user_id: string;
   device_type_id: string;
+  /** 客户端真实 IP（服务端解析代理头所得），历史会话可能为 null */
+  client_ip: string | null;
   location: string | null;
   created_at: string | null;
   last_active_at: string | null;
