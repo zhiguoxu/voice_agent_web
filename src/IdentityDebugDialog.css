@@ -1,0 +1,111 @@
+/* 身份融合调试弹窗（点说话人标签打开） */
+
+.identity-debug-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 24px;
+}
+
+.identity-debug-dialog {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px 24px;
+  width: min(560px, 100%);
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.identity-debug-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.identity-debug-header h3 {
+  margin: 0;
+  font-size: 15px;
+  flex: 1;
+}
+
+.identity-debug-flags {
+  display: flex;
+  gap: 6px;
+}
+
+.identity-debug-flags .flag {
+  padding: 1px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 999px;
+}
+
+.identity-debug-flags .flag.conflict {
+  color: var(--red, #f87171);
+  background: rgba(248, 113, 113, 0.12);
+  border: 1px solid rgba(248, 113, 113, 0.35);
+}
+
+.identity-debug-flags .flag.suspected {
+  color: var(--amber, #fbbf24);
+  background: rgba(251, 191, 36, 0.12);
+  border: 1px solid rgba(251, 191, 36, 0.35);
+}
+
+.identity-debug-close {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 2px 6px;
+}
+
+.identity-debug-close:hover {
+  color: var(--text);
+}
+
+.identity-debug-body {
+  overflow-y: auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.identity-debug-body section {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+}
+
+.identity-debug-body h4 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.identity-debug-body .kv {
+  display: flex;
+  gap: 10px;
+  padding: 2px 0;
+  font-size: 13px;
+}
+
+.identity-debug-body .kv label {
+  flex-shrink: 0;
+  width: 110px;
+  color: var(--text-muted);
+}
+
+.identity-debug-body .kv span {
+  word-break: break-all;
+}
