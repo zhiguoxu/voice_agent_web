@@ -140,7 +140,7 @@ export interface IdentityDebug {
     person_id: string | null;
     recognition: string;
     source: string | null;          // vision / voice
-    conflict_kind: string | null;   // override / conflict_unknown / voice_doubt
+    conflict_kind: string | null;   // voice_override / conflict_unknown / voice_doubt
   };
 }
 
@@ -150,7 +150,7 @@ export interface Turn {
   query: string;
   speaker_id: string | null;
   speaker_name: string | null;
-  /** 声画冲突仲裁走向：null=无冲突 / override / conflict_unknown / voice_doubt；
+  /** 声画冲突仲裁走向：null=无冲突 / voice_override / conflict_unknown / voice_doubt；
    *  voice_doubt=归镜头者但这句话声音存疑（标签「冲突」记号） */
   speaker_conflict_kind: string | null;
   /** 疑似识别标记：speaker_id 是"最像的人"可能认错（voice_doubt 弱冲突轮并在此档），

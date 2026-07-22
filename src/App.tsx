@@ -102,7 +102,7 @@ function SpeakerBadge({ speakerId, speakerName, kind, suspected, debug, names, o
     marks.push("冲突");
     markTip = "看清了镜头里的人，但这句话的声音没听准——归他但存疑，这句不写进他的记忆";
   } else if (suspected) {
-    if (effKind === "override") {
+    if (effKind === "voice_override") {
       marks.push("疑似·声纹改判");
       markTip = "镜头里看到的是别人，这句话的声纹强指向此人，按疑似档归属给他";
     } else if (source === "voice") {

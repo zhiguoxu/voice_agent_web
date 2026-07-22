@@ -32,7 +32,7 @@ function visionJudgeText(recognition: string, status: string | null): string {
 
 /** 融合仲裁走向的中文说明 */
 const FUSION_KIND_TEXT: Record<string, string> = {
-  override: "声纹否决视觉：声音极像另一人，本轮身份改判给声音指向的人（疑似级）",
+  voice_override: "声纹否决视觉：声音极像另一人，本轮身份改判给声音指向的人（疑似级）",
   conflict_unknown: "冲突归未知：声音较强指向他人但不足以断定，本轮不认定身份",
   voice_doubt: "弱冲突：身份仍归镜头里的人，但这句话的声音存疑（标签带「疑似」，记忆不绑人）",
 };
