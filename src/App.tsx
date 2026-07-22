@@ -77,11 +77,10 @@ function useSpeakerNames(deviceSn: string | null | undefined) {
  *  名称优先用轮次里的当时快照（speaker_name，便于追溯），老数据没快照时退化为按花名册现查。
  *  冲突/疑似轮加对应记号（该轮归属存疑）；轮次带 identity_debug 时标签可点击，
  *  弹窗展示该轮身份融合过程（视觉/声纹分数与判定、融合结论）。 */
-function SpeakerBadge({ speakerId, speakerName, kind, conflict, suspected, debug, names, onShowDebug }: {
+function SpeakerBadge({ speakerId, speakerName, kind, suspected, debug, names, onShowDebug }: {
   speakerId: string | null | undefined;
   speakerName: string | null | undefined;
   kind: string | null | undefined;       /* 落库的 speaker_conflict_kind（仲裁走向） */
-  conflict: boolean | null | undefined;  /* 只读老行的兼容旗标（并档前 mark 轮） */
   suspected: boolean | null | undefined;
   debug: IdentityDebug | null | undefined;
   names: Record<string, string>;
@@ -91,11 +90,12 @@ function SpeakerBadge({ speakerId, speakerName, kind, conflict, suspected, debug
   if (!speakerId && !debug) return null;
   const name = speakerId ? (speakerName || names[speakerId]) : null;
   const text = speakerId ? (name ? `${name} (${speakerId})` : speakerId) : "未识别";
-  /* 仲裁走向统一从 speaker_conflict_kind 取；老行没有该列时退化：融合记录的
-     conflict_kind（改名前老行叫 kind）→ 再退化到并档前的 conflict 旗标 */
-  const effKind = kind ?? debug?.fusion?.conflict_kind ?? debug?.fusion?.kind ?? (conflict ? "mark" : null);
+  /* 仲裁走向统一从 speaker_conflict_kind 取（历史形态——speaker_conflict 布尔
+     旗标、字段名 kind、枚举值 mark——存量均已由 session_store 启动补丁订正,
+     这里不留旧名分支）；该列早于列诞生的行退化读融合记录 */
+  const effKind = kind ?? debug?.fusion?.conflict_kind ?? null;
   const source = debug?.fusion?.source ?? null;
-  const isConflict = effKind === "mark";
+  const isConflict = effKind === "voice_doubt";
   const marks: string[] = [];
   let markTip = "";
   if (isConflict) {
@@ -934,7 +934,7 @@ export default function App() {
                       <span className="turn-icon">👤</span>
                       <span className="turn-text">{t.query || "(无输入)"}</span>
                       <SpeakerBadge speakerId={t.speaker_id} speakerName={t.speaker_name}
-                        kind={t.speaker_conflict_kind} conflict={t.speaker_conflict} suspected={t.speaker_suspected}
+                        kind={t.speaker_conflict_kind} suspected={t.speaker_suspected}
                         debug={t.identity_debug} names={speakerNames}
                         onShowDebug={setIdentityDebugShown} />
                     </div>
@@ -1013,7 +1013,7 @@ export default function App() {
                       <span className="turn-icon">👤</span>
                       <span className="turn-text">{realtimeTurn.query || "(正在输入...)"}</span>
                       <SpeakerBadge speakerId={realtimeTurn.speaker_id} speakerName={realtimeTurn.speaker_name}
-                        kind={realtimeTurn.speaker_conflict_kind} conflict={realtimeTurn.speaker_conflict} suspected={realtimeTurn.speaker_suspected}
+                        kind={realtimeTurn.speaker_conflict_kind} suspected={realtimeTurn.speaker_suspected}
                         debug={realtimeTurn.identity_debug} names={speakerNames}
                         onShowDebug={setIdentityDebugShown} />
                     </div>

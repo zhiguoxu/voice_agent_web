@@ -34,7 +34,7 @@ function visionJudgeText(recognition: string, status: string | null): string {
 const FUSION_KIND_TEXT: Record<string, string> = {
   override: "声纹否决视觉：声音极像另一人，本轮身份改判给声音指向的人（疑似级）",
   conflict_unknown: "冲突归未知：声音较强指向他人但不足以断定，本轮不认定身份",
-  mark: "弱冲突标记：身份仍归镜头里的人，但归属存疑（标签带「疑似」，记忆不绑人）",
+  voice_doubt: "弱冲突：身份仍归镜头里的人，但这句话的声音存疑（标签带「疑似」，记忆不绑人）",
 };
 
 export default function IdentityDebugDialog({ debug, conflict, suspected, names, onClose }: {
@@ -101,10 +101,10 @@ export default function IdentityDebugDialog({ debug, conflict, suspected, names,
               <label>依据</label>
               <span>{fusion.source === "vision" ? "视觉" : fusion.source === "voice" ? "声纹" : "—"}</span>
             </div>
-            {(fusion.conflict_kind ?? fusion.kind) && (
-              <div className="kv"><label>仲裁走向</label><span>{FUSION_KIND_TEXT[(fusion.conflict_kind ?? fusion.kind)!] ?? (fusion.conflict_kind ?? fusion.kind)}</span></div>
+            {fusion.conflict_kind && (
+              <div className="kv"><label>仲裁走向</label><span>{FUSION_KIND_TEXT[fusion.conflict_kind] ?? fusion.conflict_kind}</span></div>
             )}
-            {(fusion.conflict_kind ?? fusion.kind) && vision.person_id && vision.person_id !== fusion.person_id && (
+            {fusion.conflict_kind && vision.person_id && vision.person_id !== fusion.person_id && (
               <div className="kv"><label>仲裁前视觉看到</label><span>{personText(vision.person_id, names)}</span></div>
             )}
           </section>
