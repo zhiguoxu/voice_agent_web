@@ -112,12 +112,51 @@ export interface MemoryRecall {
   error: string | null;
 }
 
+/** 单轮身份融合过程记录（后端 identity.IdentityDebug 的 JSON，字段一一对应；
+ *  点说话人标签的调试弹窗展示。person_id 未启用等无融合过程的轮次为 null。 */
+export interface IdentityDebug {
+  /** 视觉识别层原始结果（融合前） */
+  vision: {
+    person_id: string | null;
+    recognition: string;            // known / suspected / unknown
+    fused_score: number | null;     // person_id 服务的多模态融合匹配分
+    status: string | null;          // 服务端原始置信档位 definite/confident/...
+  };
+  /** 声纹比对原始结果。person_id/score/confidence 是过阈值的结论；
+   *  top_person_id/top_score 是不设阈值的原始最像者 */
+  voice: {
+    person_id: string | null;
+    score: number | null;
+    confidence: string | null;      // high / low
+    net_speech_sec: number;
+    top_person_id: string | null;
+    top_score: number | null;
+  };
+  /** 镜头里的人自己的声纹分（仅"视觉认出A+声纹top-1指向他人"的仲裁场景才有） */
+  vision_person_voice_score: number | null;
+  /** 融合结论（本轮最终采用的身份及仲裁走向） */
+  fusion: {
+    person_id: string | null;
+    recognition: string;
+    source: string | null;          // vision / voice
+    conflict: boolean;
+    kind: string | null;            // override / conflict_unknown / mark
+    vision_person_id: string | null;
+  };
+}
+
 export interface Turn {
   id: number;
   trace_id: string;
   query: string;
   speaker_id: string | null;
   speaker_name: string | null;
+  /** 声画冲突标记：归属存疑，标签带「冲突」记号 */
+  speaker_conflict: boolean | null;
+  /** 疑似识别标记：speaker_id 是"最像的人"可能认错，标签带「疑似」记号 */
+  speaker_suspected: boolean | null;
+  /** 身份融合过程记录：点说话人标签展示；无融合过程的轮次为 null */
+  identity_debug: IdentityDebug | null;
   reply_text: string | null;
   intent_source: string | null;
   intent_name: string | null;

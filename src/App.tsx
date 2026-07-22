@@ -14,9 +14,11 @@ import {
   fetchExtractedTraces,
   type Session,
   type Turn,
+  type IdentityDebug,
   type ReplayResult,
   CONVERSATIONS_API_BASE,
 } from "./api";
+import IdentityDebugDialog from "./IdentityDebugDialog";
 import { useDebounce } from "./useDebounce";
 import { TimeRangePicker, type TimeRange } from "./TimeRangePicker";
 import { LatencyChart } from "./LatencyChart";
@@ -72,17 +74,43 @@ function useSpeakerNames(deviceSn: string | null | undefined) {
 
 /** query 行右侧的说话人标识：名称 (speaker_id)；没名字只显示裸 id。
  *  与 query 同行右对齐、不收缩——query 过长时自行换行，徽章位置和空间不受挤压。
- *  名称优先用轮次里的当时快照（speaker_name，便于追溯），老数据没快照时退化为按花名册现查。 */
-function SpeakerBadge({ speakerId, speakerName, names }: {
+ *  名称优先用轮次里的当时快照（speaker_name，便于追溯），老数据没快照时退化为按花名册现查。
+ *  冲突/疑似轮加对应记号（该轮归属存疑）；轮次带 identity_debug 时标签可点击，
+ *  弹窗展示该轮身份融合过程（视觉/声纹分数与判定、融合结论）。 */
+function SpeakerBadge({ speakerId, speakerName, conflict, suspected, debug, names, onShowDebug }: {
   speakerId: string | null | undefined;
   speakerName: string | null | undefined;
+  conflict: boolean | null | undefined;
+  suspected: boolean | null | undefined;
+  debug: IdentityDebug | null | undefined;
   names: Record<string, string>;
+  onShowDebug: (payload: { debug: IdentityDebug; conflict: boolean; suspected: boolean }) => void;
 }) {
-  if (!speakerId) return null;
-  const name = speakerName || names[speakerId];
+  /* 没识别出人但有融合过程记录时也要能点开看"为什么没认出"，所以不能只看 speakerId */
+  if (!speakerId && !debug) return null;
+  const name = speakerId ? (speakerName || names[speakerId]) : null;
+  const text = speakerId ? (name ? `${name} (${speakerId})` : speakerId) : "未识别";
+  const marks = [conflict ? "冲突" : null, suspected ? "疑似" : null].filter(Boolean);
+  const tip = debug
+    ? `speaker_id: ${speakerId ?? "无"}；点击查看本轮身份融合过程`
+    : `speaker_id: ${speakerId}`;
   return (
-    <span className={`speaker-badge ${name ? "" : "unnamed"}`} data-tip={`speaker_id: ${speakerId}`}>
-      {name ? `${name} (${speakerId})` : speakerId}
+    <span
+      className={[
+        "speaker-badge",
+        name ? "" : "unnamed",
+        conflict ? "conflict" : "",
+        suspected ? "suspected" : "",
+        debug ? "clickable" : "",
+      ].join(" ").replace(/\s+/g, " ").trim()}
+      data-tip={tip}
+      onClick={debug ? (e) => {
+        e.stopPropagation();  // 别触发轮次卡片的选中
+        onShowDebug({ debug, conflict: !!conflict, suspected: !!suspected });
+      } : undefined}
+    >
+      {marks.length > 0 && <b className="speaker-mark">{marks.join("·")}</b>}
+      {text}
     </span>
   );
 }
@@ -137,6 +165,10 @@ export default function App() {
   const [turnsHasMore, setTurnsHasMore] = useState(false);
   const [turnsCursor, setTurnsCursor] = useState<number | null>(null);
   const [selectedTurn, setSelectedTurn] = useState<Turn | null>(null);
+  /* 身份融合调试弹窗（点轮次卡片的说话人标签打开） */
+  const [identityDebugShown, setIdentityDebugShown] = useState<{
+    debug: IdentityDebug; conflict: boolean; suspected: boolean;
+  } | null>(null);
 
   /* ── Test Input State ── */
   const [testInputText, setTestInputText] = useState("");
@@ -491,6 +523,9 @@ export default function App() {
                command_type: data.command,
                speaker_id: data.speaker_id ?? null,
                speaker_name: data.speaker_name ?? null,
+               speaker_conflict: data.speaker_conflict ?? null,
+               speaker_suspected: data.speaker_suspected ?? null,
+               identity_debug: data.identity_debug ?? null,
              } : null);
            } else if (data.event === "done") {
               // done 表示 persist 已完成，DB 数据已就绪，直接拉取
@@ -873,7 +908,10 @@ export default function App() {
                     <div className="turn-query">
                       <span className="turn-icon">👤</span>
                       <span className="turn-text">{t.query || "(无输入)"}</span>
-                      <SpeakerBadge speakerId={t.speaker_id} speakerName={t.speaker_name} names={speakerNames} />
+                      <SpeakerBadge speakerId={t.speaker_id} speakerName={t.speaker_name}
+                        conflict={t.speaker_conflict} suspected={t.speaker_suspected}
+                        debug={t.identity_debug} names={speakerNames}
+                        onShowDebug={setIdentityDebugShown} />
                     </div>
                     <div className="turn-reply">
                       <span className="turn-icon">🤖</span> 
@@ -949,7 +987,10 @@ export default function App() {
                     <div className="turn-query">
                       <span className="turn-icon">👤</span>
                       <span className="turn-text">{realtimeTurn.query || "(正在输入...)"}</span>
-                      <SpeakerBadge speakerId={realtimeTurn.speaker_id} speakerName={realtimeTurn.speaker_name} names={speakerNames} />
+                      <SpeakerBadge speakerId={realtimeTurn.speaker_id} speakerName={realtimeTurn.speaker_name}
+                        conflict={realtimeTurn.speaker_conflict} suspected={realtimeTurn.speaker_suspected}
+                        debug={realtimeTurn.identity_debug} names={speakerNames}
+                        onShowDebug={setIdentityDebugShown} />
                     </div>
                     <div className="turn-reply">
                       <span className="turn-icon">🤖</span> 
@@ -1302,6 +1343,16 @@ export default function App() {
         <ConfigView />
       ) : (
         <LogMonitor />
+      )}
+      {/* 身份融合调试弹窗（点轮次卡片的说话人标签打开） */}
+      {identityDebugShown && (
+        <IdentityDebugDialog
+          debug={identityDebugShown.debug}
+          conflict={identityDebugShown.conflict}
+          suspected={identityDebugShown.suspected}
+          names={speakerNames}
+          onClose={() => setIdentityDebugShown(null)}
+        />
       )}
       {/* 家庭花名册对话框（按设备所属家庭）；关闭时刷新说话人名字映射（可能刚改过名） */}
       {rosterDeviceSn && (

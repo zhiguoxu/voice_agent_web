@@ -696,6 +696,36 @@ body {
     font-family: 'SF Mono', 'Fira Code', monospace;
 }
 
+/* 疑似识别轮：琥珀色（speaker_id 是"最像的人"，可能认错） */
+.speaker-badge.suspected {
+    color: var(--amber, #fbbf24);
+    background: rgba(251, 191, 36, 0.1);
+    border-color: rgba(251, 191, 36, 0.35);
+}
+
+/* 声画冲突轮：红色（声音与画面指向不一致，归属存疑）；冲突叠加疑似时红色优先 */
+.speaker-badge.conflict {
+    color: var(--red, #f87171);
+    background: rgba(248, 113, 113, 0.1);
+    border-color: rgba(248, 113, 113, 0.35);
+}
+
+/* 轮次带 identity_debug 时可点击查看本轮身份融合过程 */
+.speaker-badge.clickable {
+    cursor: pointer;
+}
+
+.speaker-badge.clickable:hover {
+    filter: brightness(1.25);
+}
+
+/* 标签内的「冲突·疑似」记号 */
+.speaker-badge .speaker-mark {
+    margin-right: 4px;
+    padding-right: 4px;
+    border-right: 1px solid currentColor;
+}
+
 .speaker-detail-name {
     color: var(--cyan);
     margin-right: 8px;
