@@ -101,11 +101,11 @@ export default function IdentityDebugDialog({ debug, conflict, suspected, names,
               <label>依据</label>
               <span>{fusion.source === "vision" ? "视觉" : fusion.source === "voice" ? "声纹" : "—"}</span>
             </div>
-            {fusion.kind && (
-              <div className="kv"><label>仲裁走向</label><span>{FUSION_KIND_TEXT[fusion.kind] ?? fusion.kind}</span></div>
+            {(fusion.conflict_kind ?? fusion.kind) && (
+              <div className="kv"><label>仲裁走向</label><span>{FUSION_KIND_TEXT[(fusion.conflict_kind ?? fusion.kind)!] ?? (fusion.conflict_kind ?? fusion.kind)}</span></div>
             )}
-            {fusion.kind && fusion.vision_person_id && fusion.vision_person_id !== fusion.person_id && (
-              <div className="kv"><label>仲裁前视觉看到</label><span>{personText(fusion.vision_person_id, names)}</span></div>
+            {(fusion.conflict_kind ?? fusion.kind) && vision.person_id && vision.person_id !== fusion.person_id && (
+              <div className="kv"><label>仲裁前视觉看到</label><span>{personText(vision.person_id, names)}</span></div>
             )}
           </section>
 

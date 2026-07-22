@@ -112,7 +112,8 @@ export interface MemoryRecall {
   error: string | null;
 }
 
-/** 单轮身份融合过程记录（后端 identity.IdentityDebug 的 JSON，字段一一对应；
+/** 单轮身份融合过程记录（后端 identity.IdentityDebug 的 JSON——运行时类型整体
+ *  dump，这里只声明 web 实际读取的字段，后端可多不可少；
  *  点说话人标签的调试弹窗展示。person_id 未启用等无融合过程的轮次为 null。 */
 export interface IdentityDebug {
   /** 视觉识别层原始结果（融合前） */
@@ -139,9 +140,9 @@ export interface IdentityDebug {
     person_id: string | null;
     recognition: string;
     source: string | null;          // vision / voice
-    conflict: boolean;
-    kind: string | null;            // override / conflict_unknown / mark
-    vision_person_id: string | null;
+    conflict_kind: string | null;   // override / conflict_unknown / mark
+    /** 改名前(2026-07-22 当天)落库的老行用的字段名，读取时兼容 */
+    kind?: string | null;
   };
 }
 
@@ -151,9 +152,14 @@ export interface Turn {
   query: string;
   speaker_id: string | null;
   speaker_name: string | null;
-  /** 声画冲突标记：归属存疑，标签带「冲突」记号 */
+  /** 声画冲突仲裁走向：null=无冲突 / override / conflict_unknown / mark；
+   *  mark=归镜头者但这句话声音存疑（标签「冲突」记号） */
+  speaker_conflict_kind: string | null;
+  /** 【只读老行】2026-07-22 并档前的弱冲突旗标，新行恒 false（弱冲突看
+   *  speaker_conflict_kind==="mark"）；老行 mark 轮 conflict=true 且 suspected=false */
   speaker_conflict: boolean | null;
-  /** 疑似识别标记：speaker_id 是"最像的人"可能认错，标签带「疑似」记号 */
+  /** 疑似识别标记：speaker_id 是"最像的人"可能认错（mark 弱冲突轮并在此档），
+   *  标签带「疑似」记号 */
   speaker_suspected: boolean | null;
   /** 身份融合过程记录：点说话人标签展示；无融合过程的轮次为 null */
   identity_debug: IdentityDebug | null;
