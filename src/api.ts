@@ -614,6 +614,34 @@ export async function eraseDeviceMemory(
   return res.json();
 }
 
+/** 整设备用户数据清空结果（花名册成员 + 底库人脸 + 记忆） */
+export interface UserDataEraseResult {
+  ok: boolean;
+  deleted_members: number;
+  faces_deleted: number;
+  deleted_memory_items: number;
+  deleted_ingest_runs: number;
+  message: string;
+}
+
+/** 清空一个设备（家庭）的全部用户数据：花名册全部成员（联动删除 person_id
+ *  底库人脸与声纹模板）+ 全部记忆（条目 + 主体索引 + 抽取运行日志），物理
+ *  删除不可恢复。历史对话（会话与消息记录）保留。 */
+export async function eraseUserData(
+  deviceSn: string,
+): Promise<UserDataEraseResult> {
+  const res = await fetch("/api/agent/user_data/erase", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ device_sn: deviceSn }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || "清空用户数据失败");
+  }
+  return res.json();
+}
+
 /** 按人记忆清除结果（shared_items：其中与他人共享、被一并删除的条数） */
 export interface PersonMemoryEraseResult {
   ok: boolean;

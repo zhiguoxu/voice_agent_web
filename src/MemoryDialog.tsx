@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import {
   fetchMemoryBTree, fetchMemoryAItems, fetchRoster,
-  eraseDeviceMemory, erasePersonMemory, eraseMemoryItem,
+  eraseDeviceMemory, erasePersonMemory, eraseMemoryItem, eraseUserData,
   type MemoryBTreeData, type MemoryAPage, type MemoryItem, type MemoryKeyMeta,
   type RosterMember,
 } from "./api";
@@ -330,6 +330,13 @@ export function MemoryDialog({ deviceSn, onClose }: { deviceSn: string; onClose:
                 confirmLabel="确认清空？全部记忆与抽取日志将被删除"
                 tip="删除该设备所属家庭的全部记忆条目和抽取运行日志（含对话原文快照），并丢弃未抽取的对话缓冲。花名册与人脸底库不动。"
                 onRun={() => runErase("device", () => eraseDeviceMemory(deviceSn))}
+              />
+              <EraseBtn
+                ctl={ctl} k="user-data" className="memory-erase-btn device"
+                label="清空全部用户数据"
+                confirmLabel="确认清空？花名册（含人脸、声纹）与全部记忆将被删除"
+                tip="删除该设备所属家庭的全部用户数据：花名册全部成员（联动删除 person_id 底库人脸与声纹模板）+ 全部记忆和抽取日志。历史对话保留。"
+                onRun={() => runErase("user-data", () => eraseUserData(deviceSn))}
               />
             </div>
           )}
