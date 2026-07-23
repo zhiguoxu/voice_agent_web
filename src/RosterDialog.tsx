@@ -4,6 +4,7 @@ import {
   addRosterRelation, deleteRosterRelation,
   type RosterData, type RosterMember, type RosterRelation,
 } from "./api";
+import { VoiceEnrollDialog } from "./VoiceEnrollDialog";
 import "./RosterDialog.css";
 
 /* 角色/性别的展示映射：兜底显示原始值，方便发现抽取出的脏数据 */
@@ -68,6 +69,8 @@ export function RosterDialog({ deviceSn, onClose }: { deviceSn: string; onClose:
   const [editingPid, setEditingPid] = useState<string | null>(null);
   const [draft, setDraft] = useState<MemberDraft | null>(null);
   const [saving, setSaving] = useState(false);
+  /* 声纹录入对话框：给选中的成员补录声纹（在其人脸注册的基础上） */
+  const [voiceEnrollMember, setVoiceEnrollMember] = useState<RosterMember | null>(null);
   /* 添加关系边表单 */
   const [relSubject, setRelSubject] = useState("");
   const [relKind, setRelKind] = useState("parent_of");
@@ -90,14 +93,14 @@ export function RosterDialog({ deviceSn, onClose }: { deviceSn: string; onClose:
     load();
   }, [load]);
 
-  /* Esc 关闭 */
+  /* Esc 关闭（声纹录入弹窗打开时由它自己处理 Esc，不连着关花名册） */
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape" && voiceEnrollMember === null) onClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, [onClose, voiceEnrollMember]);
 
   const armDelete = (personId: string) => {
     setPendingDelete(personId);
@@ -283,6 +286,16 @@ export function RosterDialog({ deviceSn, onClose }: { deviceSn: string; onClose:
           >
             ✏️
           </button>
+          <button
+            className={`roster-edit-btn${m.voice_templates > 0 ? " has-voice" : ""}`}
+            onClick={() => setVoiceEnrollMember(m)}
+            disabled={editingPid !== null}
+            data-tip={m.voice_templates > 0
+              ? `声纹已录入（${m.voice_templates} 条模板），点击可重录或删除声纹`
+              : "声纹录入：设备语音引导该成员朗读一段文字，声纹绑定到此 person_id"}
+          >
+            🎤{m.voice_templates > 0 && <span className="voice-count-dot" />}
+          </button>
           {pendingDelete === m.person_id ? (
             <button
               className="roster-delete-btn confirm"
@@ -427,6 +440,20 @@ export function RosterDialog({ deviceSn, onClose }: { deviceSn: string; onClose:
           )}
         </div>
       </div>
+
+      {voiceEnrollMember && (
+        /* 阻断冒泡：录入弹窗背景点击只关它自己，不连花名册一起关 */
+        <div onClick={(e) => e.stopPropagation()}>
+          <VoiceEnrollDialog
+            deviceSn={deviceSn}
+            personId={voiceEnrollMember.person_id}
+            personName={voiceEnrollMember.name || voiceEnrollMember.aliases[0] || voiceEnrollMember.person_id}
+            voiceTemplates={voiceEnrollMember.voice_templates}
+            onChanged={load}
+            onClose={() => setVoiceEnrollMember(null)}
+          />
+        </div>
+      )}
     </div>
   );
 }

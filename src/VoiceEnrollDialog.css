@@ -1,0 +1,53 @@
+/* ── 声纹录入对话框（复用 roster-dialog 外壳与 face-register 结果条样式） ── */
+.roster-dialog.voice-enroll-dialog {
+  width: min(560px, 100%);
+}
+
+/* 引导文本卡片：朗读中放大加亮，方便用户隔一点距离也能看清 */
+.voice-enroll-passage {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-secondary);
+  padding: 4px;
+}
+
+.voice-enroll-passage.reading {
+  border-color: rgba(52, 199, 89, 0.5);
+}
+
+.voice-enroll-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border: none;
+  outline: none;
+  resize: vertical;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 16px;
+  line-height: 1.9;
+  padding: 10px 12px;
+  font-family: inherit;
+}
+
+.voice-enroll-passage-text {
+  font-size: 18px;
+  line-height: 2;
+  padding: 12px 14px;
+  color: var(--text-primary);
+}
+
+.voice-enroll-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+/* 已有声纹的状态说明（与删除按钮同行，靠左占满剩余空间） */
+.voice-enroll-existing {
+  flex: 1;
+  align-self: center;
+  font-size: 12px;
+  color: var(--text-muted);
+  text-align: left;
+}

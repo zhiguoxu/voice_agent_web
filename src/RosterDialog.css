@@ -394,3 +394,18 @@
   word-break: break-all;
   border-top: 1px solid var(--border);
 }
+
+/* ── 声纹录入状态：已有声纹的成员在 🎤 按钮右上角亮绿点 ── */
+.roster-edit-btn.has-voice {
+  position: relative;
+}
+
+.voice-count-dot {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #34c759;
+}
