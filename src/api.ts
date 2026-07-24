@@ -147,6 +147,8 @@ export interface IdentityDebug {
 export interface Turn {
   id: number;
   trace_id: string;
+  /** 记录类别："chat"=对话轮 / "wake"=唤醒记录（不进 LLM 上下文，仅调试展示） */
+  kind: string;
   query: string;
   speaker_id: string | null;
   speaker_name: string | null;

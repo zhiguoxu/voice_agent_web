@@ -643,6 +643,22 @@ body {
     margin-left: auto;
 }
 
+/* 唤醒记录：单行浅色小卡片，与对话轮明显区分 */
+.turn-card.wake-turn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    cursor: default;
+    background: transparent;
+    border-style: dashed;
+}
+
+.wake-turn .wake-text {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
 .turn-query,
 .turn-reply {
     font-size: 13px;

@@ -955,7 +955,31 @@ export default function App() {
                     </button>
                   </div>
                 )}
-                {turns.map((t) => (
+                {turns.map((t) => t.kind === "wake" ? (
+                  <div key={t.id} className="turn-card wake-turn">
+                    <span className="wake-icon">🔔</span>
+                    <span className="wake-text">
+                      设备唤醒{t.reply_text ? <>，应答「{t.reply_text}」</> : "（应答播报失败）"}
+                    </span>
+                    <span className="turn-time">{formatTime(t.created_at)}</span>
+                    <button
+                      className="turn-delete-btn"
+                      data-tip="删除这条唤醒记录"
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        if (!await showConfirm("确定删除这条唤醒记录？")) return;
+                        try {
+                          await deleteTurn(t.id);
+                          setTurns(prev => prev.filter(x => x.id !== t.id));
+                        } catch (err: any) {
+                          alert(`删除失败: ${err.message}`);
+                        }
+                      }}
+                    >
+                      ×
+                    </button>
+                  </div>
+                ) : (
                   <div
                     key={t.id}
                     className={`turn-card ${selectedTurn?.id === t.id ? "active" : ""}`}
