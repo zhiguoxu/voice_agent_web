@@ -528,20 +528,23 @@ export default function App() {
         // SSE comments (: ping) won't trigger onmessage, only valid data lines
         try {
           const data = JSON.parse(e.data);
+          // 打断场景下两轮的事件会交错到达（新轮 query 之后仍可能收到旧轮的
+          // reply_chunk/done），一律用 trace_id 匹配当前直播轮，旧轮事件不改卡片
           if (data.event === "query") {
-             setRealtimeTurn({ 
-               id: -1, 
-               query: data.text, 
-               reply_text: "", 
+             setRealtimeTurn({
+               id: -1,
+               query: data.text,
+               reply_text: "",
                intent_source: null,
                intent_name: null,
                command_type: null,
-               trace_id: "live-stream"
+               trace_id: data.trace_id
              });
           } else if (data.event === "reply_chunk") {
-             setRealtimeTurn(prev => prev ? { ...prev, reply_text: (prev.reply_text || "") + data.text } : null);
+             setRealtimeTurn(prev => prev && prev.trace_id === data.trace_id
+               ? { ...prev, reply_text: (prev.reply_text || "") + data.text } : prev);
           } else if (data.event === "intent") {
-             setRealtimeTurn(prev => prev ? {
+             setRealtimeTurn(prev => prev && prev.trace_id === data.trace_id ? {
                ...prev,
                intent_source: data.source,
                intent_name: data.name,
@@ -551,14 +554,16 @@ export default function App() {
                speaker_conflict_kind: data.speaker_conflict_kind ?? null,
                speaker_suspected: data.speaker_suspected ?? null,
                identity_debug: data.identity_debug ?? null,
-             } : null);
+             } : prev);
            } else if (data.event === "done") {
-              // done 表示 persist 已完成，DB 数据已就绪，直接拉取
+              // done 表示该轮 persist 已完成，DB 数据已就绪，直接拉取。
+              // 被打断的旧轮的 done 会在新轮流式输出中途到达：照样刷新列表
+              //（旧轮的部分回复已落库），但不清除新轮的实时卡片
               const result = await fetchTurns(selectedSession.id, { page_size: 50 });
               setTurns([...result.items].reverse());
               setTurnsHasMore(result.has_more);
               setTurnsCursor(result.next_cursor);
-              setRealtimeTurn(null);
+              setRealtimeTurn(prev => prev && prev.trace_id !== data.trace_id ? prev : null);
               scrollTurnsToBottom();
               // 该在线会话刚产生对话，更新列表中的首末对话时间，
               // 使「截断新建 / 清除」按钮及时从禁用变为可点
@@ -574,8 +579,8 @@ export default function App() {
                 );
               }
            } else if (data.event === "error") {
-              // 异常时清除实时卡片
-              setRealtimeTurn(null);
+              // 异常时清除实时卡片（仅当前直播轮自己的 error）
+              setRealtimeTurn(prev => prev && prev.trace_id !== data.trace_id ? prev : null);
               console.error("SSE error event:", data.message);
            }
         } catch (err) {
@@ -1042,12 +1047,11 @@ export default function App() {
                     <input
                       type="text"
                       className="test-input-field"
-                      placeholder={realtimeTurn ? "上一轮未结束..." : "输入测试文本..."}
+                      placeholder={realtimeTurn ? "输入后发送将打断当前回复..." : "输入测试文本..."}
                       value={testInputText}
-                      disabled={!!realtimeTurn}
                       onChange={(e) => setTestInputText(e.target.value)}
                       onKeyDown={(e) => {
-                        if (e.key === 'Enter' && testInputText.trim() && !testInputLoading && !realtimeTurn) {
+                        if (e.key === 'Enter' && testInputText.trim() && !testInputLoading) {
                           const doSubmit = async () => {
                             // Jump to bottom and re-enable auto-scroll
                             userScrolledUpRef.current = false;
@@ -1081,7 +1085,7 @@ export default function App() {
                     </label>
                     <button
                       className="test-input-submit"
-                      disabled={!testInputText.trim() || testInputLoading || !!realtimeTurn}
+                      disabled={!testInputText.trim() || testInputLoading}
                       onClick={async () => {
                         // Jump to bottom and re-enable auto-scroll
                         userScrolledUpRef.current = false;
@@ -1098,7 +1102,7 @@ export default function App() {
                         }
                       }}
                     >
-                      {testInputLoading ? <span className="spinner inline" style={{width: 14, height: 14}}/> : "发送测试"}
+                      {testInputLoading ? <span className="spinner inline" style={{width: 14, height: 14}}/> : (realtimeTurn ? "打断并发送" : "发送测试")}
                     </button>
                   </div>
                 </div>
