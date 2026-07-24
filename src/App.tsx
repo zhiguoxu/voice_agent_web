@@ -208,9 +208,19 @@ export default function App() {
     const saved = localStorage.getItem("liveStreamEnabled");
     return saved ? saved === "true" : false;
   });
-  const [realtimeTurn, setRealtimeTurn] = useState<Partial<Turn> | null>(null);
+  // 实时卡片列表：通常只有一张（当前轮）；打断场景下被打断轮的卡片以
+  // finalizing=true 降级为"等待保存"留在原地，等它的 done 触发列表刷新后
+  // 再移除——避免半截回复在落库完成前从页面上消失
+  type LiveTurn = Partial<Turn> & { finalizing?: boolean };
+  const [liveTurns, setLiveTurns] = useState<LiveTurn[]>([]);
+  // 是否有正在流式输出的轮次（不含等待保存的），决定发送按钮的打断语义提示
+  const liveStreaming = liveTurns.some(t => !t.finalizing);
   const turnListRef = useRef<HTMLDivElement>(null);
   const userScrolledUpRef = useRef(false);
+  // done 事件的列表刷新串行链：打断场景下多个轮次的 done 会先后到达，
+  // 各自的 fetchTurns 若并发，晚发出的请求先返回时会被早请求的旧快照
+  // 覆盖（刚落库的轮次从列表里消失）。串行保证快照只变新不回退
+  const doneRefreshChainRef = useRef<Promise<void>>(Promise.resolve());
 
   /* ── Trace lookup loading ── */
   const [traceLoading, setTraceLoading] = useState(false);
@@ -529,23 +539,28 @@ export default function App() {
         try {
           const data = JSON.parse(e.data);
           // 打断场景下两轮的事件会交错到达（新轮 query 之后仍可能收到旧轮的
-          // reply_chunk/done），一律用 trace_id 匹配当前直播轮，旧轮事件不改卡片
+          // reply_chunk/done），一律用 trace_id 找到属于自己的卡片再更新
           if (data.event === "query") {
-             setRealtimeTurn({
-               id: -1,
-               query: data.text,
-               reply_text: "",
-               intent_source: null,
-               intent_name: null,
-               command_type: null,
-               trace_id: data.trace_id
-             });
+             // 新轮开始：已有卡片（被打断轮 / 还在落库的上一轮）降级为
+             // "等待保存"，原地保留到各自的 done 到达，避免半截回复闪没
+             setLiveTurns(prev => [
+               ...prev.map(t => ({ ...t, finalizing: true })),
+               {
+                 id: -1,
+                 query: data.text,
+                 reply_text: "",
+                 intent_source: null,
+                 intent_name: null,
+                 command_type: null,
+                 trace_id: data.trace_id
+               }
+             ]);
           } else if (data.event === "reply_chunk") {
-             setRealtimeTurn(prev => prev && prev.trace_id === data.trace_id
-               ? { ...prev, reply_text: (prev.reply_text || "") + data.text } : prev);
+             setLiveTurns(prev => prev.map(t => t.trace_id === data.trace_id
+               ? { ...t, reply_text: (t.reply_text || "") + data.text } : t));
           } else if (data.event === "intent") {
-             setRealtimeTurn(prev => prev && prev.trace_id === data.trace_id ? {
-               ...prev,
+             setLiveTurns(prev => prev.map(t => t.trace_id === data.trace_id ? {
+               ...t,
                intent_source: data.source,
                intent_name: data.name,
                command_type: data.command,
@@ -554,33 +569,42 @@ export default function App() {
                speaker_conflict_kind: data.speaker_conflict_kind ?? null,
                speaker_suspected: data.speaker_suspected ?? null,
                identity_debug: data.identity_debug ?? null,
-             } : prev);
+             } : t));
            } else if (data.event === "done") {
-              // done 表示该轮 persist 已完成，DB 数据已就绪，直接拉取。
-              // 被打断的旧轮的 done 会在新轮流式输出中途到达：照样刷新列表
-              //（旧轮的部分回复已落库），但不清除新轮的实时卡片
-              const result = await fetchTurns(selectedSession.id, { page_size: 50 });
-              setTurns([...result.items].reverse());
-              setTurnsHasMore(result.has_more);
-              setTurnsCursor(result.next_cursor);
-              setRealtimeTurn(prev => prev && prev.trace_id !== data.trace_id ? prev : null);
-              scrollTurnsToBottom();
-              // 该在线会话刚产生对话，更新列表中的首末对话时间，
-              // 使「截断新建 / 清除」按钮及时从禁用变为可点
-              if (result.items.length > 0) {
-                const newest = result.items[0].created_at;
-                const oldest = result.items[result.items.length - 1].created_at;
-                setSessions((prev) =>
-                  prev.map((x) =>
-                    x.id === selectedSession.id
-                      ? { ...x, first_turn_at: x.first_turn_at ?? oldest, last_turn_at: newest }
-                      : x
-                  )
-                );
-              }
+              // done 表示该轮 persist 已完成，DB 数据已就绪：先拉取列表再移除
+              // 自己的实时卡片，两个 setState 同批渲染，卡片原地换成历史卡片。
+              // 挂到串行链上执行（见 doneRefreshChainRef）：打断场景下多个
+              // done 先后到达，并发拉取的响应乱序返回会让旧快照覆盖新列表
+              doneRefreshChainRef.current = doneRefreshChainRef.current.then(async () => {
+                try {
+                  const result = await fetchTurns(selectedSession.id, { page_size: 50 });
+                  setTurns([...result.items].reverse());
+                  setTurnsHasMore(result.has_more);
+                  setTurnsCursor(result.next_cursor);
+                  setLiveTurns(prev => prev.filter(t => t.trace_id !== data.trace_id));
+                  scrollTurnsToBottom();
+                  // 该在线会话刚产生对话，更新列表中的首末对话时间，
+                  // 使「截断新建 / 清除」按钮及时从禁用变为可点
+                  if (result.items.length > 0) {
+                    const newest = result.items[0].created_at;
+                    const oldest = result.items[result.items.length - 1].created_at;
+                    setSessions((prev) =>
+                      prev.map((x) =>
+                        x.id === selectedSession.id
+                          ? { ...x, first_turn_at: x.first_turn_at ?? oldest, last_turn_at: newest }
+                          : x
+                      )
+                    );
+                  }
+                } catch (err) {
+                  // 拉取失败不能让链断掉（后续 done 还要走这条链）；
+                  // 本轮卡片保留在"保存中"状态，等下一次 done 刷新时一并换掉
+                  console.error("done 后刷新对话列表失败:", err);
+                }
+              });
            } else if (data.event === "error") {
-              // 异常时清除实时卡片（仅当前直播轮自己的 error）
-              setRealtimeTurn(prev => prev && prev.trace_id !== data.trace_id ? prev : null);
+              // 异常轮次只移除自己的卡片，不影响其他在途轮
+              setLiveTurns(prev => prev.filter(t => t.trace_id !== data.trace_id));
               console.error("SSE error event:", data.message);
            }
         } catch (err) {
@@ -598,6 +622,8 @@ export default function App() {
       if (evtSource) {
         evtSource.close();
       }
+      // 连接关闭后收不到剩余的 done，在途卡片等不到移除时机，直接清掉
+      setLiveTurns([]);
     };
   }, [selectedSession, liveStreamEnabled, loadTurns]);
 
@@ -610,13 +636,13 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!realtimeTurn) return;
+    if (liveTurns.length === 0) return;
     if (userScrolledUpRef.current) return;
     const el = turnListRef.current;
     if (el) {
       el.scrollTop = el.scrollHeight;
     }
-  }, [realtimeTurn]);
+  }, [liveTurns]);
 
   /* ── 筛选条件同步到 URL（不刷新页面） ── */
   useEffect(() => {
@@ -1004,7 +1030,7 @@ export default function App() {
                     </div>
                   </div>
                 ))}
-                {turns.length === 0 && !turnsLoading && !realtimeTurn && (
+                {turns.length === 0 && !turnsLoading && liveTurns.length === 0 && (
                   <div className="empty">暂无对话记录</div>
                 )}
                 {turnsLoading && turns.length === 0 && (
@@ -1012,33 +1038,35 @@ export default function App() {
                     <div className="spinner" />
                   </div>
                 )}
-                {realtimeTurn && (
-                  <div className="turn-card live-turn">
+                {liveTurns.map((lt) => (
+                  <div className="turn-card live-turn" key={lt.trace_id}>
                     <div className="turn-query">
                       <span className="turn-icon">👤</span>
-                      <span className="turn-text">{realtimeTurn.query || "(正在输入...)"}</span>
-                      <SpeakerBadge speakerId={realtimeTurn.speaker_id} speakerName={realtimeTurn.speaker_name}
-                        kind={realtimeTurn.speaker_conflict_kind} suspected={realtimeTurn.speaker_suspected}
-                        debug={realtimeTurn.identity_debug} names={speakerNames}
+                      <span className="turn-text">{lt.query || "(正在输入...)"}</span>
+                      <SpeakerBadge speakerId={lt.speaker_id} speakerName={lt.speaker_name}
+                        kind={lt.speaker_conflict_kind} suspected={lt.speaker_suspected}
+                        debug={lt.identity_debug} names={speakerNames}
                         onShowDebug={setIdentityDebugShown} />
                     </div>
                     <div className="turn-reply">
-                      <span className="turn-icon">🤖</span> 
-                      <span className="turn-text">{realtimeTurn.reply_text || <span className="blinking-cursor">|</span>}</span>
+                      <span className="turn-icon">🤖</span>
+                      <span className="turn-text">{lt.reply_text || (lt.finalizing ? "" : <span className="blinking-cursor">|</span>)}</span>
                     </div>
                     <div className="turn-footer">
-                      {realtimeTurn.intent_source && (
-                        <span className={`badge ${realtimeTurn.intent_source}`}>
-                          {realtimeTurn.intent_source}
+                      {lt.intent_source && (
+                        <span className={`badge ${lt.intent_source}`}>
+                          {lt.intent_source}
                         </span>
                       )}
-                      {realtimeTurn.intent_name && (
-                        <span className="badge intent">{realtimeTurn.intent_name}</span>
+                      {lt.intent_name && (
+                        <span className="badge intent">{lt.intent_name}</span>
                       )}
-                      <span className="trace live-badge">🔴 正在实时输出...</span>
+                      {lt.finalizing
+                        ? <span className="trace live-badge">💾 已停止，保存中...</span>
+                        : <span className="trace live-badge">🔴 正在实时输出...</span>}
                     </div>
                   </div>
-                )}
+                ))}
               </div>
 
               {selectedSession.is_online && (
@@ -1047,7 +1075,7 @@ export default function App() {
                     <input
                       type="text"
                       className="test-input-field"
-                      placeholder={realtimeTurn ? "输入后发送将打断当前回复..." : "输入测试文本..."}
+                      placeholder={liveStreaming ? "输入后发送将打断当前回复..." : "输入测试文本..."}
                       value={testInputText}
                       onChange={(e) => setTestInputText(e.target.value)}
                       onKeyDown={(e) => {
@@ -1102,7 +1130,7 @@ export default function App() {
                         }
                       }}
                     >
-                      {testInputLoading ? <span className="spinner inline" style={{width: 14, height: 14}}/> : (realtimeTurn ? "打断并发送" : "发送测试")}
+                      {testInputLoading ? <span className="spinner inline" style={{width: 14, height: 14}}/> : (liveStreaming ? "打断并发送" : "发送测试")}
                     </button>
                   </div>
                 </div>
