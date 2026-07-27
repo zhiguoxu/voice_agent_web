@@ -12,6 +12,8 @@ import {
   updateDeviceName,
   fetchRoster,
   fetchExtractedTraces,
+  fetchStreamStatus,
+  type StreamStatusData,
   type Session,
   type Turn,
   type IdentityDebug,
@@ -28,6 +30,7 @@ import { RosterDialog } from "./RosterDialog";
 import { MemoryDialog } from "./MemoryDialog";
 import { MemoryIngestDialog } from "./MemoryIngestDialog";
 import { FaceRegisterDialog } from "./FaceRegisterDialog";
+import { StreamControlDialog, deriveStreamState } from "./StreamControlDialog";
 import { MemoryRecallPanel } from "./MemoryRecallPanel";
 import { ConfigView } from "./ConfigView";
 import "./App.css";
@@ -152,6 +155,10 @@ export default function App() {
     { deviceSn: string; sessionId?: number; traceId?: string } | null>(null);
   /* 注册人脸对话框：输入人名后触发该设备的引导式人脸注册（结果以设备播报为准） */
   const [faceRegDeviceSn, setFaceRegDeviceSn] = useState<string | null>(null);
+  /* 摄像头拉流控制对话框（查看拉流状态 / 开启 / 关闭） */
+  const [streamDialogSn, setStreamDialogSn] = useState<string | null>(null);
+  /* 当前会话设备的拉流状态（会话头部指示灯用；person_id 未启用时按钮不显示） */
+  const [streamStatus, setStreamStatus] = useState<StreamStatusData | null>(null);
   /* 当前会话中已进入过抽取批次的轮次 trace 集合（轮次行「已抽取/未抽取」标记）。
      记忆系统未启用时为 null，轮次行不显示任何抽取标记 */
   const [extractedTraces, setExtractedTraces] = useState<Set<string> | null>(null);
@@ -383,6 +390,28 @@ export default function App() {
       .catch(() => { if (!stale) setExtractedTraces(null); });
     return () => { stale = true; };
   }, [selectedSession, turns.length]);
+
+  /* ── 当前会话设备的拉流状态轮询 ──
+     每 10 秒刷新一次会话头部的拉流指示灯（弹窗打开时其内部另有更快的轮询，
+     启停结果经 onStatusChange 即时回填这里）。查询失败保留上次快照，
+     只影响指示灯不打扰主流程。 */
+  const streamDeviceSn = selectedSession?.device_sn ?? null;
+  useEffect(() => {
+    setStreamStatus(null);
+    if (!streamDeviceSn) return;
+    let stale = false;
+    const load = async () => {
+      try {
+        const d = await fetchStreamStatus(streamDeviceSn);
+        if (!stale) setStreamStatus(d);
+      } catch {
+        /* 下轮再试 */
+      }
+    };
+    load();
+    const timer = setInterval(load, 10000);
+    return () => { stale = true; clearInterval(timer); };
+  }, [streamDeviceSn]);
 
   /* ── Load more turns (prepend older) ── */
   const loadMoreTurns = async () => {
@@ -919,6 +948,21 @@ export default function App() {
                   >
                     📷 注册人脸
                   </button>
+                  {streamStatus?.enabled && (
+                    <button
+                      className="roster-open-btn stream-open-btn"
+                      data-tip={{
+                        on: "摄像头拉流中，点击查看详情或关闭",
+                        warn: "拉流已开启但视频流未连上（重连/恢复中），点击查看",
+                        off: "摄像头未拉流，点击开启",
+                        unknown: "person_id 服务不可达，拉流状态未知",
+                      }[deriveStreamState(streamStatus)]}
+                      onClick={() => setStreamDialogSn(selectedSession.device_sn)}
+                    >
+                      <span className={`stream-dot ${deriveStreamState(streamStatus)}`} />
+                      {deriveStreamState(streamStatus) === "on" ? "拉流中" : "拉流"}
+                    </button>
+                  )}
                 </h2>
                 <div className="content-header-actions">
                   {selectedSession.is_online && (
@@ -1466,6 +1510,16 @@ export default function App() {
         <FaceRegisterDialog
           deviceSn={faceRegDeviceSn}
           onClose={() => setFaceRegDeviceSn(null)}
+        />
+      )}
+      {/* 摄像头拉流控制对话框（状态详情 + 开启/关闭；状态变化回填头部指示灯） */}
+      {streamDialogSn && (
+        <StreamControlDialog
+          deviceSn={streamDialogSn}
+          onClose={() => setStreamDialogSn(null)}
+          onStatusChange={(d) => {
+            if (selectedSession?.device_sn === streamDialogSn) setStreamStatus(d);
+          }}
         />
       )}
       {/* Custom Confirm Dialog */}

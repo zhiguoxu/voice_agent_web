@@ -526,6 +526,76 @@ export async function registerFace(
   return res.json();
 }
 
+/** person_id 服务端拉流消费状态（StreamStatusResponse 原样透传，只声明 web 读取的字段） */
+export interface StreamConsumeStatus {
+  camera_id: string;
+  running: boolean;
+  /** 是否已成功连上视频流；「正在拉流」的口径是 running 且 connected */
+  connected: boolean;
+  url: string | null;
+  stream_width: number;
+  stream_height: number;
+  frames_read: number;
+  frames_processed: number;
+  process_fps: number;
+  env: string;
+  auto_restream: boolean;
+  /** 断流自动恢复流程（在线检查/ISS 重推）进行中 */
+  recovering: boolean;
+  restream_count: number;
+  last_error: string | null;
+}
+
+export interface StreamStatusData {
+  /** person_id 人物识别能力是否开启（关闭时按钮不显示） */
+  enabled: boolean;
+  /** person_id 服务是否可达（不可达 ≠ 未拉流，展示上要区分） */
+  reachable: boolean;
+  status: StreamConsumeStatus | null;
+}
+
+/** 查询设备摄像头的服务端拉流状态（camera_id = device_sn，控制台周期轮询） */
+export async function fetchStreamStatus(deviceSn: string): Promise<StreamStatusData> {
+  const res = await fetch(`/api/agent/stream/status?device_sn=${encodeURIComponent(deviceSn)}`);
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || "查询拉流状态失败");
+  }
+  return res.json();
+}
+
+/** 开启拉流：经 ISS 开启设备推流拿 FLV 地址，再让 person_id 服务端消费。幂等。 */
+export async function startStreamConsume(
+  deviceSn: string, env: string,
+): Promise<StreamConsumeStatus> {
+  const res = await fetch("/api/agent/stream/start", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ device_sn: deviceSn, env }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || "开启拉流失败");
+  }
+  return res.json();
+}
+
+/** 关闭拉流：先停服务端消费，再停设备推流。对未在拉流的设备幂等。 */
+export async function stopStreamConsume(
+  deviceSn: string, env: string,
+): Promise<StreamConsumeStatus> {
+  const res = await fetch("/api/agent/stream/stop", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ device_sn: deviceSn, env }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || "关闭拉流失败");
+  }
+  return res.json();
+}
+
 /** 声纹录入 start 的结果 */
 export interface VoiceEnrollStartResult {
   success: boolean;
