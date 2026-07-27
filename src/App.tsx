@@ -1003,7 +1003,9 @@ export default function App() {
                   <div key={t.id} className="turn-card wake-turn">
                     <span className="wake-icon">🔔</span>
                     <span className="wake-text">
-                      设备唤醒{t.reply_text ? <>，应答「{t.reply_text}」</> : "（应答播报失败）"}
+                      {t.query
+                        ? <>识别到唤醒语「{t.query}」（未进入对话）</>
+                        : <>设备唤醒{t.reply_text ? <>，应答「{t.reply_text}」</> : "（应答播报失败）"}</>}
                     </span>
                     <span className="turn-time">{formatTime(t.created_at)}</span>
                     <button
