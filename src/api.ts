@@ -161,6 +161,10 @@ export interface Turn {
   /** 身份融合过程记录：点说话人标签展示；无融合过程的轮次为 null */
   identity_debug: IdentityDebug | null;
   reply_text: string | null;
+  /** 本轮异常/失败信息，正常轮为 null。chat 轮：处理异常（轮次照常落库，
+   *  query/部分回复尽力保存）；wake 轮：应答语没播出去（更早的存量失败行
+   *  没有本字段，表现为 reply_text 为 null 的旧标记法） */
+  error_message: string | null;
   intent_source: string | null;
   intent_name: string | null;
   command_type: string | null;

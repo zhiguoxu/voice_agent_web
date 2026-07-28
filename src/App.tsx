@@ -599,11 +599,13 @@ export default function App() {
                speaker_suspected: data.speaker_suspected ?? null,
                identity_debug: data.identity_debug ?? null,
              } : t));
-           } else if (data.event === "done") {
-              // done 表示该轮 persist 已完成，DB 数据已就绪：先拉取列表再移除
-              // 自己的实时卡片，两个 setState 同批渲染，卡片原地换成历史卡片。
+           } else if (data.event === "done" || data.event === "error") {
+              // done/error 都表示该轮 persist 已完成（异常轮次也落库，带
+              // error_message），DB 数据已就绪：先拉取列表再移除自己的实时
+              // 卡片，两个 setState 同批渲染，卡片原地换成历史卡片。
               // 挂到串行链上执行（见 doneRefreshChainRef）：打断场景下多个
               // done 先后到达，并发拉取的响应乱序返回会让旧快照覆盖新列表
+              if (data.event === "error") console.error("SSE error event:", data.message);
               doneRefreshChainRef.current = doneRefreshChainRef.current.then(async () => {
                 try {
                   const result = await fetchTurns(selectedSession.id, { page_size: 50 });
@@ -631,10 +633,6 @@ export default function App() {
                   console.error("done 后刷新对话列表失败:", err);
                 }
               });
-           } else if (data.event === "error") {
-              // 异常轮次只移除自己的卡片，不影响其他在途轮
-              setLiveTurns(prev => prev.filter(t => t.trace_id !== data.trace_id));
-              console.error("SSE error event:", data.message);
            }
         } catch (err) {
           // Ignore JSON parse errors for non-JSON messages if any
@@ -1005,7 +1003,9 @@ export default function App() {
                     <span className="wake-text">
                       {t.query
                         ? <>识别到唤醒语「{t.query}」（未进入对话）</>
-                        : <>设备唤醒{t.reply_text ? <>，应答「{t.reply_text}」</> : "（应答播报失败）"}</>}
+                        : <>设备唤醒{t.reply_text
+                            ? <>，应答「{t.reply_text}」{t.error_message && <span className="wake-fail">（播报失败）</span>}</>
+                            : <span className="wake-fail">（应答播报失败）</span>}</>}
                     </span>
                     <span className="turn-time">{formatTime(t.created_at)}</span>
                     <button
@@ -1043,6 +1043,12 @@ export default function App() {
                       <span className="turn-icon">🤖</span> 
                       <span className="turn-text">{t.reply_text || "(无回复)"}</span>
                     </div>
+                    {t.error_message && (
+                      <div className="turn-error"
+                           data-tip="本轮处理异常，回复可能不完整或未播报">
+                        ⚠️ {t.error_message}
+                      </div>
+                    )}
                     <div className="turn-footer">
                       {t.intent_source && (
                         <span className={`badge ${t.intent_source}`}>

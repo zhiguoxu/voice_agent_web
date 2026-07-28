@@ -659,6 +659,11 @@ body {
     color: var(--text-muted);
 }
 
+/* 唤醒应答播报失败标记 */
+.wake-turn .wake-fail {
+    color: var(--red);
+}
+
 .turn-query,
 .turn-reply {
     font-size: 13px;
@@ -672,6 +677,18 @@ body {
 .turn-reply {
     color: var(--text-secondary);
     margin-bottom: 8px;
+}
+
+/* 异常轮次的错误信息行（error_message 非空时显示） */
+.turn-error {
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--red);
+    background: rgba(239, 68, 68, 0.08);
+    border-radius: 6px;
+    padding: 4px 8px;
+    margin-bottom: 8px;
+    word-break: break-all;
 }
 
 .turn-icon {
