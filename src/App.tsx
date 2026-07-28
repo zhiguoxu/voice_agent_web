@@ -759,11 +759,11 @@ export default function App() {
           {/* ── Filter Bar ── */}
           <div className="filter-bar">
         <div className="filter-group">
-          <label>设备 SN</label>
+          <label>设备</label>
           <div className="input-wrap sn">
             <input
               type="text"
-              placeholder="支持部分匹配"
+              placeholder="SN 或名称，支持部分匹配"
               value={filterSn}
               onChange={(e) => setFilterSn(e.target.value)}
             />

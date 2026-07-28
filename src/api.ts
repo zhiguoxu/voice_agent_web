@@ -239,6 +239,7 @@ function normalizeCursorResult<T extends { id: number }>(raw: any): CursorResult
 
 export async function fetchSessions(
   params: {
+    /** 按设备 SN 或设备显示名称模糊筛选（后端两者都匹配） */
     device_sn?: string;
     user_id?: string;
     start_time?: string;
