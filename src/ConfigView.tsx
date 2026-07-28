@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   fetchVoiceConfig,
   fetchAgentConfig,
@@ -10,6 +10,7 @@ import {
   putDeviceConfigOverride,
   deleteDeviceConfigOverride,
   fetchSessions,
+  searchDevices,
   fetchIntentLabels,
   classifyIntent,
   type ServiceConfig,
@@ -684,6 +685,13 @@ function DeviceOverridePanel({
   const [fields, setFields] = useState<Partial<Record<ConfigService, DeviceEditableField[]>> | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /* 可搜索组合框：不输入时列出候选，输入即按名称/SN 模糊搜索
+     （走后端全量设备档案与历史会话设备，不限于本地候选） */
+  const [query, setQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<{ sn: string; name: string }[] | null>(null);
+  const [searching, setSearching] = useState(false);
+  const [comboOpen, setComboOpen] = useState(false);
+  const comboRef = useRef<HTMLSpanElement>(null);
 
   const loadOverview = useCallback(async () => {
     const [v, a, sessions] = await Promise.allSettled([
@@ -748,11 +756,62 @@ function DeviceOverridePanel({
     loadDevice(selected);
   }, [selected, loadDevice]);
 
+  /* 防抖搜索：后端按名称/SN 模糊匹配（覆盖全部设备档案与历史会话设备），
+     本地候选同步过滤兜底（后端不可达时至少能搜下拉里已有的） */
+  useEffect(() => {
+    const q = query.trim();
+    if (!q) {
+      setSearchResults(null);
+      setSearching(false);
+      return;
+    }
+    setSearching(true);
+    const timer = setTimeout(async () => {
+      const lower = q.toLowerCase();
+      const merged = new Map<string, string>();
+      for (const d of candidates) {
+        if (d.sn.toLowerCase().includes(lower) || d.name.toLowerCase().includes(lower)) {
+          merged.set(d.sn, d.name);
+        }
+      }
+      try {
+        for (const d of await searchDevices(q)) {
+          merged.set(d.device_sn, d.name || merged.get(d.device_sn) || "");
+        }
+      } catch {
+        /* 后端搜索失败时静默降级为本地候选过滤 */
+      }
+      setSearchResults([...merged.entries()].map(([sn, name]) => ({ sn, name })));
+      setSearching(false);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [query, candidates]);
+
+  /* 点组合框外部关闭下拉 */
+  useEffect(() => {
+    if (!comboOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (comboRef.current && !comboRef.current.contains(e.target as Node)) {
+        setComboOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [comboOpen]);
+
   const afterMutation = useCallback(async () => {
     await Promise.all([loadDevice(selected), loadOverview(), onGlobalReload()]);
   }, [loadDevice, loadOverview, onGlobalReload, selected]);
 
   const deviceLabel = (sn: string, name: string) => (name ? `${name} (${sn})` : sn);
+
+  /* 组合框列表：不输入时列全部候选，输入后换成搜索结果 */
+  const comboOptions = query.trim() ? (searchResults ?? []) : candidates;
+  const selectedName =
+    candidates.find((d) => d.sn === selected)?.name ||
+    summary.get(selected)?.name ||
+    searchResults?.find((d) => d.sn === selected)?.name ||
+    "";
 
   return (
     <div className="card cfg-card">
@@ -764,12 +823,49 @@ function DeviceOverridePanel({
       <div className="cfg-device-toolbar">
         <label>
           选择设备：
-          <select value={selected} onChange={(e) => setSelected(e.target.value)}>
-            <option value="">— 请选择 —</option>
-            {candidates.map((d) => (
-              <option value={d.sn} key={d.sn}>{deviceLabel(d.sn, d.name)}</option>
-            ))}
-          </select>
+          <span className="cfg-device-combo" ref={comboRef}>
+            <input
+              type="text"
+              value={comboOpen ? query : selected ? deviceLabel(selected, selectedName) : ""}
+              onFocus={() => { setQuery(""); setComboOpen(true); }}
+              onChange={(e) => { setQuery(e.target.value); setComboOpen(true); }}
+              onKeyDown={(e) => e.key === "Escape" && setComboOpen(false)}
+              placeholder={comboOpen
+                ? "输入设备名称或 SN 模糊搜索，或从列表点选"
+                : "点击选择设备（可输入名称/SN 搜索）"}
+            />
+            {selected && !comboOpen && (
+              <button
+                className="cfg-device-combo-clear"
+                data-tip="清除选择"
+                onClick={() => { setSelected(""); setQuery(""); }}
+              >×</button>
+            )}
+            {comboOpen && (
+              <div className="cfg-device-combo-list">
+                {searching && <div className="cfg-device-combo-empty"><span className="spinner inline" /> 搜索中…</div>}
+                {!searching && comboOptions.length === 0 && (
+                  <div className="cfg-device-combo-empty">
+                    {query.trim() ? `没有匹配「${query.trim()}」的设备（名称与 SN 均未命中）` : "暂无候选设备，输入名称或 SN 搜索"}
+                  </div>
+                )}
+                {!searching && comboOptions.map((d) => (
+                  <button
+                    className={`cfg-device-combo-option ${d.sn === selected ? "active" : ""}`}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => { setSelected(d.sn); setQuery(""); setComboOpen(false); }}
+                    key={d.sn}
+                  >
+                    <span className="cfg-device-combo-name">{d.name || d.sn}</span>
+                    {d.name && <span className="cfg-device-combo-sn">{d.sn}</span>}
+                    {(summary.get(d.sn)?.override_count ?? 0) > 0 && (
+                      <span className="cfg-device-combo-count">{summary.get(d.sn)!.override_count} 条覆盖</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+          </span>
         </label>
         {summary.size > 0 && (
           <span className="cfg-device-summary">

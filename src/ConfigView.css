@@ -642,14 +642,101 @@
   white-space: nowrap;
 }
 
-.cfg-device-toolbar select {
-  min-width: 220px;
-  padding: 5px 8px;
+/* 可搜索组合框：选择与搜索合一（点开列候选，输入即按名称/SN 模糊搜索） */
+.cfg-device-combo {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.cfg-device-combo input {
+  min-width: 280px;
+  padding: 5px 26px 5px 8px;
   border-radius: 6px;
   border: 1px solid var(--border);
   background: var(--bg-input, var(--bg));
   color: var(--text-primary);
   font-size: 13px;
+}
+
+.cfg-device-combo-clear {
+  position: absolute;
+  right: 4px;
+  padding: 0 6px;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.cfg-device-combo-clear:hover {
+  color: var(--text-primary);
+}
+
+.cfg-device-combo-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 30;
+  min-width: 100%;
+  max-height: 280px;
+  overflow-y: auto;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-card, var(--bg));
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.cfg-device-combo-option {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  text-align: left;
+  color: var(--text-primary);
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.cfg-device-combo-option:hover {
+  background: rgba(52, 211, 153, 0.1);
+}
+
+.cfg-device-combo-option.active .cfg-device-combo-name {
+  color: var(--green, #34d399);
+  font-weight: 600;
+}
+
+.cfg-device-combo-sn {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.cfg-device-combo-count {
+  margin-left: auto;
+  padding: 0 8px;
+  border-radius: 8px;
+  background: rgba(52, 211, 153, 0.14);
+  color: var(--green, #34d399);
+  font-size: 11px;
+}
+
+.cfg-device-combo-empty {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  color: var(--text-muted);
+  font-size: 12px;
 }
 
 .cfg-device-summary {

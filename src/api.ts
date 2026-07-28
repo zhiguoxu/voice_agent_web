@@ -1205,6 +1205,24 @@ export async function sendAction(
   }
 }
 
+/** 设备搜索结果的一条（name 为空串表示未命名） */
+export interface DeviceSearchItem {
+  device_sn: string;
+  name: string;
+}
+
+/** 按设备显示名称（含改名后的新名称）或 device_sn 模糊搜索设备 */
+export async function searchDevices(q: string, limit = 20): Promise<DeviceSearchItem[]> {
+  const sp = new URLSearchParams({ q, limit: String(limit) });
+  const res = await fetch(`/api/voice/device/search?${sp}`);
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || "Failed to search devices");
+  }
+  const data = await res.json();
+  return data.items ?? [];
+}
+
 /** 设置设备显示名称（空串清除）。名称是设备档案属性，同设备所有会话共用 */
 export async function updateDeviceName(
   deviceSn: string,
