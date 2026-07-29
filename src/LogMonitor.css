@@ -30,6 +30,7 @@
 }
 
 .log-field select,
+.log-field input,
 .log-search input {
   background: var(--bg-card);
   border: 1px solid var(--border);
@@ -41,8 +42,29 @@
 }
 
 .log-field select:focus,
+.log-field input:focus,
 .log-search input:focus {
   border-color: var(--accent);
+}
+
+/* ── 第二行：服务端检索条件 ── */
+.log-filter-bar {
+  padding-top: 0;
+}
+
+.log-exact-input {
+  width: 180px;
+}
+
+.log-filter-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.log-load-more-wrap {
+  display: flex;
+  justify-content: center;
+  padding: 8px 0;
 }
 
 .log-search {
@@ -279,6 +301,18 @@
   color: var(--text-secondary);
   flex-shrink: 0;
   opacity: 0.8;
+}
+
+/* 日志行内的 SN / trace 可点击 → 按其精确过滤 */
+.log-sn.clickable,
+.log-trace.clickable {
+  cursor: pointer;
+}
+
+.log-sn.clickable:hover,
+.log-trace.clickable:hover {
+  text-decoration: underline;
+  opacity: 1;
 }
 
 .log-msg {

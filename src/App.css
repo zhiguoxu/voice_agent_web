@@ -821,6 +821,16 @@ body {
     margin-left: auto;
 }
 
+/* 可点击跳转日志页的 trace（轮次卡片与详情面板） */
+.trace-jump {
+    cursor: pointer;
+}
+
+.trace-jump:hover {
+    color: var(--accent);
+    text-decoration: underline;
+}
+
 /* 轮次「已抽取」按钮（点击查看该轮所在抽取批次）与「未抽取」标记 */
 .turn-ingest-btn {
     background: rgba(167, 139, 250, 0.1);

@@ -19,13 +19,14 @@ import {
   type IdentityDebug,
   type ReplayResult,
   CONVERSATIONS_API_BASE,
+  LIVE_CONVERSATIONS_API_BASE,
 } from "./api";
 import IdentityDebugDialog from "./IdentityDebugDialog";
 import { useDebounce } from "./useDebounce";
 import { TimeRangePicker, type TimeRange } from "./TimeRangePicker";
 import { LatencyChart } from "./LatencyChart";
 import { DeviceControl } from "./DeviceControl";
-import { LogMonitor } from "./LogMonitor";
+import { LogMonitor, type LogJumpFilter } from "./LogMonitor";
 import { RosterDialog } from "./RosterDialog";
 import { MemoryDialog } from "./MemoryDialog";
 import { MemoryIngestDialog } from "./MemoryIngestDialog";
@@ -145,6 +146,12 @@ function SpeakerBadge({ speakerId, speakerName, kind, suspected, debug, names, o
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<"conversations" | "deviceControl" | "logs" | "config">("conversations");
+  /* 对话分析页跳转到日志页时预填的精确过滤条件（一次性，LogMonitor 挂载后消费） */
+  const [logJumpFilter, setLogJumpFilter] = useState<LogJumpFilter | null>(null);
+  const openLogsWith = (filter: LogJumpFilter) => {
+    setLogJumpFilter(filter);
+    setActiveTab("logs");
+  };
   /* 家庭花名册对话框：按会话设备打开（多家庭同库，只看该设备所属家庭） */
   const [rosterDeviceSn, setRosterDeviceSn] = useState<string | null>(null);
   /* 记忆查询对话框：同上按设备所属家庭（B 类 key 树 + A 类分页表） */
@@ -561,7 +568,7 @@ export default function App() {
 
 
     if (selectedSession?.is_online && liveStreamEnabled) {
-      evtSource = new EventSource(`${CONVERSATIONS_API_BASE}/sessions/${selectedSession.id}/stream`);
+      evtSource = new EventSource(`${LIVE_CONVERSATIONS_API_BASE}/sessions/${selectedSession.id}/stream`);
       
       evtSource.onmessage = async (e) => {
         // SSE comments (: ping) won't trigger onmessage, only valid data lines
@@ -946,6 +953,13 @@ export default function App() {
                   >
                     📷 注册人脸
                   </button>
+                  <button
+                    className="roster-open-btn"
+                    data-tip="跳转到后端日志页，按该设备号精确过滤"
+                    onClick={() => openLogsWith({ deviceSn: selectedSession.device_sn })}
+                  >
+                    📜 查日志
+                  </button>
                   {streamStatus?.enabled && (
                     <button
                       className="roster-open-btn stream-open-btn"
@@ -1061,7 +1075,17 @@ export default function App() {
                       {t.tool_names && (
                         <span className="badge tool">🔧 {t.tool_names}</span>
                       )}
-                      <span className="trace">trace: {t.trace_id || "-"}</span>
+                      <span
+                        className={`trace ${t.trace_id ? "trace-jump" : ""}`}
+                        data-tip={t.trace_id ? "跳转到后端日志页，按此 Trace ID 精确过滤" : undefined}
+                        onClick={(e) => {
+                          if (!t.trace_id) return;
+                          e.stopPropagation();
+                          openLogsWith({ traceId: t.trace_id });
+                        }}
+                      >
+                        trace: {t.trace_id || "-"}
+                      </span>
                       {extractedTraces && (
                         t.trace_id && extractedTraces.has(t.trace_id) ? (
                           <button
@@ -1232,7 +1256,11 @@ export default function App() {
               <div className="detail-title-row">
                 <h3>轮次详情</h3>
                 {selectedTurn.trace_id && (
-                  <code className="detail-trace-id" data-tip={selectedTurn.trace_id}>
+                  <code
+                    className="detail-trace-id trace-jump"
+                    data-tip={`${selectedTurn.trace_id}（点击跳转日志页按此 Trace 过滤）`}
+                    onClick={() => openLogsWith({ traceId: selectedTurn.trace_id })}
+                  >
                     {selectedTurn.trace_id}
                   </code>
                 )}
@@ -1475,7 +1503,10 @@ export default function App() {
       ) : activeTab === 'config' ? (
         <ConfigView />
       ) : (
-        <LogMonitor />
+        <LogMonitor
+          initialFilter={logJumpFilter ?? undefined}
+          onInitialFilterConsumed={() => setLogJumpFilter(null)}
+        />
       )}
       {/* 身份融合调试弹窗（点轮次卡片的说话人标签打开） */}
       {identityDebugShown && (

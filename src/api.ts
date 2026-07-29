@@ -1,11 +1,21 @@
 // 后端按前缀分流（vite dev proxy 与生产 nginx 同规则）：
-//   /api/voice/*  → voice_server(:8017)，代理层去掉 /voice 前缀
-//   /api/agent/*  → agent_server(:8018)，原样透传（agent_server 本身就是 /api/agent 前缀）
+//   /api/voice/*    → voice_server(:8017)，代理层去掉 /voice 前缀
+//   /api/agent/*    → agent_server(:8018)，原样透传（agent_server 本身就是 /api/agent 前缀）
+//   /api/console/*  → console_server(:8022)，代理层去掉 /console 前缀
+// 会话/轮次的 CRUD 仍在 voice_server；日志与对话实时功能（SSE、测试输入）
+// 在 console_server（它把控制请求转发到持有设备连接的 voice 实例）。
 export const CONVERSATIONS_API_BASE = "/api/voice/conversations";
-export const LOGS_API_BASE = "/api/voice/logs";
+export const LIVE_CONVERSATIONS_API_BASE = "/api/console/conversations";
+export const LOGS_API_BASE = "/api/console/logs";
 
 export interface LogEntry {
-  seq?: number;
+  /** DB 行 id（仅历史检索返回；实时流条目无） */
+  id?: number;
+  /** Redis Stream 消息 ID "ms-seq"（全局单调=console 到达序）：历史检索与
+   *  实时流衔接处按它去重，同毫秒日志也按它决胜排序（须数值比较，见 compareUid） */
+  uid?: string;
+  /** epoch 毫秒时间戳（time 字符串仅供展示） */
+  ts?: number;
   source?: string;
   time: string;
   level: string;
@@ -13,12 +23,50 @@ export interface LogEntry {
   device_sn: string;
   trace_id: string;
   file: string;
-  module: string;
+  module?: string;
   function: string;
   line: number;
   name: string;
   /** 异常堆栈全文（仅 logger.exception 记录的日志携带） */
   exc?: string;
+}
+
+export interface LogSearchParams {
+  /** 设备号，完全匹配（服务端走索引） */
+  device_sn?: string;
+  /** Trace ID，完全匹配（服务端走索引） */
+  trace_id?: string;
+  /** 不低于该级别 */
+  level?: string;
+  source?: string;
+  start_ms?: number;
+  end_ms?: number;
+  /** 上一页最后一行的 id，向更旧翻页 */
+  cursor?: number;
+  limit?: number;
+}
+
+export interface LogSearchResult {
+  items: LogEntry[];
+  /** 还有更旧数据时非空，作为下一页 cursor */
+  next_cursor: number | null;
+}
+
+/** 检索 DB 历史日志（新→旧排序，游标分页） */
+export async function searchLogs(params: LogSearchParams = {}): Promise<LogSearchResult> {
+  const sp = new URLSearchParams();
+  if (params.device_sn) sp.set("device_sn", params.device_sn);
+  if (params.trace_id) sp.set("trace_id", params.trace_id);
+  if (params.level) sp.set("level", params.level);
+  if (params.source) sp.set("source", params.source);
+  if (params.start_ms != null) sp.set("start_ms", String(params.start_ms));
+  if (params.end_ms != null) sp.set("end_ms", String(params.end_ms));
+  if (params.cursor != null) sp.set("cursor", String(params.cursor));
+  sp.set("limit", String(params.limit ?? 500));
+  const res = await fetch(`${LOGS_API_BASE}/search?${sp}`);
+  if (!res.ok) throw new Error("Failed to search logs");
+  const data = await res.json();
+  return { items: data.items ?? [], next_cursor: data.next_cursor ?? null };
 }
 
 export async function fetchRecentLogs(
@@ -358,7 +406,7 @@ export async function replayTurn(chatRequest: object): Promise<ReplayResult> {
 }
 
 export async function testSessionInput(sessionId: number, text: string, withTts: boolean): Promise<void> {
-  const res = await fetch(`${CONVERSATIONS_API_BASE}/sessions/${sessionId}/test_input`, {
+  const res = await fetch(`${LIVE_CONVERSATIONS_API_BASE}/sessions/${sessionId}/test_input`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ text, with_tts: withTts }),
@@ -370,7 +418,7 @@ export async function testSessionInput(sessionId: number, text: string, withTts:
 }
 
 export async function forceNewSession(sessionId: number): Promise<{ new_session_id: number }> {
-  const res = await fetch(`${CONVERSATIONS_API_BASE}/sessions/${sessionId}/force_new`, {
+  const res = await fetch(`${LIVE_CONVERSATIONS_API_BASE}/sessions/${sessionId}/force_new`, {
     method: "POST",
   });
   if (!res.ok) {

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { fetchRecentLogs, clearBackendLogs, LOGS_API_BASE, type LogEntry } from "./api";
+import { searchLogs, LOGS_API_BASE, type LogEntry } from "./api";
 import { StackTraceDialog } from "./StackTraceDialog";
+import { useDebounce } from "./useDebounce";
 import "./LogMonitor.css";
 
 const LEVELS = ["TRACE", "DEBUG", "INFO", "SUCCESS", "WARNING", "ERROR", "CRITICAL"];
@@ -9,9 +10,32 @@ const SOURCES = [
   { key: "voice", label: "Voice" },
   { key: "agent", label: "Agent" },
 ];
-const MAX_LOGS = 2000;
+const MAX_LOGS = 5000;
+const PAGE_SIZE = 500;
 
-export function LogMonitor() {
+/** Redis Stream 消息 ID "ms-seq" 的数值化比较（= console 到达序，全局单调）。
+ *  不能整串字典序比较：seq 段不定宽，"...-9" 会被排到 "...-10" 后面。
+ *  缺 uid 的条目返回 0，交给稳定排序保持原有相对位置。 */
+function compareUid(a?: string, b?: string): number {
+  if (!a || !b) return 0;
+  const [ams, aseq] = a.split("-");
+  const [bms, bseq] = b.split("-");
+  return Number(ams) - Number(bms) || Number(aseq) - Number(bseq);
+}
+
+/** 对话分析页跳转过来时预填的精确过滤条件 */
+export interface LogJumpFilter {
+  deviceSn?: string;
+  traceId?: string;
+}
+
+export function LogMonitor({
+  initialFilter,
+  onInitialFilterConsumed,
+}: {
+  initialFilter?: LogJumpFilter;
+  onInitialFilterConsumed?: () => void;
+}) {
   /* ── 设置（持久化到 localStorage） ── */
   const [level, setLevel] = useState(() => localStorage.getItem("logLevel") || "INFO");
   const [source, setSource] = useState(() => localStorage.getItem("logSource") || "all");
@@ -26,9 +50,31 @@ export function LogMonitor() {
     return Number.isFinite(n) && n > 0 ? n : 30;
   });
 
+  /* ── 服务端检索条件（DB 查询 + 实时流过滤都用它们） ──
+     device_sn / trace_id 完全匹配；日期范围只作用于历史检索 */
+  const [deviceSn, setDeviceSn] = useState(initialFilter?.deviceSn ?? "");
+  const [traceId, setTraceId] = useState(initialFilter?.traceId ?? "");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  // 手输时防抖，避免每个字符都打一次 DB 查询 + SSE 重连
+  const dSn = useDebounce(deviceSn.trim(), 400);
+  const dTrace = useDebounce(traceId.trim(), 400);
+  const startMs = useMemo(() => (startDate ? new Date(startDate).getTime() : null), [startDate]);
+  const endMs = useMemo(() => (endDate ? new Date(endDate).getTime() : null), [endDate]);
+
+  // 跳转条件是一次性的：消费掉，避免下次手动切到日志页时被重复套用
+  useEffect(() => {
+    onInitialFilterConsumed?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   /* ── 日志缓存 ── */
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [connected, setConnected] = useState(false);
+  /** 结束时间早于当前 → 实时推流自动关闭 */
+  const [streamClosed, setStreamClosed] = useState(false);
+  const [nextCursor, setNextCursor] = useState<number | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   /* ── 异常堆栈对话框（点击带堆栈日志行的「堆栈」按钮打开） ── */
   const [stackEntry, setStackEntry] = useState<LogEntry | null>(null);
@@ -39,6 +85,8 @@ export function LogMonitor() {
 
   /* ── 缓冲区：避免高频日志逐条 re-render ── */
   const pendingRef = useRef<LogEntry[]>([]);
+  /* 已展示日志的 uid 集合：历史查询与实时流衔接处按 uid 去重 */
+  const seenRef = useRef<Set<string>>(new Set());
 
   const scrollToBottom = useCallback(() => {
     requestAnimationFrame(() => {
@@ -47,30 +95,81 @@ export function LogMonitor() {
     });
   }, []);
 
-  /* ── 首次加载历史日志 + level 变化时重新拉取 ── */
+  const serverParams = useMemo(
+    () => ({
+      device_sn: dSn || undefined,
+      trace_id: dTrace || undefined,
+      level: level || undefined,
+      source: source !== "all" ? source : undefined,
+      start_ms: startMs ?? undefined,
+      end_ms: endMs ?? undefined,
+    }),
+    [dSn, dTrace, level, source, startMs, endMs]
+  );
+
+  /* ── 首屏/条件变化：按条件查 DB 历史（新→旧返回，翻转成旧→新展示） ── */
   useEffect(() => {
     let cancelled = false;
-    fetchRecentLogs({ limit: 500, level })
-      .then((items) => {
+    searchLogs({ ...serverParams, limit: PAGE_SIZE })
+      .then(({ items, next_cursor }) => {
         if (cancelled) return;
-        pendingRef.current = [];
-        setLogs(items.slice(-MAX_LOGS));
+        const asc = [...items].reverse();
+        seenRef.current = new Set(
+          asc.map((e) => e.uid).filter((u): u is string => Boolean(u))
+        );
+        setLogs(asc);
+        setNextCursor(next_cursor);
         scrollToBottom();
       })
       .catch(() => {});
     return () => {
       cancelled = true;
     };
-  }, [level, scrollToBottom]);
+  }, [serverParams, scrollToBottom]);
 
-  /* ── SSE 实时订阅 ── */
+  /* ── 向更旧翻页 ── */
+  const loadOlder = useCallback(async () => {
+    if (nextCursor == null || loadingMore) return;
+    setLoadingMore(true);
+    try {
+      const { items, next_cursor } = await searchLogs({
+        ...serverParams,
+        cursor: nextCursor,
+        limit: PAGE_SIZE,
+      });
+      const asc = [...items]
+        .reverse()
+        .filter((e) => !e.uid || !seenRef.current.has(e.uid));
+      asc.forEach((e) => e.uid && seenRef.current.add(e.uid));
+      setLogs((prev) => [...asc, ...prev]);
+      setNextCursor(next_cursor);
+    } catch {
+      /* 失败保持原状，用户可重试 */
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [nextCursor, loadingMore, serverParams]);
+
+  /* ── SSE 实时订阅（device_sn/trace_id/source/level 服务端过滤） ── */
   useEffect(() => {
     if (!live) {
       setConnected(false);
+      setStreamClosed(false);
       return;
     }
+    // 结束时间早于当前 → 纯历史查询场景，自动关闭实时推流
+    if (endMs != null && endMs < Date.now()) {
+      setConnected(false);
+      setStreamClosed(true);
+      return;
+    }
+    setStreamClosed(false);
+
     const sp = new URLSearchParams();
     if (level) sp.set("level", level);
+    if (dSn) sp.set("device_sn", dSn);
+    if (dTrace) sp.set("trace_id", dTrace);
+    if (source !== "all") sp.set("source", source);
     const es = new EventSource(`${LOGS_API_BASE}/stream?${sp}`);
 
     es.onopen = () => setConnected(true);
@@ -84,11 +183,14 @@ export function LogMonitor() {
     };
     es.onerror = () => setConnected(false);
 
-    // 每 300ms 批量刷新一次
+    // 每 300ms 批量刷新一次；与历史查询结果按 uid 去重
     const timer = window.setInterval(() => {
       if (pendingRef.current.length === 0) return;
-      const batch = pendingRef.current;
+      const raw = pendingRef.current;
       pendingRef.current = [];
+      const batch = raw.filter((e) => !e.uid || !seenRef.current.has(e.uid));
+      if (batch.length === 0) return;
+      batch.forEach((e) => e.uid && seenRef.current.add(e.uid));
       setLogs((prev) => {
         const next = prev.concat(batch);
         return next.length > MAX_LOGS ? next.slice(next.length - MAX_LOGS) : next;
@@ -101,7 +203,7 @@ export function LogMonitor() {
       window.clearInterval(timer);
       setConnected(false);
     };
-  }, [live, level, scrollToBottom]);
+  }, [live, level, dSn, dTrace, source, endMs, scrollToBottom]);
 
   /* ── 滚动监听：上滚则停止自动跟随 ── */
   const handleScroll = useCallback(() => {
@@ -110,11 +212,10 @@ export function LogMonitor() {
     userScrolledUpRef.current = el.scrollTop + el.clientHeight < el.scrollHeight - 4;
   }, []);
 
-  /* ── 来源 + 文本过滤，并按时间戳排序（混合视图） ── */
+  /* ── 文本部分匹配（纯前端，作用于已加载内容），并按时间戳排序 ── */
   const filtered = useMemo(() => {
     const kw = search.trim().toLowerCase();
     let out = logs;
-    if (source !== "all") out = out.filter((l) => (l.source || "") === source);
     if (kw) {
       out = out.filter(
         (l) =>
@@ -125,18 +226,26 @@ export function LogMonitor() {
       );
     }
     // 按时间戳混合排序（time 为定宽 "YYYY-MM-DD HH:mm:ss.SSS"，可直接字典序比较）；
-    // 时间相同则用 seq 兜底，保证稳定顺序
+    // 产生时刻相同（同毫秒）时按 uid 决胜——历史检索与 SSE 条目都带 uid，
+    // 它是横跨两个来源的统一到达序坐标。
     return [...out].sort((a, b) => {
       if (a.time !== b.time) return a.time < b.time ? -1 : 1;
-      return (a.seq ?? 0) - (b.seq ?? 0);
+      return compareUid(a.uid, b.uid);
     });
-  }, [logs, search, source]);
+  }, [logs, search]);
 
   const clearLogs = () => {
+    // 只清当前显示，DB 历史不动（有 90 天保留策略兜底），改条件即可重新查回
     pendingRef.current = [];
+    seenRef.current = new Set();
     setLogs([]);
-    // 联动清空后端内存日志缓冲，避免下次刷新/切换级别时历史日志被重新拉回
-    clearBackendLogs().catch(() => {});
+  };
+
+  const clearFilters = () => {
+    setDeviceSn("");
+    setTraceId("");
+    setStartDate("");
+    setEndDate("");
   };
 
   const jumpToBottom = () => {
@@ -145,20 +254,32 @@ export function LogMonitor() {
     if (el) el.scrollTop = el.scrollHeight;
   };
 
+  const hasFilter = deviceSn || traceId || startDate || endDate;
+
   return (
     <div className="log-monitor">
       <div className="log-toolbar">
         <button
-          className={`log-live-btn ${live ? "active" : ""}`}
+          className={`log-live-btn ${live && !streamClosed ? "active" : ""}`}
           onClick={() => {
             const v = !live;
             setLive(v);
             localStorage.setItem("logLive", String(v));
           }}
-          data-tip={live ? "暂停实时" : "开启实时"}
+          data-tip={
+            streamClosed
+              ? "结束时间早于当前，实时推流已自动关闭（清除结束时间可恢复）"
+              : live
+              ? "暂停实时"
+              : "开启实时"
+          }
         >
-          <span className={`log-live-dot ${live && connected ? "on" : live ? "connecting" : ""}`} />
-          {live ? (connected ? "实时中" : "连接中…") : "已暂停"}
+          <span
+            className={`log-live-dot ${
+              live && connected ? "on" : live && !streamClosed ? "connecting" : ""
+            }`}
+          />
+          {streamClosed ? "已停实时" : live ? (connected ? "实时中" : "连接中…") : "已暂停"}
         </button>
 
         <label className="log-field">
@@ -196,7 +317,7 @@ export function LogMonitor() {
         <div className="log-search">
           <input
             type="text"
-            placeholder="过滤：消息 / trace / SN / 文件"
+            placeholder="文本过滤（前端，部分匹配）"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -281,9 +402,62 @@ export function LogMonitor() {
         <button className="log-btn" onClick={jumpToBottom} data-tip="滚到底部并恢复自动跟随">
           ↓ 底部
         </button>
-        <button className="log-btn danger" onClick={clearLogs} data-tip="清空前端 + 后端日志缓存">
+        <button
+          className="log-btn danger"
+          onClick={clearLogs}
+          data-tip="清空当前显示（数据库历史不受影响）"
+        >
           🧹 清空
         </button>
+      </div>
+
+      {/* 第二行：服务端检索条件（查 DB 历史 + 实时流过滤） */}
+      <div className="log-toolbar log-filter-bar">
+        <label className="log-field">
+          设备SN
+          <input
+            className="log-exact-input"
+            type="text"
+            placeholder="完全匹配"
+            value={deviceSn}
+            onChange={(e) => setDeviceSn(e.target.value)}
+          />
+        </label>
+        <label className="log-field">
+          Trace
+          <input
+            className="log-exact-input"
+            type="text"
+            placeholder="完全匹配"
+            value={traceId}
+            onChange={(e) => setTraceId(e.target.value)}
+          />
+        </label>
+        <label className="log-field">
+          开始
+          <input
+            type="datetime-local"
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+          />
+        </label>
+        <label className="log-field">
+          结束
+          <input
+            type="datetime-local"
+            value={endDate}
+            data-tip="结束时间早于当前时自动关闭实时推流"
+            onChange={(e) => setEndDate(e.target.value)}
+          />
+        </label>
+        {hasFilter && (
+          <button className="log-btn" onClick={clearFilters}>
+            清除条件
+          </button>
+        )}
+        <span className="log-filter-hint">
+          SN / Trace 完全匹配，与日期一起在服务端过滤；历史来自数据库（保留 90 天）
+        </span>
       </div>
 
       <div
@@ -291,11 +465,21 @@ export function LogMonitor() {
         ref={listRef}
         onScroll={handleScroll}
       >
+        {nextCursor != null && (
+          <div className="log-load-more-wrap">
+            <button className="log-btn" disabled={loadingMore} onClick={loadOlder}>
+              {loadingMore ? "加载中…" : "⇡ 加载更早"}
+            </button>
+          </div>
+        )}
         {filtered.length === 0 ? (
           <div className="log-empty">暂无日志</div>
         ) : (
           filtered.map((l, i) => (
-            <div key={l.seq ?? `${l.time}-${i}`} className={`log-row level-${l.level}`}>
+            <div
+              key={l.uid ?? `${l.time}-${i}`}
+              className={`log-row level-${l.level}`}
+            >
               {/* time 为定宽 "YYYY-MM-DD HH:mm:ss.SSS"；关闭「显示日期」时只取时间部分 */}
               <span className="log-time" data-tip={l.time}>
                 {showDate ? l.time : l.time.slice(11)}
@@ -320,15 +504,27 @@ export function LogMonitor() {
                 );
               })()}
               {/* device_sn / trace_id 用竖线包裹，与控制台格式一致（即使为空也保留分隔位）；
-                  device_sn 可由工具栏「显示SN」开关控制是否展示 */}
+                  device_sn 可由工具栏「显示SN」开关控制是否展示；点击即按其精确过滤 */}
               {showSn && (
                 <>
                   <span className="log-sep">|</span>
-                  <span className="log-sn">{l.device_sn}</span>
+                  <span
+                    className={`log-sn ${l.device_sn ? "clickable" : ""}`}
+                    data-tip={l.device_sn ? "点击按此设备号精确过滤" : undefined}
+                    onClick={() => l.device_sn && setDeviceSn(l.device_sn)}
+                  >
+                    {l.device_sn}
+                  </span>
                 </>
               )}
               <span className="log-sep">|</span>
-              <span className="log-trace">{l.trace_id}</span>
+              <span
+                className={`log-trace ${l.trace_id ? "clickable" : ""}`}
+                data-tip={l.trace_id ? "点击按此 Trace ID 精确过滤" : undefined}
+                onClick={() => l.trace_id && setTraceId(l.trace_id)}
+              >
+                {l.trace_id}
+              </span>
               <span className="log-sep">|</span>
               <span className="log-msg">{l.msg}</span>
               {l.exc && (
