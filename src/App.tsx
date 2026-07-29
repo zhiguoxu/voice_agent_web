@@ -509,7 +509,7 @@ export default function App() {
     e.stopPropagation();
     if (!await showConfirm("确定要为该设备开启一个新 Session 吗？\n当前 Session 的对话记录会保留，后续对话将在新 Session 中进行，LLM 上下文从零开始。")) return;
     try {
-      const result = await forceNewSession(s.id);
+      const result = await forceNewSession(s.id, s.device_sn);
       // 刷新会话列表以显示新 session
       await loadSessions();
       // 自动选中新 session
@@ -568,7 +568,7 @@ export default function App() {
 
 
     if (selectedSession?.is_online && liveStreamEnabled) {
-      evtSource = new EventSource(`${LIVE_CONVERSATIONS_API_BASE}/sessions/${selectedSession.id}/stream`);
+      evtSource = new EventSource(`${LIVE_CONVERSATIONS_API_BASE}/sessions/${selectedSession.id}/stream?device_sn=${encodeURIComponent(selectedSession.device_sn)}`);
       
       evtSource.onmessage = async (e) => {
         // SSE comments (: ping) won't trigger onmessage, only valid data lines
@@ -1187,7 +1187,7 @@ export default function App() {
                             if (el) el.scrollTop = el.scrollHeight;
                             setTestInputLoading(true);
                             try {
-                              await testSessionInput(selectedSession.id, testInputText.trim(), testInputWithTts);
+                              await testSessionInput(selectedSession.id, selectedSession.device_sn, testInputText.trim(), testInputWithTts);
                               setTestInputText("");
                             } catch (err: any) {
                               alert(`测试发送失败: ${err.message || String(err)}`);
@@ -1221,7 +1221,7 @@ export default function App() {
                         if (el) el.scrollTop = el.scrollHeight;
                         setTestInputLoading(true);
                         try {
-                          await testSessionInput(selectedSession.id, testInputText.trim(), testInputWithTts);
+                          await testSessionInput(selectedSession.id, selectedSession.device_sn, testInputText.trim(), testInputWithTts);
                           setTestInputText("");
                         } catch (err: any) {
                           alert(`测试发送失败: ${err.message || String(err)}`);

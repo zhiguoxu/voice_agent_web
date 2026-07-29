@@ -69,23 +69,6 @@ export async function searchLogs(params: LogSearchParams = {}): Promise<LogSearc
   return { items: data.items ?? [], next_cursor: data.next_cursor ?? null };
 }
 
-export async function fetchRecentLogs(
-  params: { limit?: number; level?: string } = {}
-): Promise<LogEntry[]> {
-  const sp = new URLSearchParams();
-  sp.set("limit", String(params.limit ?? 200));
-  if (params.level) sp.set("level", params.level);
-  const res = await fetch(`${LOGS_API_BASE}/recent?${sp}`);
-  if (!res.ok) throw new Error("Failed to fetch recent logs");
-  const data = await res.json();
-  return data.items ?? [];
-}
-
-export async function clearBackendLogs(): Promise<void> {
-  const res = await fetch(LOGS_API_BASE, { method: "DELETE" });
-  if (!res.ok) throw new Error("Failed to clear backend logs");
-}
-
 export interface Session {
   id: number;
   device_sn: string;
@@ -405,8 +388,9 @@ export async function replayTurn(chatRequest: object): Promise<ReplayResult> {
   return res.json();
 }
 
-export async function testSessionInput(sessionId: number, text: string, withTts: boolean): Promise<void> {
-  const res = await fetch(`${LIVE_CONVERSATIONS_API_BASE}/sessions/${sessionId}/test_input`, {
+// device_sn: console_server 按设备定位持有 WebSocket 的 voice 实例（在线标记按设备键）
+export async function testSessionInput(sessionId: number, deviceSn: string, text: string, withTts: boolean): Promise<void> {
+  const res = await fetch(`${LIVE_CONVERSATIONS_API_BASE}/sessions/${sessionId}/test_input?device_sn=${encodeURIComponent(deviceSn)}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ text, with_tts: withTts }),
@@ -417,8 +401,8 @@ export async function testSessionInput(sessionId: number, text: string, withTts:
   }
 }
 
-export async function forceNewSession(sessionId: number): Promise<{ new_session_id: number }> {
-  const res = await fetch(`${LIVE_CONVERSATIONS_API_BASE}/sessions/${sessionId}/force_new`, {
+export async function forceNewSession(sessionId: number, deviceSn: string): Promise<{ new_session_id: number }> {
+  const res = await fetch(`${LIVE_CONVERSATIONS_API_BASE}/sessions/${sessionId}/force_new?device_sn=${encodeURIComponent(deviceSn)}`, {
     method: "POST",
   });
   if (!res.ok) {
