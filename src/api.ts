@@ -178,7 +178,8 @@ export interface IdentityDebug {
 export interface Turn {
   id: number;
   trace_id: string;
-  /** 记录类别："chat"=对话轮 / "wake"=唤醒记录（不进 LLM 上下文，仅调试展示） */
+  /** 记录类别："chat"=对话轮 / "wake"=唤醒记录 / "noise"=拾音未识别
+   *  （VAD 判有人声但 ASR 结果为空，语音留档可回放）。非 chat 仅调试展示，不进 LLM 上下文 */
   kind: string;
   query: string;
   speaker_id: string | null;

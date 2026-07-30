@@ -1039,6 +1039,48 @@ export default function App() {
                       ×
                     </button>
                   </div>
+                ) : t.kind === "noise" ? (
+                  <div key={t.id} className="turn-card wake-turn noise-turn">
+                    <span className="wake-icon">🔇</span>
+                    <span className="wake-text"
+                          data-tip="VAD 判定有人声但 ASR 识别结果为空（误触发/环境噪音/听不清）">
+                      拾音未识别
+                    </span>
+                    {t.input_audio_cos_key ? (
+                      <audio
+                        controls
+                        preload="none"
+                        className="noise-audio"
+                        src={`${CONVERSATIONS_API_BASE}/media?key=${encodeURIComponent(t.input_audio_cos_key)}`}
+                      />
+                    ) : (
+                      <span className="wake-text">（无语音留档）</span>
+                    )}
+                    <span
+                      className={`trace ${t.trace_id ? "trace-jump" : ""}`}
+                      data-tip={t.trace_id ? "跳转到后端日志页，按此 Trace ID 精确过滤" : undefined}
+                      onClick={() => t.trace_id && openLogsWith({ traceId: t.trace_id })}
+                    >
+                      trace: {t.trace_id || "-"}
+                    </span>
+                    <span className="turn-time">{formatTime(t.created_at)}</span>
+                    <button
+                      className="turn-delete-btn"
+                      data-tip="删除这条拾音记录"
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        if (!await showConfirm("确定删除这条拾音记录？")) return;
+                        try {
+                          await deleteTurn(t.id);
+                          setTurns(prev => prev.filter(x => x.id !== t.id));
+                        } catch (err: any) {
+                          alert(`删除失败: ${err.message}`);
+                        }
+                      }}
+                    >
+                      ×
+                    </button>
+                  </div>
                 ) : (
                   <div
                     key={t.id}

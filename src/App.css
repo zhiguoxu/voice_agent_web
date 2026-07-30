@@ -664,6 +664,18 @@ body {
     color: var(--red);
 }
 
+/* 拾音未识别记录（kind=noise）：内嵌留档语音播放器 */
+.noise-turn .noise-audio {
+    height: 26px;
+    max-width: 260px;
+}
+
+.noise-turn .trace {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-family: 'SF Mono', 'Fira Code', monospace;
+}
+
 .turn-query,
 .turn-reply {
     font-size: 13px;
