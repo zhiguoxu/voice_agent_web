@@ -415,23 +415,45 @@ export function LogMonitor({
       <div className="log-toolbar log-filter-bar">
         <label className="log-field">
           设备SN
-          <input
-            className="log-exact-input"
-            type="text"
-            placeholder="完全匹配"
-            value={deviceSn}
-            onChange={(e) => setDeviceSn(e.target.value)}
-          />
+          <span className="log-clearable">
+            <input
+              className="log-exact-input"
+              type="text"
+              placeholder="完全匹配"
+              value={deviceSn}
+              onChange={(e) => setDeviceSn(e.target.value)}
+            />
+            {deviceSn && (
+              <button
+                type="button"
+                className="log-search-clear"
+                onClick={() => setDeviceSn("")}
+              >
+                ×
+              </button>
+            )}
+          </span>
         </label>
         <label className="log-field">
           Trace
-          <input
-            className="log-exact-input"
-            type="text"
-            placeholder="完全匹配"
-            value={traceId}
-            onChange={(e) => setTraceId(e.target.value)}
-          />
+          <span className="log-clearable">
+            <input
+              className="log-exact-input"
+              type="text"
+              placeholder="完全匹配"
+              value={traceId}
+              onChange={(e) => setTraceId(e.target.value)}
+            />
+            {traceId && (
+              <button
+                type="button"
+                className="log-search-clear"
+                onClick={() => setTraceId("")}
+              >
+                ×
+              </button>
+            )}
+          </span>
         </label>
         <label className="log-field">
           开始
@@ -478,7 +500,9 @@ export function LogMonitor({
           filtered.map((l, i) => (
             <div
               key={l.uid ?? `${l.time}-${i}`}
-              className={`log-row level-${l.level}`}
+              className={`log-row level-${l.level}${
+                i > 0 && filtered[i - 1].trace_id !== l.trace_id ? " trace-break" : ""
+              }`}
             >
               {/* time 为定宽 "YYYY-MM-DD HH:mm:ss.SSS"；关闭「显示日期」时只取时间部分 */}
               <span className="log-time" data-tip={l.time}>

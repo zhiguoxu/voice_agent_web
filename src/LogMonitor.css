@@ -49,11 +49,19 @@
 
 /* ── 第二行：服务端检索条件 ── */
 .log-filter-bar {
-  padding-top: 0;
+  padding-top: 8px;
 }
 
 .log-exact-input {
   width: 180px;
+  padding-right: 24px;
+}
+
+/* 带清除按钮的输入框容器（清除按钮复用 .log-search-clear） */
+.log-clearable {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
 }
 
 .log-filter-hint {
@@ -209,6 +217,11 @@
 
 .log-list.wrap .log-row {
   white-space: normal;
+}
+
+/* trace_id 与上一行不同时空出约一行的间距，区分不同 trace 的日志段 */
+.log-row.trace-break {
+  margin-top: 1.6em;
 }
 
 .log-row:hover {
