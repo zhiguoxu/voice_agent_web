@@ -9,7 +9,6 @@ const PAGE_SIZE = 20;
 const TRIGGER_LABELS: Record<string, string> = {
   batch_full: "攒满批",
   idle_timeout: "静默超时",
-  session_switch: "切换会话",
   shutdown: "停机收尾",
 };
 

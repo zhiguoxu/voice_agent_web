@@ -916,7 +916,7 @@ export interface IngestDraft {
 export interface MemoryIngestRun {
   id: number;
   session_id: number;
-  trigger: string;        // batch_full | idle_timeout | session_switch | shutdown
+  trigger: string;        // batch_full | idle_timeout | shutdown
   status: string;         // ok | empty | error
   error: string | null;
   model_count: number;    // 模型给出条数（护栏前）
