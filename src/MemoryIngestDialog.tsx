@@ -9,7 +9,7 @@ const PAGE_SIZE = 20;
 const TRIGGER_LABELS: Record<string, string> = {
   batch_full: "攒满批",
   idle_timeout: "静默超时",
-  shutdown: "停机收尾",
+  shutdown: "停机收尾", // 历史取值: 停机收尾扫描已移除, 仅供旧记录渲染
 };
 
 const STATUS_LABELS: Record<string, string> = {

@@ -1,0 +1,261 @@
+/* 记忆摄取水位监控面板（配色沿用 App.css 的设计变量） */
+
+.sweep-monitor {
+  padding: 16px 20px 32px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+/* ── 工具条 ── */
+
+.sweep-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.sweep-ranges {
+  display: flex;
+  gap: 4px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 3px;
+}
+
+.sweep-range {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary, #9aa3b8);
+  padding: 5px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.sweep-range:hover { color: var(--text-primary); }
+
+.sweep-range.active {
+  background: var(--accent);
+  color: #fff;
+}
+
+.sweep-meta {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 12px;
+  color: var(--text-secondary, #9aa3b8);
+}
+
+.sweep-refresh {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  border-radius: var(--radius-sm);
+  width: 26px;
+  height: 26px;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.sweep-refresh:hover { border-color: var(--accent); }
+
+.sweep-empty,
+.sweep-error {
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--text-secondary, #9aa3b8);
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.sweep-error {
+  padding: 12px;
+  color: #f87171;
+  text-align: left;
+}
+
+/* ── 指标卡 ── */
+
+.sweep-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.sweep-kpi {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+}
+
+.sweep-kpi.ok { border-left-color: var(--green); }
+.sweep-kpi.warn { border-left-color: #fbbf24; }
+.sweep-kpi.danger { border-left-color: #f87171; }
+
+.sweep-kpi-label {
+  font-size: 12px;
+  color: var(--text-secondary, #9aa3b8);
+}
+
+.sweep-kpi-value {
+  font-size: 24px;
+  font-weight: 600;
+  margin: 4px 0 2px;
+  font-variant-numeric: tabular-nums;
+}
+
+.sweep-kpi.warn .sweep-kpi-value { color: #fbbf24; }
+.sweep-kpi.danger .sweep-kpi-value { color: #f87171; }
+
+.sweep-kpi-sub {
+  font-size: 11px;
+  color: var(--text-secondary, #9aa3b8);
+}
+
+/* ── 图表 ── */
+
+.sweep-chart {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px 10px;
+  margin-bottom: 14px;
+}
+
+.sweep-chart-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.sweep-chart-head h4 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.sweep-hint {
+  display: inline-block;
+  margin-left: 6px;
+  width: 15px;
+  height: 15px;
+  line-height: 15px;
+  text-align: center;
+  border-radius: 50%;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  color: var(--text-secondary, #9aa3b8);
+  font-size: 10px;
+  cursor: help;
+}
+
+.sweep-legend {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--text-secondary, #9aa3b8);
+}
+
+.sweep-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.sweep-legend-item i {
+  width: 9px;
+  height: 3px;
+  border-radius: 2px;
+}
+
+.sweep-legend-item b {
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.sweep-plot { position: relative; }
+
+.sweep-svg {
+  display: block;
+  width: 100%;
+  height: 120px;
+  overflow: visible;
+}
+
+/* y 轴刻度贴在图上（SVG 用了 preserveAspectRatio=none，文字进去会被拉变形） */
+.sweep-ymax,
+.sweep-ymin {
+  position: absolute;
+  left: 0;
+  font-size: 10px;
+  color: var(--text-secondary, #9aa3b8);
+  background: color-mix(in srgb, var(--bg-card) 80%, transparent);
+  padding: 0 3px;
+  border-radius: 2px;
+  pointer-events: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.sweep-ymax { top: -2px; }
+.sweep-ymin { bottom: -2px; }
+
+.sweep-grid {
+  stroke: var(--border);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+  opacity: 0.5;
+}
+
+.sweep-cursor {
+  stroke: var(--text-secondary, #9aa3b8);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+
+.sweep-axis {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--text-secondary, #9aa3b8);
+  margin-top: 4px;
+  font-variant-numeric: tabular-nums;
+}
+
+.sweep-axis-hover { color: var(--text-primary); }
+
+.sweep-reflegend {
+  display: flex;
+  gap: 14px;
+  font-size: 11px;
+  color: var(--text-secondary, #9aa3b8);
+  margin-top: 2px;
+}
+
+.sweep-reflegend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.sweep-reflegend span.off { opacity: 0.55; }
+
+.sweep-reflegend i {
+  width: 12px;
+  height: 2px;
+  border-radius: 1px;
+  opacity: 0.85;
+}

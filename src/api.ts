@@ -958,6 +958,39 @@ export async function fetchMemoryIngestRuns(
   return res.json();
 }
 
+/** 一轮记忆摄取兜底扫描的水位采样（字段口径见后端 MemorySweepSampleORM）。
+ *  容量模型：稳态要求 R·t < C，等价于「排空耗时 < 扫描周期」（水位 < 1）。 */
+export interface SweepSample {
+  id: number;
+  created_at: string | null;
+  instance_id: string;      // 当时持扫描租约的实例，换人说明发生过接管
+  devices: number;          // 已跟踪设备数
+  candidates: number;       // 批量预筛后剩下的候选数
+  planned: number;          // 规划出批的设备数
+  batches: number;          // 真派出的批数 = N
+  prefilter_ms: number;
+  plan_ms: number;          // 含预筛，派完即止（不含抽取）
+  drain_ms: number | null;  // = D；null 表示没排空就被下一轮换了代
+  inflight_left: number;    // 换代时仍在途的批数，> 0 即超载
+  t_mean_ms: number | null; // 本轮单批服务耗时 = t（排队时间不计，归 D）
+  t_max_ms: number | null;
+  t_count: number;
+  concurrency: number;      // = C（当时生效值）
+  interval_sec: number;     // = I（当时生效值）
+}
+
+/** 最近 N 小时的扫描水位采样，按时间正序（全局，不分设备）。 */
+export async function fetchSweepSamples(
+  hours: number,
+): Promise<{ enabled: boolean; hours?: number; items: SweepSample[] }> {
+  const res = await fetch(`/api/agent/memory/sweep_samples?hours=${hours}`);
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || "Failed to fetch sweep samples");
+  }
+  return res.json();
+}
+
 /** 一个会话中已进入过抽取批次的轮次 trace_id 集合（轮次行「已抽取/未抽取」标记用） */
 export async function fetchExtractedTraces(
   deviceSn: string, sessionId: number,

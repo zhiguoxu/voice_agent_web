@@ -34,6 +34,7 @@ import { FaceRegisterDialog } from "./FaceRegisterDialog";
 import { StreamControlDialog, deriveStreamState } from "./StreamControlDialog";
 import { MemoryRecallPanel } from "./MemoryRecallPanel";
 import { ConfigView } from "./ConfigView";
+import { SweepMonitor } from "./SweepMonitor";
 import "./App.css";
 
 function formatTime(iso: string | null) {
@@ -145,7 +146,7 @@ function SpeakerBadge({ speakerId, speakerName, kind, suspected, debug, names, o
 }
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<"conversations" | "deviceControl" | "logs" | "config">("conversations");
+  const [activeTab, setActiveTab] = useState<"conversations" | "deviceControl" | "logs" | "sweep" | "config">("conversations");
   /* 对话分析页跳转到日志页时预填的精确过滤条件（一次性，LogMonitor 挂载后消费） */
   const [logJumpFilter, setLogJumpFilter] = useState<LogJumpFilter | null>(null);
   const openLogsWith = (filter: LogJumpFilter) => {
@@ -747,6 +748,13 @@ export default function App() {
             onClick={() => setActiveTab('logs')}
           >
             后端日志
+          </button>
+          <button
+            className={`main-tab ${activeTab === 'sweep' ? 'active' : ''}`}
+            onClick={() => setActiveTab('sweep')}
+            data-tip="记忆摄取兜底扫描的吞吐水位趋势"
+          >
+            摄取水位
           </button>
           <button
             className={`main-tab ${activeTab === 'config' ? 'active' : ''}`}
@@ -1542,6 +1550,8 @@ export default function App() {
       </>
       ) : activeTab === 'deviceControl' ? (
         <DeviceControl sessions={sessions} />
+      ) : activeTab === 'sweep' ? (
+        <SweepMonitor />
       ) : activeTab === 'config' ? (
         <ConfigView />
       ) : (
