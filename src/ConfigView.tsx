@@ -50,6 +50,7 @@ const LONG_TEXT_THRESHOLD = 120;
    （填错服务商名会导致下一轮识别/合成报错，选择框从源头杜绝手滑） */
 const ENUM_OPTIONS: Record<string, string[]> = {
   "asr.name": ["xiaodu", "azure"],
+  "tts.name": ["minimax", "azure"],
 };
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {
