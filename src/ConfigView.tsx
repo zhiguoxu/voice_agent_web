@@ -47,10 +47,13 @@ const SECTION_LABELS: Record<string, string> = {
 const LONG_TEXT_THRESHOLD = 120;
 
 /* 枚举字段：值只能是固定几个实现名之一，编辑时渲染下拉选择而不是文本框
-   （填错服务商名会导致下一轮识别/合成报错，选择框从源头杜绝手滑） */
+   （填错服务商名会导致下一轮识别/合成/对话报错，选择框从源头杜绝手滑）。
+   llm.name 的候选须与 LLMConfig 的方案字段(doubao/gemini)保持一致，
+   后端 validator 也会拦，但下拉让操作者根本不用记方案名 */
 const ENUM_OPTIONS: Record<string, string[]> = {
   "asr.name": ["xiaodu", "azure"],
   "tts.name": ["minimax", "azure"],
+  "llm.name": ["doubao", "gemini"],
 };
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {
