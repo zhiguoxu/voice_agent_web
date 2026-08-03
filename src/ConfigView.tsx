@@ -46,6 +46,12 @@ const SECTION_LABELS: Record<string, string> = {
 
 const LONG_TEXT_THRESHOLD = 120;
 
+/* 枚举字段：值只能是固定几个实现名之一，编辑时渲染下拉选择而不是文本框
+   （填错服务商名会导致下一轮识别/合成报错，选择框从源头杜绝手滑） */
+const ENUM_OPTIONS: Record<string, string[]> = {
+  "asr.name": ["xiaodu", "azure"],
+};
+
 function isPlainObject(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
 }
@@ -103,6 +109,7 @@ function FieldEditor({
   onCancel: () => void;
 }) {
   const sample = field.baseline;
+  const enumOptions = ENUM_OPTIONS[field.path];
   const jsonMode = Array.isArray(sample) && sample.some((v) => isPlainObject(v));
   const [draft, setDraft] = useState(() => {
     if (field.sensitive) return "";  // 脱敏字段不回显当前值
@@ -145,7 +152,15 @@ function FieldEditor({
 
   return (
     <div className="cfg-edit-box">
-      {typeof sample === "boolean" ? (
+      {enumOptions ? (
+        <select value={draft} onChange={(e) => setDraft(e.target.value)} disabled={saving}>
+          {/* 当前值不在选项里时（如后端已在线改成未知值）也列出来，避免下拉悄悄换值 */}
+          {!enumOptions.includes(draft) && <option value={draft}>{draft}</option>}
+          {enumOptions.map((o) => (
+            <option value={o} key={o}>{o}</option>
+          ))}
+        </select>
+      ) : typeof sample === "boolean" ? (
         <select value={draft} onChange={(e) => setDraft(e.target.value)} disabled={saving}>
           <option value="true">true</option>
           <option value="false">false</option>
