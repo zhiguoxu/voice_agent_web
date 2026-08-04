@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import {
   fetchVoiceConfig,
   fetchAgentConfig,
+  fetchConsoleConfig,
   fetchEditableConfig,
   putConfigOverride,
   deleteConfigOverride,
@@ -25,6 +26,26 @@ import {
 } from "./api";
 import { PromptsPanel } from "./PromptsPanel";
 import "./ConfigView.css";
+
+/** 后端 started_at 已是 naive 北京时间字面量，原样展示即可 */
+function formatStartedAt(s: string | null | undefined): string {
+  if (!s) return "-";
+  return s.replace("T", " ");
+}
+
+/** 依赖包版本徽标：common / session_store / family_memory 等 */
+function PackageBadges({ packages }: { packages?: Record<string, string> | null }) {
+  if (!packages || Object.keys(packages).length === 0) return null;
+  return (
+    <>
+      {Object.entries(packages).map(([name, ver]) => (
+        <span className="cfg-badge pkg" data-tip={`依赖包 ${name}`} key={name}>
+          {name} v{ver}
+        </span>
+      ))}
+    </>
+  );
+}
 
 /* 顶层配置段的中文标题：帮助非开发同学快速定位；没收录的段直接显示原始字段名 */
 const SECTION_LABELS: Record<string, string> = {
@@ -396,15 +417,10 @@ function ServiceCard({
 
   return (
     <div className="card cfg-card">
+      {/* 版本/环境/启动时间/依赖包版本统一在顶部状态条展示，此处不重复 */}
       <h3>
         {icon} {title}
         <span className="subtitle">{subtitle}</span>
-        {data && (
-          <span className="cfg-badges">
-            <span className="cfg-badge">v{data.version}</span>
-            <span className="cfg-badge env">env: {data.env}</span>
-          </span>
-        )}
       </h3>
 
       {error && <div className="cfg-error">❌ 加载失败: {error}</div>}
@@ -994,11 +1010,71 @@ function PasswordDialog({
   );
 }
 
+/** 顶部三服务启动时间状态条：一眼看到 voice / agent / console 是否在线与上次启动 */
+function ServiceStartStrip({
+  voice,
+  agent,
+  consoleCfg,
+  voiceError,
+  agentError,
+  consoleError,
+}: {
+  voice: ServiceConfig | null;
+  agent: ServiceConfig | null;
+  consoleCfg: ServiceConfig | null;
+  voiceError: string | null;
+  agentError: string | null;
+  consoleError: string | null;
+}) {
+  const items: {
+    key: string;
+    icon: string;
+    title: string;
+    data: ServiceConfig | null;
+    error: string | null;
+  }[] = [
+    { key: "voice", icon: "🎙️", title: "voice_server", data: voice, error: voiceError },
+    { key: "agent", icon: "🤖", title: "agent_server", data: agent, error: agentError },
+    { key: "console", icon: "🖥️", title: "console_server", data: consoleCfg, error: consoleError },
+  ];
+
+  return (
+    <div className="cfg-start-strip">
+      {items.map(({ key, icon, title, data, error }) => (
+        <div className={`cfg-start-item ${error ? "down" : data ? "ok" : ""}`} key={key}>
+          <span className="cfg-start-name">{icon} {title}</span>
+          {error ? (
+            <span className="cfg-start-status" data-tip={error}>● 不可达</span>
+          ) : data ? (
+            <>
+              <span className="cfg-start-status ok">● 在线</span>
+              <span className="cfg-start-time" data-tip="本进程最近一次启动时间（北京时间）">
+                启动于 {formatStartedAt(data.started_at)}
+              </span>
+              <span className="cfg-badges cfg-start-badges">
+                <span className="cfg-badge">v{data.version}</span>
+                <span className="cfg-badge env">env: {data.env}</span>
+              </span>
+              <span className="cfg-start-pkgs">
+                <PackageBadges packages={data.packages} />
+              </span>
+            </>
+          ) : (
+            <span className="cfg-start-status">加载中…</span>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function ConfigView() {
   const [voice, setVoice] = useState<ServiceConfig | null>(null);
   const [agent, setAgent] = useState<ServiceConfig | null>(null);
+  const [consoleCfg, setConsoleCfg] = useState<ServiceConfig | null>(null);
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const [agentError, setAgentError] = useState<string | null>(null);
+  const [consoleError, setConsoleError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   /* 可编辑白名单（path → 字段状态）。接口不可用时为 null，页面退化为纯只读 */
   const [voiceEditable, setVoiceEditable] = useState<Map<string, EditableField> | null>(null);
@@ -1011,9 +1087,11 @@ export function ConfigView() {
     setLoading(true);
     setVoiceError(null);
     setAgentError(null);
-    const [v, a, ve, ae] = await Promise.allSettled([
+    setConsoleError(null);
+    const [v, a, c, ve, ae] = await Promise.allSettled([
       fetchVoiceConfig(),
       fetchAgentConfig(),
+      fetchConsoleConfig(),
       fetchEditableConfig("voice"),
       fetchEditableConfig("agent"),
     ]);
@@ -1021,6 +1099,8 @@ export function ConfigView() {
     else setVoiceError(v.reason?.message || String(v.reason));
     if (a.status === "fulfilled") setAgent(a.value);
     else setAgentError(a.reason?.message || String(a.reason));
+    if (c.status === "fulfilled") setConsoleCfg(c.value);
+    else setConsoleError(c.reason?.message || String(c.reason));
     setVoiceEditable(ve.status === "fulfilled" ? new Map(ve.value.items.map((f) => [f.path, f])) : null);
     setAgentEditable(ae.status === "fulfilled" ? new Map(ae.value.items.map((f) => [f.path, f])) : null);
     setLoading(false);
@@ -1113,6 +1193,14 @@ export function ConfigView() {
           {loading ? <span className="spinner inline" /> : "🔄 刷新"}
         </button>
       </div>
+      <ServiceStartStrip
+        voice={voice}
+        agent={agent}
+        consoleCfg={consoleCfg}
+        voiceError={voiceError}
+        agentError={agentError}
+        consoleError={consoleError}
+      />
       {notice && <div className="cfg-notice">{notice}</div>}
       {pwPrompt && (
         <PasswordDialog

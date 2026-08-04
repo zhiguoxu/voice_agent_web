@@ -79,6 +79,85 @@
   color: var(--cyan);
 }
 
+.cfg-badge.started {
+  background: rgba(52, 211, 153, 0.12);
+  color: #34d399;
+  font-variant-numeric: tabular-nums;
+}
+
+.cfg-badge.pkg {
+  background: rgba(148, 163, 184, 0.12);
+  color: var(--text-secondary, #94a3b8);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 三服务启动时间状态条 */
+.cfg-start-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.cfg-start-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 10px 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 13px;
+}
+
+.cfg-start-item.ok {
+  border-color: rgba(52, 211, 153, 0.35);
+}
+
+.cfg-start-item.down {
+  border-color: rgba(248, 113, 113, 0.4);
+}
+
+.cfg-start-name {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.cfg-start-status {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.cfg-start-status.ok {
+  color: #34d399;
+}
+
+.cfg-start-item.down .cfg-start-status {
+  color: var(--red);
+}
+
+.cfg-start-time {
+  color: var(--text-secondary, #8b95a5);
+  font-variant-numeric: tabular-nums;
+}
+
+.cfg-start-badges {
+  margin-left: auto;
+}
+
+.cfg-start-pkgs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  width: 100%;
+}
+
+.cfg-start-pkgs .cfg-badge {
+  font-size: 11px;
+  padding: 1px 6px;
+}
+
 .cfg-error {
   padding: 12px 16px;
   background: rgba(248, 113, 113, 0.1);

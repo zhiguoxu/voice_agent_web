@@ -1006,11 +1006,15 @@ export async function fetchExtractedTraces(
   return res.json();
 }
 
-/** 后端配置查询接口的统一响应（voice_server / agent_server 同构） */
+/** 后端配置查询接口的统一响应（voice / agent / console 同构） */
 export interface ServiceConfig {
   service: string;
   version: string;
   env: string;
+  /** 本进程最近一次启动时刻（naive 北京时间，如 "2026-08-04 20:09:15"） */
+  started_at?: string | null;
+  /** 本进程依赖的内部 packages 版本（如 common / session_store / family_memory） */
+  packages?: Record<string, string>;
   config: Record<string, unknown>;
 }
 
@@ -1028,6 +1032,15 @@ export async function fetchAgentConfig(): Promise<ServiceConfig> {
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
     throw new Error(data.detail || "Failed to fetch agent_server config");
+  }
+  return res.json();
+}
+
+export async function fetchConsoleConfig(): Promise<ServiceConfig> {
+  const res = await fetch("/api/console/config");
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || "Failed to fetch console_server config");
   }
   return res.json();
 }
