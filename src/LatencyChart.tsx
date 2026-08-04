@@ -15,7 +15,7 @@ export function LatencyChart({ turn }: { turn: Turn }) {
     turn.t_llm_tool_done || 0,
     turn.t_subagent_done || 0,
     turn.t_emote_action_done || 0,
-    turn.t_bert_done || 0,
+    turn.t_intent_done || 0,
     turn.t_asr_done || 0,
     turn.t_stateless_start || 0,
     turn.t_memory_done || 0,
@@ -41,7 +41,7 @@ export function LatencyChart({ turn }: { turn: Turn }) {
   };
 
   // Pipeline phases
-  const ttsStart = turn.t_first_token || turn.t_llm_first_token || turn.t_subagent_done || turn.t_bert_done || turn.t_agent_start;
+  const ttsStart = turn.t_first_token || turn.t_llm_first_token || turn.t_subagent_done || turn.t_intent_done || turn.t_agent_start;
   type Phase = { label: string; start: number | null; end: number | null; color: string; tooltip?: string };
   const phases: Phase[] = [];
   if (turn.t_asr_done && turn.t_vad_end && turn.t_asr_done - turn.t_vad_end > 0.001) {
@@ -60,8 +60,8 @@ export function LatencyChart({ turn }: { turn: Turn }) {
   pushIfVisible("记忆召回", turn.t_names_done, turn.t_memory_done, "var(--green)");
   pushIfVisible("请求构造", turn.t_memory_done, turn.t_stateless_start, "var(--orange)");
 
-  if (turn.t_bert_start && turn.t_bert_done) {
-    phases.push({ label: "BERT调用", start: turn.t_bert_start, end: turn.t_bert_done, color: "var(--red)" });
+  if (turn.t_intent_start && turn.t_intent_done) {
+    phases.push({ label: "意图分类", start: turn.t_intent_start, end: turn.t_intent_done, color: "var(--red)" });
   }
 
   if (turn.t_subagent_start && turn.t_subagent_done) {
