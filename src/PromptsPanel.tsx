@@ -82,7 +82,7 @@ function PromptEditor({
 }
 
 /** 单个提示词模板：折叠条目，展开后是说明 + 占位符表 + 正文（模板/渲染后可切换）。
-    命中可编辑白名单（prompt.{key}）的模板可在线编辑，编辑后的值存数据库。 */
+    带 config_path 且命中可编辑字段表的模板可在线编辑，编辑后的值存数据库。 */
 function PromptItem({
   p,
   editField,
@@ -263,20 +263,20 @@ export function PromptsPanel({
       {prompts && (
         <div className="cfg-prompt-list">
           {prompts.map((p) => {
-            const path = `prompt.${p.key}`;
-            const editField = editFields?.get(path);
+            const path = p.config_path;
+            const editField = path ? editFields?.get(path) : undefined;
             return (
               <PromptItem
                 p={p}
                 key={p.key}
                 editField={editField}
                 onSave={
-                  editField && onSaveOverride
+                  path && editField && onSaveOverride
                     ? async (v) => { await onSaveOverride(path, v); await load(); }
                     : undefined
                 }
                 onRevert={
-                  editField && onRevertOverride
+                  path && editField && onRevertOverride
                     ? async () => { await onRevertOverride(path); await load(); }
                     : undefined
                 }

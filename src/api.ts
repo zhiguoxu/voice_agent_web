@@ -1218,6 +1218,8 @@ export interface PromptTemplateInfo {
   usage: string;
   source: string;              // 来源文件（仓库相对路径）
   source_kind: string;         // yaml=改配置即可调整 | code=写死在代码里
+  /** 配置模型里的真实叶子路径（在线编辑用它定位）；code 来源为 null */
+  config_path: string | null;
   model: string | null;        // 使用该提示词的 LLM 模型名（未接入为 null）
   placeholders: PromptPlaceholder[];
   template: string;            // 模板原文（占位符未填充）
