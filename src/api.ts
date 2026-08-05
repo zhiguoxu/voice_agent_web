@@ -993,25 +993,33 @@ export async function fetchSweepSamples(
   return res.json();
 }
 
-/** MiniMax TTS 一分钟的访问计数（后端 Redis 分钟桶，所有 voice 实例全局累加） */
-export interface TtsMinuteSample {
+/** 一个上游一分钟的访问计数（后端 Redis 分钟桶，所有 voice 实例全局累加）。
+ *  各上游只有自己注册过的口径（见后端 traffic_metrics.PROVIDERS），
+ *  没有的字段缺省。 */
+export interface TrafficMinuteSample {
   /** 分钟起点（naive 产品时区，如 "2026-08-05 17:03:00"） */
   minute: string;
-  /** 建连次数：每次合成新建一条 WebSocket + task_start */
-  connects: number;
-  /** 文本请求次数：攒句后逐句 task_continue */
-  requests: number;
+  /** 建连次数（TTS 类上游：每次合成新建一条连接）；agent_chat 无此口径 */
+  connects?: number;
+  /** 请求次数：minimax 的 task_continue / azure 的逐句合成 / HTTP 请求 */
+  requests?: number;
+  /** 失败次数：建连失败 + 服务端错误事件 + 请求异常（多为静默降级，
+   *  这条线是唯一暴露口） */
+  errors?: number;
 }
 
-/** 最近 N 分钟 MiniMax TTS 的逐分钟访问次数（时间正序，空分钟补 0；
- *  最后一个元素是当前尚未走完的分钟，读数会继续涨）。 */
-export async function fetchTtsMetrics(
+/** 一个上游最近 N 分钟的逐分钟访问次数（时间正序，空分钟补 0；
+ *  最后一个元素是当前尚未走完的分钟，读数会继续涨）。
+ *  provider ∈ minimax_tts | azure_tts | agent_chat。 */
+export async function fetchTrafficMetrics(
+  provider: string,
   minutes: number,
-): Promise<{ provider: string; minutes: number; items: TtsMinuteSample[] }> {
-  const res = await fetch(`/api/voice/tts_metrics/minimax?minutes=${minutes}`);
+): Promise<{ provider: string; minutes: number; items: TrafficMinuteSample[] }> {
+  const res = await fetch(
+    `/api/voice/traffic/${encodeURIComponent(provider)}?minutes=${minutes}`);
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
-    throw new Error(data.detail || "Failed to fetch TTS metrics");
+    throw new Error(data.detail || "Failed to fetch traffic metrics");
   }
   return res.json();
 }
