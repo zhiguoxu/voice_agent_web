@@ -36,7 +36,7 @@ const C_GRAY = "#8b93a7";
 const W = 600;
 const H = 140;
 
-interface Series {
+export interface Series {
   label: string;
   color: string;
   /** 与 times 等长；null = 该轮无此值（如超载轮没有排空耗时），断线不连 */
@@ -47,7 +47,7 @@ interface Series {
   format?: (v: number) => string;
 }
 
-interface RefLine {
+export interface RefLine {
   value: number;
   color: string;
   label: string;
@@ -62,7 +62,7 @@ interface RefLine {
  * 还有多远」由指标卡的配色回答，图要回答的是「在往哪走」。放不下的参考线
  * 只在图例里标出数值。
  */
-function TrendChart({ title, hint, times, series, refLines, format, marks }: {
+export function TrendChart({ title, hint, times, series, refLines, format, marks }: {
   title: string;
   hint?: string;
   times: string[];
@@ -366,7 +366,7 @@ export function SweepMonitor() {
   );
 }
 
-function KPI({ label, value, sub, tone }: {
+export function KPI({ label, value, sub, tone }: {
   label: string; value: string; sub?: string; tone?: "ok" | "warn" | "danger";
 }) {
   return (
