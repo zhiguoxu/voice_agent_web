@@ -5,6 +5,8 @@
  * 每个已注册上游一组 KPI + 一张趋势图：
  * - MiniMax / Azure TTS：按请求频率限流，限流时表现是"没声音"且对话侧
  *   毫无痕迹，靠失败线提前看出访问量在逼近配额；
+ * - 小度 / Azure ASR：每轮语音一次建连+识别会话，失败线暴露建连超时、
+ *   服务端错误与收尾超时；
  * - agent_server 对话：每聊天轮一次，是全链路吞吐的直接读数。
  */
 import { useCallback, useEffect, useState } from "react";
@@ -29,7 +31,7 @@ interface ProviderDef {
   id: string;
   title: string;
   reqLabel: string;
-  /** 是否有"建连"口径（TTS 类有，agent_chat 没有） */
+  /** 是否有"建连"口径（TTS/ASR 类有，agent_chat 没有） */
   hasConn: boolean;
   hint: string;
 }
@@ -52,6 +54,24 @@ const TTS_PROVIDERS: ProviderDef[] = [
   },
 ];
 
+/** ASR 双 provider：同一区块内用标签页切换（同一时刻只有一个在生效） */
+const ASR_PROVIDERS: ProviderDef[] = [
+  {
+    id: "xiaodu_asr",
+    title: "小度 ASR",
+    reqLabel: "识别会话",
+    hasConn: true,
+    hint: "识别会话 = 每轮语音一次 finish_stream；建连 = 每次识别新建的 WebSocket + START 帧；失败 = 建连/START 失败 + 服务端错误事件 + 等待最终结果超时。未启用 xiaodu 时恒为 0",
+  },
+  {
+    id: "azure_asr",
+    title: "Azure ASR",
+    reqLabel: "识别会话",
+    hasConn: true,
+    hint: "识别会话 = 每轮语音一次 finish_stream；建连 = 每次识别启动的连续识别会话；失败 = 启动失败 + SDK canceled(Error) + 等待最终结果超时。未启用 azure 时恒为 0",
+  },
+];
+
 const AGENT_PROVIDER: ProviderDef = {
   id: "agent_chat",
   title: "agent_server 对话",
@@ -60,13 +80,14 @@ const AGENT_PROVIDER: ProviderDef = {
   hint: "每聊天轮恰好一次 SSE 请求，是全链路吞吐的直接读数；失败 = HTTP 错误 / 连不上 / 回复流超时 / 传输中断",
 };
 
-const ALL_PROVIDERS = [...TTS_PROVIDERS, AGENT_PROVIDER];
+const ALL_PROVIDERS = [...TTS_PROVIDERS, ...ASR_PROVIDERS, AGENT_PROVIDER];
 
 const hhmm = (s: string) => s.slice(11, 16);
 
 export function TrafficMonitor() {
   const [minutes, setMinutes] = useState(60);
   const [ttsProvider, setTtsProvider] = useState(TTS_PROVIDERS[0].id);
+  const [asrProvider, setAsrProvider] = useState(ASR_PROVIDERS[0].id);
   const [data, setData] = useState<Record<string, TrafficMinuteSample[]>>({});
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -131,6 +152,20 @@ export function TrafficMonitor() {
             ))}
           </div>
           {TTS_PROVIDERS.filter((u) => u.id === ttsProvider).map((u) => (
+            <ProviderSection key={u.id} provider={u} items={data[u.id] ?? []} />
+          ))}
+
+          {/* ASR 区块：与 TTS 同结构，标签页切换 */}
+          <div className="sweep-ranges" style={{ marginTop: 4 }}>
+            {ASR_PROVIDERS.map((u) => (
+              <button key={u.id}
+                      className={`sweep-range ${asrProvider === u.id ? "active" : ""}`}
+                      onClick={() => setAsrProvider(u.id)}>
+                {u.title}
+              </button>
+            ))}
+          </div>
+          {ASR_PROVIDERS.filter((u) => u.id === asrProvider).map((u) => (
             <ProviderSection key={u.id} provider={u} items={data[u.id] ?? []} />
           ))}
 

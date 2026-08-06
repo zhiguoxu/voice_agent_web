@@ -999,9 +999,10 @@ export async function fetchSweepSamples(
 export interface TrafficMinuteSample {
   /** 分钟起点（naive 产品时区，如 "2026-08-05 17:03:00"） */
   minute: string;
-  /** 建连次数（TTS 类上游：每次合成新建一条连接）；agent_chat 无此口径 */
+  /** 建连次数（TTS/ASR 类上游：每次合成/识别新建一条连接）；agent_chat 无此口径 */
   connects?: number;
-  /** 请求次数：minimax 的 task_continue / azure 的逐句合成 / HTTP 请求 */
+  /** 请求次数：minimax 的 task_continue / azure 的逐句合成 /
+   *  ASR 每轮识别会话 / HTTP 请求 */
   requests?: number;
   /** 失败次数：建连失败 + 服务端错误事件 + 请求异常（多为静默降级，
    *  这条线是唯一暴露口） */
@@ -1010,7 +1011,7 @@ export interface TrafficMinuteSample {
 
 /** 一个上游最近 N 分钟的逐分钟访问次数（时间正序，空分钟补 0；
  *  最后一个元素是当前尚未走完的分钟，读数会继续涨）。
- *  provider ∈ minimax_tts | azure_tts | agent_chat。 */
+ *  provider ∈ minimax_tts | azure_tts | xiaodu_asr | azure_asr | agent_chat。 */
 export async function fetchTrafficMetrics(
   provider: string,
   minutes: number,
