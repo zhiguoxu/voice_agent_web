@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, lazy, Suspense } from "react";
 import {
   fetchSessions,
   fetchTurns,
@@ -37,6 +37,12 @@ import { ConfigView } from "./ConfigView";
 import { SweepMonitor } from "./SweepMonitor";
 import { TrafficMonitor } from "./TrafficMonitor";
 import "./App.css";
+
+// 视觉识别模块体量大（含 vision.css 与全套面板组件），按需加载单独分包，
+// 避免主包超过 500 kB
+const VisionView = lazy(() =>
+  import("./vision/VisionView").then((m) => ({ default: m.VisionView })),
+);
 
 function formatTime(iso: string | null) {
   if (!iso) return "-";
@@ -147,7 +153,7 @@ function SpeakerBadge({ speakerId, speakerName, kind, suspected, debug, names, o
 }
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<"conversations" | "deviceControl" | "logs" | "sweep" | "traffic" | "config">("conversations");
+  const [activeTab, setActiveTab] = useState<"conversations" | "deviceControl" | "logs" | "sweep" | "traffic" | "vision" | "config">("conversations");
   /* 对话分析页跳转到日志页时预填的精确过滤条件（一次性，LogMonitor 挂载后消费） */
   const [logJumpFilter, setLogJumpFilter] = useState<LogJumpFilter | null>(null);
   const openLogsWith = (filter: LogJumpFilter) => {
@@ -763,6 +769,13 @@ export default function App() {
             data-tip="TTS / agent 等外部调用的每分钟访问次数与失败趋势"
           >
             流量监控
+          </button>
+          <button
+            className={`main-tab ${activeTab === 'vision' ? 'active' : ''}`}
+            onClick={() => setActiveTab('vision')}
+            data-tip="person_id 视觉识别仪表盘（实时视频、身份识别、底库管理）"
+          >
+            视觉识别
           </button>
           <button
             className={`main-tab ${activeTab === 'config' ? 'active' : ''}`}
@@ -1562,6 +1575,10 @@ export default function App() {
         <SweepMonitor />
       ) : activeTab === 'traffic' ? (
         <TrafficMonitor />
+      ) : activeTab === 'vision' ? (
+        <Suspense fallback={<div style={{ padding: 24, color: "#888" }}>视觉识别模块加载中…</div>}>
+          <VisionView />
+        </Suspense>
       ) : activeTab === 'config' ? (
         <ConfigView />
       ) : (

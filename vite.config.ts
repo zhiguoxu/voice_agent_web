@@ -27,6 +27,14 @@ export default defineConfig({
         target: 'http://124.220.147.121:8017',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api\/voice/, '/api'),
+      },
+      //   /vision/*      → person_id 视觉识别服务，去掉 /vision 前缀
+      //                    （REST /vision/api/* 与实时视频 WebSocket /vision/ws/vision 都走这一条）
+      '/vision': {
+        target: 'http://1.15.11.133:10003',
+        changeOrigin: true,
+        ws: true,
+        rewrite: (path) => path.replace(/^\/vision/, ''),
       }
     }
   }
