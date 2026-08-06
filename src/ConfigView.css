@@ -29,6 +29,68 @@
 }
 
 /* 宽屏两列并排，窄屏自动落成单列 */
+/* 三个服务配置卡的 tab 切换条（视觉同顶部 .main-tabs） */
+.cfg-service-tabs {
+  display: inline-flex;
+  gap: 10px;
+  background: var(--bg-card);
+  padding: 4px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  margin-bottom: 12px;
+}
+
+.cfg-service-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  padding: 8px 16px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 500;
+  font-family: var(--font-mono, monospace);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.cfg-service-tab:hover {
+  color: var(--text-primary);
+  background: var(--bg-card-hover);
+}
+
+.cfg-service-tab.active {
+  background: var(--accent);
+  color: white;
+}
+
+.cfg-service-tab-icon {
+  font-size: 14px;
+}
+
+/* 设备级面板内的服务 tab: 与全局配置卡的 tab 同款, 仅间距微调 */
+.cfg-device-tabs {
+  margin: 2px 0 10px;
+}
+
+/* tab 上的"被此设备覆盖条数"角标 */
+.cfg-service-tab-count {
+  min-width: 16px;
+  padding: 0 5px;
+  border-radius: 8px;
+  font-size: 11px;
+  line-height: 16px;
+  background: rgba(52, 211, 153, 0.18);
+  color: var(--green);
+}
+
+.cfg-service-tab.active .cfg-service-tab-count {
+  background: rgba(255, 255, 255, 0.25);
+  color: white;
+}
+
 .cfg-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(480px, 1fr));

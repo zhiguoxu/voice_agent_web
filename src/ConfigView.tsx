@@ -49,6 +49,13 @@ function PackageBadges({ packages }: { packages?: Record<string, string> | null 
 }
 
 /* 顶层配置段的中文标题：帮助非开发同学快速定位；没收录的段直接显示原始字段名 */
+/* 配置卡 tab 条（三个服务切换展示, 与下方 ServiceCard 一一对应） */
+const SERVICE_TABS: { key: ConfigService; icon: string; label: string }[] = [
+  { key: "voice", icon: "🎙️", label: "voice_server" },
+  { key: "agent", icon: "🤖", label: "agent_server" },
+  { key: "person", icon: "👁️", label: "person_id" },
+];
+
 const SECTION_LABELS: Record<string, string> = {
   audio: "音频参数",
   vad: "VAD 语音活动检测",
@@ -743,6 +750,8 @@ function DeviceOverridePanel({
   const [searching, setSearching] = useState(false);
   const [comboOpen, setComboOpen] = useState(false);
   const comboRef = useRef<HTMLSpanElement>(null);
+  /* 两个服务(voice/agent)的设备级配置用 tab 切换展示, 与上方全局配置卡一致 */
+  const [svcTab, setSvcTab] = useState<ConfigService>("voice");
 
   const loadOverview = useCallback(async () => {
     const [v, a, sessions] = await Promise.allSettled([
@@ -943,7 +952,25 @@ function DeviceOverridePanel({
 
       {selected && fields && !loading && (
         <div className="cfg-device-sections">
-          {SERVICE_META.map(({ key, icon, title }) => {
+          <div className="cfg-service-tabs cfg-device-tabs">
+            {SERVICE_META.map(({ key, icon, title }) => {
+              const overridden = fields[key]?.filter((f) => f.overridden).length ?? 0;
+              return (
+                <button
+                  key={key}
+                  className={`cfg-service-tab ${svcTab === key ? "active" : ""}`}
+                  onClick={() => setSvcTab(key)}
+                >
+                  <span className="cfg-service-tab-icon">{icon}</span>
+                  {title}
+                  {overridden > 0 && (
+                    <span className="cfg-service-tab-count">{overridden}</span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+          {SERVICE_META.filter(({ key }) => key === svcTab).map(({ key, icon, title }) => {
             const items = fields[key];
             if (!items) {
               return (
@@ -1105,6 +1132,15 @@ export function ConfigView() {
   const [personEditable, setPersonEditable] = useState<Map<string, EditableField> | null>(null);
   /* 保存/恢复后的提示条（非 hot 项提示需要重启） */
   const [notice, setNotice] = useState<string | null>(null);
+  /* 三个服务的配置卡用 tab 切换展示（并列三卡信息过密）；选中项跨会话记住 */
+  const [svcTab, setSvcTab] = useState<ConfigService>(() => {
+    const saved = localStorage.getItem("cfgServiceTab");
+    return saved === "voice" || saved === "agent" || saved === "person" ? saved : "voice";
+  });
+  const selectSvcTab = useCallback((s: ConfigService) => {
+    setSvcTab(s);
+    localStorage.setItem("cfgServiceTab", s);
+  }, []);
 
   /* 各请求独立 settle：一边挂掉不影响另一边展示 */
   const load = useCallback(async () => {
@@ -1254,35 +1290,53 @@ export function ConfigView() {
         onSaveOverride={agentEdit?.onSave}
         onRevertOverride={agentEdit?.onRevert}
       />
+      <div className="cfg-service-tabs">
+        {SERVICE_TABS.map((t) => (
+          <button
+            key={t.key}
+            className={`cfg-service-tab ${svcTab === t.key ? "active" : ""}`}
+            onClick={() => selectSvcTab(t.key)}
+          >
+            <span className="cfg-service-tab-icon">{t.icon}</span>
+            {t.label}
+          </button>
+        ))}
+      </div>
       <div className="cfg-grid">
-        <ServiceCard
-          icon="🎙️"
-          title="voice_server"
-          subtitle="语音接入：ASR / TTS / VAD / 设备通道"
-          data={voice}
-          error={voiceError}
-          loading={loading}
-          edit={voiceEdit}
-        />
-        <ServiceCard
-          icon="🤖"
-          title="agent_server"
-          subtitle="对话智能体：LLM / 意图 / 记忆"
-          data={agent}
-          error={agentError}
-          loading={loading}
-          hideSections={["prompt"]}
-          edit={agentEdit}
-        />
-        <ServiceCard
-          icon="👁️"
-          title="person_id"
-          subtitle="视觉识别：检测 / 追踪 / 底库匹配 / 拉流"
-          data={person}
-          error={personError}
-          loading={loading}
-          edit={personEdit}
-        />
+        {svcTab === "voice" && (
+          <ServiceCard
+            icon="🎙️"
+            title="voice_server"
+            subtitle="语音接入：ASR / TTS / VAD / 设备通道"
+            data={voice}
+            error={voiceError}
+            loading={loading}
+            edit={voiceEdit}
+          />
+        )}
+        {svcTab === "agent" && (
+          <ServiceCard
+            icon="🤖"
+            title="agent_server"
+            subtitle="对话智能体：LLM / 意图 / 记忆"
+            data={agent}
+            error={agentError}
+            loading={loading}
+            hideSections={["prompt"]}
+            edit={agentEdit}
+          />
+        )}
+        {svcTab === "person" && (
+          <ServiceCard
+            icon="👁️"
+            title="person_id"
+            subtitle="视觉识别：检测 / 追踪 / 底库匹配 / 拉流"
+            data={person}
+            error={personError}
+            loading={loading}
+            edit={personEdit}
+          />
+        )}
       </div>
     </div>
   );
