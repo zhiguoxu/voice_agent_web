@@ -9,6 +9,7 @@ const SOURCES = [
   { key: "all", label: "全部" },
   { key: "voice", label: "Voice" },
   { key: "agent", label: "Agent" },
+  { key: "person", label: "Person" },
 ];
 const MAX_LOGS = 5000;
 const PAGE_SIZE = 500;

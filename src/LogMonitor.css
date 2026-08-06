@@ -282,6 +282,11 @@
   background: rgba(167, 139, 250, 0.16);
 }
 
+.src-person {
+  color: var(--amber, #fbbf24);
+  background: rgba(251, 191, 36, 0.14);
+}
+
 .log-loc {
   color: var(--purple);
   flex-shrink: 0;
