@@ -3,6 +3,7 @@ import {
   fetchVoiceConfig,
   fetchAgentConfig,
   fetchConsoleConfig,
+  fetchPersonConfig,
   fetchEditableConfig,
   putConfigOverride,
   deleteConfigOverride,
@@ -63,6 +64,18 @@ const SECTION_LABELS: Record<string, string> = {
   mqtt: "MQTT 消息通道",
   redis: "Redis",
   cos: "对象存储 COS",
+  // person_id (视觉识别) 服务的顶层配置段
+  hardware: "硬件与计算设备",
+  detection: "检测 (YOLO)",
+  face: "人脸识别",
+  reid: "重识别 ReID",
+  gallery: "特征底库",
+  matching: "匹配与融合",
+  tracking: "追踪引擎",
+  multiframe: "多帧处理",
+  vlm: "VLM 仲裁",
+  voice_embed: "声纹提取",
+  server: "服务参数",
 };
 
 const LONG_TEXT_THRESHOLD = 120;
@@ -75,6 +88,9 @@ const ENUM_OPTIONS: Record<string, string[]> = {
   "asr.name": ["xiaodu", "azure"],
   "tts.name": ["minimax", "azure"],
   "llm.name": ["doubao", "gemini"],
+  // person_id (视觉识别) 的模型选择字段
+  "face.recognition_backend": ["arcface", "adaface"],
+  "gallery.ediffiqa_enroll_variant": ["tiny", "small", "medium", "large"],
 };
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {
@@ -1010,21 +1026,25 @@ function PasswordDialog({
   );
 }
 
-/** 顶部三服务启动时间状态条：一眼看到 voice / agent / console 是否在线与上次启动 */
+/** 顶部服务启动时间状态条：一眼看到 voice / agent / console / person 是否在线与上次启动 */
 function ServiceStartStrip({
   voice,
   agent,
   consoleCfg,
+  person,
   voiceError,
   agentError,
   consoleError,
+  personError,
 }: {
   voice: ServiceConfig | null;
   agent: ServiceConfig | null;
   consoleCfg: ServiceConfig | null;
+  person: ServiceConfig | null;
   voiceError: string | null;
   agentError: string | null;
   consoleError: string | null;
+  personError: string | null;
 }) {
   const items: {
     key: string;
@@ -1036,6 +1056,7 @@ function ServiceStartStrip({
     { key: "voice", icon: "🎙️", title: "voice_server", data: voice, error: voiceError },
     { key: "agent", icon: "🤖", title: "agent_server", data: agent, error: agentError },
     { key: "console", icon: "🖥️", title: "console_server", data: consoleCfg, error: consoleError },
+    { key: "person", icon: "👁️", title: "person_id", data: person, error: personError },
   ];
 
   return (
@@ -1072,13 +1093,16 @@ export function ConfigView() {
   const [voice, setVoice] = useState<ServiceConfig | null>(null);
   const [agent, setAgent] = useState<ServiceConfig | null>(null);
   const [consoleCfg, setConsoleCfg] = useState<ServiceConfig | null>(null);
+  const [person, setPerson] = useState<ServiceConfig | null>(null);
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const [agentError, setAgentError] = useState<string | null>(null);
   const [consoleError, setConsoleError] = useState<string | null>(null);
+  const [personError, setPersonError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   /* 可编辑白名单（path → 字段状态）。接口不可用时为 null，页面退化为纯只读 */
   const [voiceEditable, setVoiceEditable] = useState<Map<string, EditableField> | null>(null);
   const [agentEditable, setAgentEditable] = useState<Map<string, EditableField> | null>(null);
+  const [personEditable, setPersonEditable] = useState<Map<string, EditableField> | null>(null);
   /* 保存/恢复后的提示条（非 hot 项提示需要重启） */
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -1088,12 +1112,15 @@ export function ConfigView() {
     setVoiceError(null);
     setAgentError(null);
     setConsoleError(null);
-    const [v, a, c, ve, ae] = await Promise.allSettled([
+    setPersonError(null);
+    const [v, a, c, p, ve, ae, pe] = await Promise.allSettled([
       fetchVoiceConfig(),
       fetchAgentConfig(),
       fetchConsoleConfig(),
+      fetchPersonConfig(),
       fetchEditableConfig("voice"),
       fetchEditableConfig("agent"),
+      fetchEditableConfig("person"),
     ]);
     if (v.status === "fulfilled") setVoice(v.value);
     else setVoiceError(v.reason?.message || String(v.reason));
@@ -1101,8 +1128,11 @@ export function ConfigView() {
     else setAgentError(a.reason?.message || String(a.reason));
     if (c.status === "fulfilled") setConsoleCfg(c.value);
     else setConsoleError(c.reason?.message || String(c.reason));
+    if (p.status === "fulfilled") setPerson(p.value);
+    else setPersonError(p.reason?.message || String(p.reason));
     setVoiceEditable(ve.status === "fulfilled" ? new Map(ve.value.items.map((f) => [f.path, f])) : null);
     setAgentEditable(ae.status === "fulfilled" ? new Map(ae.value.items.map((f) => [f.path, f])) : null);
+    setPersonEditable(pe.status === "fulfilled" ? new Map(pe.value.items.map((f) => [f.path, f])) : null);
     setLoading(false);
   }, []);
 
@@ -1155,7 +1185,8 @@ export function ConfigView() {
   const makeEditCtx = useCallback(
     (service: ConfigService, fields: Map<string, EditableField> | null): EditCtx | undefined => {
       if (!fields) return undefined;
-      const serverName = service === "voice" ? "voice_server" : "agent_server";
+      const serverName =
+        service === "voice" ? "voice_server" : service === "agent" ? "agent_server" : "person_id";
       return {
         fields,
         onSave: async (path, value) => {
@@ -1181,12 +1212,13 @@ export function ConfigView() {
 
   const voiceEdit = makeEditCtx("voice", voiceEditable);
   const agentEdit = makeEditCtx("agent", agentEditable);
+  const personEdit = makeEditCtx("person", personEditable);
 
   return (
     <div className="cfg-container">
       <div className="cfg-toolbar">
         <span className="cfg-hint">
-          两个服务当前生效的运行配置（YAML + 环境变量 + 在线编辑覆盖合并后的结果），密钥类字段已脱敏；
+          各服务当前生效的运行配置（YAML + 环境变量 + 在线编辑覆盖合并后的结果），密钥类字段已脱敏；
           带 ✏️ 的项可在线编辑（需口令，存数据库），「恢复默认」即删除覆盖、回到 yaml 原值
         </span>
         <button className="roster-refresh" onClick={load} disabled={loading}>
@@ -1197,9 +1229,11 @@ export function ConfigView() {
         voice={voice}
         agent={agent}
         consoleCfg={consoleCfg}
+        person={person}
         voiceError={voiceError}
         agentError={agentError}
         consoleError={consoleError}
+        personError={personError}
       />
       {notice && <div className="cfg-notice">{notice}</div>}
       {pwPrompt && (
@@ -1239,6 +1273,15 @@ export function ConfigView() {
           loading={loading}
           hideSections={["prompt"]}
           edit={agentEdit}
+        />
+        <ServiceCard
+          icon="👁️"
+          title="person_id"
+          subtitle="视觉识别：检测 / 追踪 / 底库匹配 / 拉流"
+          data={person}
+          error={personError}
+          loading={loading}
+          edit={personEdit}
         />
       </div>
     </div>

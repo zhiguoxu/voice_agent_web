@@ -31,16 +31,16 @@ async function toError(res: Response): Promise<Error> {
   return new Error(err.detail || res.statusText);
 }
 
-/* ── 全局配置 ── */
+/* ── 滑块可调参数（改内存不落库, 原路径 /api/config, 2026-08 改名 /api/params）── */
 
 export async function fetchVisionConfig(): Promise<VisionConfig> {
-  const res = await fetch(`${VISION_API}/config`);
+  const res = await fetch(`${VISION_API}/params`);
   if (!res.ok) throw await toError(res);
   return res.json();
 }
 
 export async function updateVisionConfig(updates: Record<string, unknown>): Promise<void> {
-  const res = await fetch(`${VISION_API}/config`, {
+  const res = await fetch(`${VISION_API}/params`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ updates }),

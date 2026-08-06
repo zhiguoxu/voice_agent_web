@@ -97,7 +97,7 @@ export interface VisionEvent {
   candidates?: MatchCandidate[];
 }
 
-/** 可调参数（GET /api/config 的 params 字段） */
+/** 可调参数（GET /api/params 的 params 字段） */
 export interface TunableParam {
   value: number;
   min: number;
