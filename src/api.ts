@@ -1369,12 +1369,14 @@ export interface ModerationTestResult {
 export async function testModeration(
   replyText: string,
   query: string,
+  /** 最近几轮对话（可空）。生产送审自动附带，格式为每行“用户: …”或“机器人: …” */
+  history = "",
   deviceSn = "",
 ): Promise<ModerationTestResult> {
   const res = await fetch("/api/voice/moderation/test", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ reply_text: replyText, query, device_sn: deviceSn }),
+    body: JSON.stringify({ reply_text: replyText, query, history, device_sn: deviceSn }),
   });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));

@@ -632,10 +632,11 @@ function IntentPanel() {
 function ModerationPanel() {
   const [replyText, setReplyText] = useState("");
   const [query, setQuery] = useState("");
+  const [history, setHistory] = useState("");
   const [testing, setTesting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [results, setResults] = useState<
-    { replyText: string; query: string; r: ModerationTestResult }[]
+    { replyText: string; query: string; history: string; r: ModerationTestResult }[]
   >([]);
 
   const runTest = async () => {
@@ -644,8 +645,9 @@ function ModerationPanel() {
     setTesting(true);
     setError(null);
     try {
-      const r = await testModeration(text, query.trim());
-      setResults((prev) => [{ replyText: text, query: query.trim(), r }, ...prev].slice(0, 20));
+      const r = await testModeration(text, query.trim(), history.trim());
+      setResults((prev) =>
+        [{ replyText: text, query: query.trim(), history: history.trim(), r }, ...prev].slice(0, 20));
       setReplyText("");
     } catch (e: any) {
       setError(e.message || String(e));
@@ -685,6 +687,14 @@ function ModerationPanel() {
           {testing ? <span className="spinner inline" /> : "审核"}
         </button>
       </div>
+      <textarea
+        className="cfg-mod-history"
+        placeholder={"最近对话（可选，生产送审会自动附带最近几轮，格式每行一句）：\n用户: 我们玩接龙\n机器人: 好呀好呀"}
+        rows={2}
+        value={history}
+        onChange={(e) => setHistory(e.target.value)}
+        disabled={testing}
+      />
       {error && <div className="cfg-error">❌ 审核失败: {error}</div>}
 
       {results.length > 0 && (
@@ -697,6 +707,11 @@ function ModerationPanel() {
                   <span className="cfg-intent-query">“{item.replyText}”</span>
                   {item.query && (
                     <span className="cfg-mod-ctx">（用户问题：{item.query}）</span>
+                  )}
+                  {item.history && (
+                    <span className="cfg-mod-ctx" title={item.history}>
+                      （含 {item.history.split("\n").length} 行最近对话）
+                    </span>
                   )}
                   <span className={`cfg-badge hit ${r.final.risky ? "down" : "ok"}`}>
                     {r.final.risky ? `⛔ 有风险 · ${r.final.source}` : "✔ 无风险"}

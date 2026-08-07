@@ -547,6 +547,28 @@
   flex: 0 1 260px;
 }
 
+/* 最近对话输入(多行, 与生产送审同格式: 每行"用户: …"或"机器人: …") */
+.cfg-mod-history {
+  display: block;
+  width: 100%;
+  max-width: 792px;
+  margin: -4px 0 12px;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-family: inherit;
+  line-height: 1.5;
+  color: var(--text-primary);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  resize: vertical;
+}
+
+.cfg-mod-history:focus {
+  border-color: var(--purple);
+  outline: none;
+}
+
 /* 结果卡片改纵向布局：头行(输入+结论徽标) / 双层明细 / 替代话术 */
 .cfg-mod-result {
   flex-direction: column;
