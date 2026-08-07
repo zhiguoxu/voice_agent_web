@@ -826,6 +826,24 @@ body {
     color: var(--blue);
 }
 
+.badge.moderation {
+    background: rgba(248, 113, 113, 0.12);
+    color: var(--red, #ef4444);
+}
+
+/* 风控拦截的原始输出：划线置灰，与替代话术并排区分展示 */
+.moderation-original {
+    text-decoration: line-through;
+    color: var(--text-muted);
+    opacity: 0.75;
+    margin-right: 8px;
+}
+
+/* 风控替代话术：实际播报并写入对话历史的文本 */
+.moderation-replacement {
+    color: var(--red, #ef4444);
+}
+
 .trace {
     font-size: 10px;
     color: var(--text-muted);

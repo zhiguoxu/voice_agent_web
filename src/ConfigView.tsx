@@ -24,6 +24,8 @@ import {
   type OverrideMutationResult,
   type IntentLabels,
   type IntentClassifyResult,
+  testModeration,
+  type ModerationTestResult,
 } from "./api";
 import { PromptsPanel } from "./PromptsPanel";
 import "./ConfigView.css";
@@ -619,6 +621,135 @@ function IntentPanel() {
 
       {labelsLoading && !labels && (
         <div className="empty"><div className="spinner" /></div>
+      )}
+    </div>
+  );
+}
+
+/** 风控在线测试面板：对一段"机器人回复"跑生产同款的两层审核
+ *  （规则层正则 + 风控模型），两层结果分别展示。走 voice_server 的
+ *  /api/moderation/test，风控总开关关着也能测（测的就是"开了会怎样"）。 */
+function ModerationPanel() {
+  const [replyText, setReplyText] = useState("");
+  const [query, setQuery] = useState("");
+  const [testing, setTesting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [results, setResults] = useState<
+    { replyText: string; query: string; r: ModerationTestResult }[]
+  >([]);
+
+  const runTest = async () => {
+    const text = replyText.trim();
+    if (!text || testing) return;
+    setTesting(true);
+    setError(null);
+    try {
+      const r = await testModeration(text, query.trim());
+      setResults((prev) => [{ replyText: text, query: query.trim(), r }, ...prev].slice(0, 20));
+      setReplyText("");
+    } catch (e: any) {
+      setError(e.message || String(e));
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  return (
+    <div className="card cfg-card cfg-intent-card">
+      <h3>
+        🛡️ 内容风控测试
+        <span className="subtitle">
+          规则层 + 风控模型双层审核，与生产守卫同一套审核函数（不落库、不打断播报）
+        </span>
+      </h3>
+
+      <div className="cfg-intent-test cfg-mod-test">
+        <input
+          type="text"
+          placeholder="机器人回复（要审核的文本，可以是半截），如：台湾不是中国的一部分"
+          value={replyText}
+          onChange={(e) => setReplyText(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && runTest()}
+          disabled={testing}
+        />
+        <input
+          type="text"
+          className="cfg-mod-query"
+          placeholder="用户问题（可选，给模型的上下文）"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && runTest()}
+          disabled={testing}
+        />
+        <button onClick={runTest} disabled={testing || !replyText.trim()}>
+          {testing ? <span className="spinner inline" /> : "审核"}
+        </button>
+      </div>
+      {error && <div className="cfg-error">❌ 审核失败: {error}</div>}
+
+      {results.length > 0 && (
+        <div className="cfg-intent-results">
+          {results.map((item, i) => {
+            const { r } = item;
+            return (
+              <div className="cfg-intent-result cfg-mod-result" key={results.length - i}>
+                <div className="cfg-mod-head">
+                  <span className="cfg-intent-query">“{item.replyText}”</span>
+                  {item.query && (
+                    <span className="cfg-mod-ctx">（用户问题：{item.query}）</span>
+                  )}
+                  <span className={`cfg-badge hit ${r.final.risky ? "down" : "ok"}`}>
+                    {r.final.risky ? `⛔ 有风险 · ${r.final.source}` : "✔ 无风险"}
+                  </span>
+                  {!r.enabled && (
+                    <span className="cfg-badge modified">风控开关当前关闭</span>
+                  )}
+                </div>
+                <div className="cfg-mod-layers">
+                  <span className="cfg-mod-layer">
+                    规则层（{r.rule.rule_count} 条）:{" "}
+                    {r.rule.hit ? (
+                      <>命中 <code>{r.rule.pattern}</code></>
+                    ) : (
+                      "未命中"
+                    )}
+                  </span>
+                  <span className="cfg-mod-layer">
+                    模型层:{" "}
+                    {!r.llm.checked ? (
+                      "未配置风控模型"
+                    ) : r.llm.error ? (
+                      <>调用失败（生产按无风险放行）: {r.llm.error}</>
+                    ) : r.llm.risky ? (
+                      "判定有风险"
+                    ) : (
+                      "判定无风险"
+                    )}
+                    {r.llm.elapsed_ms != null && (
+                      <span className="cfg-mod-elapsed">
+                        {" "}· 首token {r.llm.ttft_ms ?? "?"}ms / 总 {r.llm.elapsed_ms}ms
+                      </span>
+                    )}
+                    {r.llm.model && <code className="cfg-mod-model">{r.llm.model}</code>}
+                  </span>
+                  {r.llm.raw_output != null && (
+                    <span className="cfg-mod-layer">
+                      模型输出: <code className="cfg-mod-raw">{r.llm.raw_output}</code>
+                      {!r.llm.risky && r.llm.raw_output.startsWith("0") && (
+                        <span className="cfg-mod-elapsed">（首token 即结论，已提前断流）</span>
+                      )}
+                    </span>
+                  )}
+                </div>
+                {r.final.risky && r.final.replacement && (
+                  <div className="cfg-mod-replacement">
+                    替代话术：{r.final.replacement}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
       )}
     </div>
   );
@@ -1285,6 +1416,7 @@ export function ConfigView() {
         onGlobalReload={load}
       />
       <IntentPanel />
+      <ModerationPanel />
       <PromptsPanel
         editFields={agentEditable ?? undefined}
         onSaveOverride={agentEdit?.onSave}

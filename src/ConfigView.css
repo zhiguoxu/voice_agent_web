@@ -540,6 +540,70 @@
   color: var(--cyan);
 }
 
+/* ── 内容风控测试面板 ── */
+
+/* 双输入框：回复文本占大头，用户问题窄一些 */
+.cfg-mod-test input.cfg-mod-query {
+  flex: 0 1 260px;
+}
+
+/* 结果卡片改纵向布局：头行(输入+结论徽标) / 双层明细 / 替代话术 */
+.cfg-mod-result {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+}
+
+.cfg-mod-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.cfg-mod-ctx {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.cfg-mod-layers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 24px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.cfg-mod-layer code {
+  color: var(--yellow, #fbbf24);
+  word-break: break-all;
+}
+
+.cfg-mod-elapsed {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.cfg-mod-model {
+  margin-left: 8px;
+  color: var(--text-muted);
+}
+
+/* 模型原始输出(协议: 首字符 0/1) */
+.cfg-mod-raw {
+  color: var(--cyan);
+  word-break: break-all;
+}
+
+.cfg-mod-replacement {
+  padding: 6px 10px;
+  border-left: 3px solid var(--green, #4ade80);
+  background: rgba(74, 222, 128, 0.06);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 13px;
+}
+
 /* ── 提示词配置面板 ── */
 
 .cfg-prompt-card h3 .roster-refresh {

@@ -600,7 +600,23 @@ export default function App() {
                }
              ]);
           } else if (data.event === "reply_chunk") {
-             setLiveTurns(prev => prev.map(t => t.trace_id === data.trace_id
+             // 风控命中后不再追加原文 chunk（拦截时刻可能仍有在途事件迟到）
+             setLiveTurns(prev => prev.map(t => t.trace_id === data.trace_id && !t.moderated
+               ? { ...t, reply_text: (t.reply_text || "") + data.text } : t));
+          } else if (data.event === "moderation") {
+             // 输出侧风控命中：已输出的原文改为"被拦截"展示，回复换成替代话术。
+             // 模型层命中时首个事件 replacement_text 为 null（话术还在生成中，
+             // 之后 moderation_chunk 增量追加），播报完成后同名事件带完整文本定稿
+             setLiveTurns(prev => prev.map(t => t.trace_id === data.trace_id ? {
+               ...t,
+               moderated: true,
+               moderation_source: data.source ?? null,
+               moderation_original_text: data.original_text ?? "",
+               reply_text: data.replacement_text ?? "",
+             } : t));
+          } else if (data.event === "moderation_chunk") {
+             // 风控替代话术的流式增量（仅已标记 moderated 的轮次）
+             setLiveTurns(prev => prev.map(t => t.trace_id === data.trace_id && t.moderated
                ? { ...t, reply_text: (t.reply_text || "") + data.text } : t));
           } else if (data.event === "intent") {
              setLiveTurns(prev => prev.map(t => t.trace_id === data.trace_id ? {
@@ -1126,7 +1142,22 @@ export default function App() {
                     </div>
                     <div className="turn-reply">
                       <span className="turn-icon">🤖</span> 
-                      <span className="turn-text">{t.reply_text || "(无回复)"}</span>
+                      {t.moderated ? (
+                        <span className="turn-text">
+                          {t.moderation_original_text && (
+                            <span className="moderation-original"
+                                  data-tip="风控拦截的原始输出（已打断播报，不进对话历史）">
+                              {t.moderation_original_text}
+                            </span>
+                          )}
+                          <span className="moderation-replacement"
+                                data-tip="风控替代话术（实际播报并写入对话历史的文本）">
+                            {t.reply_text || "(无回复)"}
+                          </span>
+                        </span>
+                      ) : (
+                        <span className="turn-text">{t.reply_text || "(无回复)"}</span>
+                      )}
                     </div>
                     {t.error_message && (
                       <div className="turn-error"
@@ -1142,6 +1173,12 @@ export default function App() {
                       )}
                       {t.intent_name && (
                         <span className="badge intent">{t.intent_name}</span>
+                      )}
+                      {t.moderated && (
+                        <span className="badge moderation"
+                              data-tip={`输出被内容风控拦截并替换（命中层：${t.moderation_source === "rule" ? "正则规则" : "风控模型"}）`}>
+                          🛡️ 风控替换
+                        </span>
                       )}
                       {t.tool_names && (
                         <span className="badge tool">🔧 {t.tool_names}</span>
@@ -1221,7 +1258,22 @@ export default function App() {
                     </div>
                     <div className="turn-reply">
                       <span className="turn-icon">🤖</span>
-                      <span className="turn-text">{lt.reply_text || (lt.finalizing ? "" : <span className="blinking-cursor">|</span>)}</span>
+                      {lt.moderated ? (
+                        <span className="turn-text">
+                          {lt.moderation_original_text && (
+                            <span className="moderation-original"
+                                  data-tip="风控拦截的原始输出（已打断播报，不进对话历史）">
+                              {lt.moderation_original_text}
+                            </span>
+                          )}
+                          <span className="moderation-replacement"
+                                data-tip="风控替代话术（实际播报并写入对话历史的文本）">
+                            {lt.reply_text}
+                          </span>
+                        </span>
+                      ) : (
+                        <span className="turn-text">{lt.reply_text || (lt.finalizing ? "" : <span className="blinking-cursor">|</span>)}</span>
+                      )}
                     </div>
                     <div className="turn-footer">
                       {lt.intent_source && (
@@ -1231,6 +1283,12 @@ export default function App() {
                       )}
                       {lt.intent_name && (
                         <span className="badge intent">{lt.intent_name}</span>
+                      )}
+                      {lt.moderated && (
+                        <span className="badge moderation"
+                              data-tip={`输出被内容风控拦截并替换（命中层：${lt.moderation_source === "rule" ? "正则规则" : "风控模型"}）`}>
+                          🛡️ 风控替换
+                        </span>
                       )}
                       {lt.finalizing
                         ? <span className="trace live-badge">💾 已停止，保存中...</span>

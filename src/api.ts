@@ -193,6 +193,13 @@ export interface Turn {
   /** 身份融合过程记录：点说话人标签展示；无融合过程的轮次为 null */
   identity_debug: IdentityDebug | null;
   reply_text: string | null;
+  /** 输出侧风控：true=本轮回复被拦截替换（reply_text 已是替代话术，
+   *  下一轮 LLM 历史只见替代文本） */
+  moderated: boolean | null;
+  /** 风控命中来源：rule=正则规则层 / llm=风控模型层 */
+  moderation_source: string | null;
+  /** 被拦截的原始已产出文本（可能不完整），仅审计展示，不进 LLM 上下文 */
+  moderation_original_text: string | null;
   /** 本轮异常/失败信息，正常轮为 null。chat 轮：处理异常（轮次照常落库，
    *  query/部分回复尽力保存）；wake 轮：应答语没播出去（更早的存量失败行
    *  没有本字段，表现为 reply_text 为 null 的旧标记法） */
@@ -1320,6 +1327,58 @@ export async function classifyIntent(text: string): Promise<IntentClassifyResult
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
     throw new Error(data.detail || "Failed to classify intent");
+  }
+  return res.json();
+}
+
+/** 风控在线测试结果（POST /api/voice/moderation/test，与生产守卫同一套审核函数） */
+export interface ModerationTestResult {
+  /** 风控总开关当前状态（测试接口不受它限制，关着也能测） */
+  enabled: boolean;
+  rule: {
+    hit: boolean;
+    /** 命中的正则原文；未命中为 null */
+    pattern: string | null;
+    rule_count: number;
+  };
+  llm: {
+    /** 是否实际调用了风控模型（未配置 moderation.llm 时为 false） */
+    checked: boolean;
+    model: string | null;
+    /** 模型是否判有风险（调用失败按无风险，同生产 fail-open） */
+    risky: boolean;
+    replacement: string | null;
+    /** 模型原始输出（协议：首字符 0/1）。无风险时因首 token 即断流只有开头的包 */
+    raw_output: string | null;
+    /** 首 token 延迟（毫秒），即拿到风险结论的时间 */
+    ttft_ms: number | null;
+    /** 总耗时（毫秒）：无风险≈首token即返回；有风险还含收完替代话术的时间 */
+    elapsed_ms: number | null;
+    /** 调用失败原因（生产会按无风险放行）；正常为 null */
+    error: string | null;
+  };
+  final: {
+    /** 综合结论：任一层命中即有风险 */
+    risky: boolean;
+    source: string | null;
+    /** 实际会播报并写入对话历史的替代话术 */
+    replacement: string | null;
+  };
+}
+
+export async function testModeration(
+  replyText: string,
+  query: string,
+  deviceSn = "",
+): Promise<ModerationTestResult> {
+  const res = await fetch("/api/voice/moderation/test", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ reply_text: replyText, query, device_sn: deviceSn }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || "风控测试请求失败");
   }
   return res.json();
 }
