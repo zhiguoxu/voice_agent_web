@@ -31,7 +31,7 @@ export default defineConfig({
       //   /vision/*      → person_id 视觉识别服务，去掉 /vision 前缀
       //                    （REST /vision/api/* 与实时视频 WebSocket /vision/ws/vision 都走这一条）
       '/vision': {
-        target: 'http://1.15.11.133:10003',
+        target: 'http://123.206.174.158:10003',  // 本地 dev 走公网 (内网 172.17.48.17 仅同区域服务可达)
         changeOrigin: true,
         ws: true,
         rewrite: (path) => path.replace(/^\/vision/, ''),
