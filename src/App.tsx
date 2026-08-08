@@ -41,7 +41,7 @@ import "./App.css";
 // 视觉识别模块体量大（含 vision.css 与全套面板组件），按需加载单独分包，
 // 避免主包超过 500 kB
 const VisionView = lazy(() =>
-  import("./vision/VisionView").then((m) => ({ default: m.VisionView })),
+  import("./person_id/VisionView").then((m) => ({ default: m.VisionView })),
 );
 
 function formatTime(iso: string | null) {

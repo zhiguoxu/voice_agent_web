@@ -1086,10 +1086,10 @@ export async function fetchConsoleConfig(): Promise<ServiceConfig> {
   return res.json();
 }
 
-/** person_id 视觉识别服务经 /vision 前缀代理直达（同 vision 页的 REST 规则）。
+/** person_id 服务经 /person_id 前缀代理直达（同视觉页的 REST 规则）。
     滑块调参接口已改名 /api/params，/api/config 与 voice/agent 一样返回全量脱敏 dump。 */
 export async function fetchPersonConfig(): Promise<ServiceConfig> {
-  const res = await fetch("/vision/api/config");
+  const res = await fetch("/person_id/api/config");
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
     throw new Error(data.detail || "Failed to fetch person_id config");
@@ -1106,7 +1106,7 @@ export type ConfigService = "voice" | "agent" | "person";
 const CONFIG_EDIT_PREFIX: Record<ConfigService, string> = {
   voice: "/api/voice/config/editable",
   agent: "/api/agent/config/editable",
-  person: "/vision/api/config/editable",
+  person: "/person_id/api/config/editable",
 };
 
 /** 带 HTTP 状态码的错误（口令错误 401 需要单独识别以重新弹口令框） */
@@ -1184,7 +1184,7 @@ const CONFIG_DEVICE_PREFIX: Record<ConfigService, string> = {
   agent: "/api/agent/config/devices",
   // person_id 没有按设备解析配置的消费链路，后端不开放任何设备级字段；
   // 端点存在但恒为空，设备覆盖面板也不查询它
-  person: "/vision/api/config/devices",
+  person: "/person_id/api/config/devices",
 };
 
 /** 设备视角的一个可编辑配置项。值来源三层：设备覆盖 → 全局生效值 → yaml 原值 */

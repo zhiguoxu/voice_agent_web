@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""一次性脚本: 把 person_id/frontend/css/style.css 移植成 web/src/vision/vision.css。
+"""一次性脚本: 把 person_id/frontend/css/style.css 移植成 web/src/person_id/vision.css。
 
 变换规则:
 1. 所有选择器加 .vision-view 前缀 (样式只作用于视觉页签, 不污染控制台)。
@@ -16,7 +16,7 @@ import re
 from pathlib import Path
 
 SRC = Path(__file__).resolve().parents[2] / "person_id/frontend/css/style.css"
-DST = Path(__file__).resolve().parents[1] / "src/vision/vision.css"
+DST = Path(__file__).resolve().parents[1] / "src/person_id/vision.css"
 
 ID_MAP = {
     "#app-header": ".vision-header",

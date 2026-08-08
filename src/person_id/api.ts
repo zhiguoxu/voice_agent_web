@@ -1,9 +1,9 @@
 /**
- * person_id 视觉识别服务 REST 客户端。
+ * person_id 服务 REST 客户端。
  *
  * 同域反向代理约定（vite dev proxy 与生产 nginx 同规则）：
- *   /vision/*  → person_id(:10003)，代理层去掉 /vision 前缀
- * 因此 REST 基址为 /vision/api，WebSocket 为 /vision/ws/vision。
+ *   /person_id/*  → person_id(:10003)，代理层去掉 /person_id 前缀
+ * 因此 REST 基址为 /person_id/api，WebSocket 为 /person_id/ws/vision。
  */
 import type {
   BodyQualityResult,
@@ -17,13 +17,13 @@ import type {
   VisionConfig,
 } from "./types";
 
-export const VISION_BASE = "/vision";
-export const VISION_API = `${VISION_BASE}/api`;
+export const PERSON_ID_BASE = "/person_id";
+export const PERSON_ID_API = `${PERSON_ID_BASE}/api`;
 
 /** 实时视觉 WebSocket 地址（同域，https 下自动用 wss） */
 export function visionWsUrl(cameraId: string): string {
   const proto = location.protocol === "https:" ? "wss" : "ws";
-  return `${proto}://${location.host}${VISION_BASE}/ws/vision?camera_id=${encodeURIComponent(cameraId)}`;
+  return `${proto}://${location.host}${PERSON_ID_BASE}/ws/vision?camera_id=${encodeURIComponent(cameraId)}`;
 }
 
 async function toError(res: Response): Promise<Error> {
@@ -34,13 +34,13 @@ async function toError(res: Response): Promise<Error> {
 /* ── 滑块可调参数（改内存不落库, 原路径 /api/config, 2026-08 改名 /api/params）── */
 
 export async function fetchVisionConfig(): Promise<VisionConfig> {
-  const res = await fetch(`${VISION_API}/params`);
+  const res = await fetch(`${PERSON_ID_API}/params`);
   if (!res.ok) throw await toError(res);
   return res.json();
 }
 
 export async function updateVisionConfig(updates: Record<string, unknown>): Promise<void> {
-  const res = await fetch(`${VISION_API}/params`, {
+  const res = await fetch(`${PERSON_ID_API}/params`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ updates }),
@@ -51,7 +51,7 @@ export async function updateVisionConfig(updates: Record<string, unknown>): Prom
 /* ── 底库（gallery） ── */
 
 export async function fetchGalleryPersons(cameraId: string): Promise<GalleryPersonSummary[]> {
-  const res = await fetch(`${VISION_API}/${encodeURIComponent(cameraId)}/gallery/persons`);
+  const res = await fetch(`${PERSON_ID_API}/${encodeURIComponent(cameraId)}/gallery/persons`);
   if (!res.ok) throw await toError(res);
   const data = await res.json();
   return data.persons || data || [];
@@ -62,7 +62,7 @@ export async function fetchGalleryPersonDetail(
   personId: string,
 ): Promise<GalleryPersonDetail> {
   const res = await fetch(
-    `${VISION_API}/${encodeURIComponent(cameraId)}/gallery/person/${encodeURIComponent(personId)}`,
+    `${PERSON_ID_API}/${encodeURIComponent(cameraId)}/gallery/person/${encodeURIComponent(personId)}`,
   );
   if (!res.ok) throw await toError(res);
   return res.json();
@@ -74,7 +74,7 @@ export async function renameGalleryPerson(
   displayName: string,
 ): Promise<void> {
   const res = await fetch(
-    `${VISION_API}/${encodeURIComponent(cameraId)}/gallery/person/${encodeURIComponent(personId)}`,
+    `${PERSON_ID_API}/${encodeURIComponent(cameraId)}/gallery/person/${encodeURIComponent(personId)}`,
     {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -86,7 +86,7 @@ export async function renameGalleryPerson(
 
 export async function deleteGalleryPerson(cameraId: string, personId: string): Promise<void> {
   const res = await fetch(
-    `${VISION_API}/${encodeURIComponent(cameraId)}/gallery/person/${encodeURIComponent(personId)}`,
+    `${PERSON_ID_API}/${encodeURIComponent(cameraId)}/gallery/person/${encodeURIComponent(personId)}`,
     { method: "DELETE" },
   );
   if (!res.ok) throw await toError(res);
@@ -99,7 +99,7 @@ export async function startDeviceStream(
   env: string,
 ): Promise<{ flv_url?: string }> {
   const res = await fetch(
-    `${VISION_API}/${encodeURIComponent(cameraId)}/device_stream/start?env=${env}`,
+    `${PERSON_ID_API}/${encodeURIComponent(cameraId)}/device_stream/start?env=${env}`,
     { method: "POST" },
   );
   if (!res.ok) throw await toError(res);
@@ -108,7 +108,7 @@ export async function startDeviceStream(
 
 export async function stopDeviceStream(cameraId: string, env: string): Promise<void> {
   const res = await fetch(
-    `${VISION_API}/${encodeURIComponent(cameraId)}/device_stream/stop?env=${env}`,
+    `${PERSON_ID_API}/${encodeURIComponent(cameraId)}/device_stream/stop?env=${env}`,
     { method: "POST" },
   );
   if (!res.ok) throw await toError(res);
@@ -119,7 +119,7 @@ export async function fetchRestreamLog(
   limit = 100,
 ): Promise<{ attempts: RestreamAttempt[] }> {
   const res = await fetch(
-    `${VISION_API}/${encodeURIComponent(cameraId)}/device_stream/restream_log?limit=${limit}`,
+    `${PERSON_ID_API}/${encodeURIComponent(cameraId)}/device_stream/restream_log?limit=${limit}`,
   );
   if (!res.ok) throw await toError(res);
   const data = await res.json();
@@ -133,7 +133,7 @@ export async function startConsume(
   url: string,
   env: string,
 ): Promise<void> {
-  const res = await fetch(`${VISION_API}/${encodeURIComponent(cameraId)}/consume/start`, {
+  const res = await fetch(`${PERSON_ID_API}/${encodeURIComponent(cameraId)}/consume/start`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ url, env, auto_restream: true }),
@@ -142,14 +142,14 @@ export async function startConsume(
 }
 
 export async function stopConsume(cameraId: string): Promise<void> {
-  const res = await fetch(`${VISION_API}/${encodeURIComponent(cameraId)}/consume/stop`, {
+  const res = await fetch(`${PERSON_ID_API}/${encodeURIComponent(cameraId)}/consume/stop`, {
     method: "POST",
   });
   if (!res.ok) throw await toError(res);
 }
 
 export async function fetchConsumeStatus(cameraId: string): Promise<ConsumeStatus> {
-  const res = await fetch(`${VISION_API}/${encodeURIComponent(cameraId)}/consume/status`);
+  const res = await fetch(`${PERSON_ID_API}/${encodeURIComponent(cameraId)}/consume/status`);
   if (!res.ok) throw await toError(res);
   return res.json();
 }
@@ -161,7 +161,7 @@ export async function fetchQualityCache(
   trackId: number,
 ): Promise<QualityCache> {
   const res = await fetch(
-    `${VISION_API}/${encodeURIComponent(cameraId)}/track/${trackId}/quality_cache`,
+    `${PERSON_ID_API}/${encodeURIComponent(cameraId)}/track/${trackId}/quality_cache`,
   );
   if (!res.ok) throw await toError(res);
   return res.json();
@@ -169,7 +169,7 @@ export async function fetchQualityCache(
 
 export async function clearQualityCache(cameraId: string, trackId: number): Promise<void> {
   const res = await fetch(
-    `${VISION_API}/${encodeURIComponent(cameraId)}/track/${trackId}/quality_cache`,
+    `${PERSON_ID_API}/${encodeURIComponent(cameraId)}/track/${trackId}/quality_cache`,
     { method: "DELETE" },
   );
   if (!res.ok) throw await toError(res);
@@ -180,7 +180,7 @@ export async function clearQualityCache(cameraId: string, trackId: number): Prom
 export async function testBodyQuality(file: File): Promise<BodyQualityResult> {
   const formData = new FormData();
   formData.append("file", file);
-  const res = await fetch(`${VISION_API}/test_body_quality`, { method: "POST", body: formData });
+  const res = await fetch(`${PERSON_ID_API}/test_body_quality`, { method: "POST", body: formData });
   if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
   return res.json();
 }
@@ -194,7 +194,7 @@ export async function testFaceSimilarity(
   formData.append("file1", file1);
   formData.append("file2", file2);
   if (undistort) formData.append("undistort", "true");
-  const res = await fetch(`${VISION_API}/test_face_similarity`, {
+  const res = await fetch(`${PERSON_ID_API}/test_face_similarity`, {
     method: "POST",
     body: formData,
   });
@@ -211,7 +211,7 @@ export async function testReidCompare(
   formData.append("file1", file1);
   formData.append("file2", file2);
   if (undistort) formData.append("undistort", "true");
-  const res = await fetch(`${VISION_API}/test_reid_compare`, { method: "POST", body: formData });
+  const res = await fetch(`${PERSON_ID_API}/test_reid_compare`, { method: "POST", body: formData });
   if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
   return res.json();
 }

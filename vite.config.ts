@@ -28,13 +28,13 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api\/voice/, '/api'),
       },
-      //   /vision/*      → person_id 视觉识别服务，去掉 /vision 前缀
-      //                    （REST /vision/api/* 与实时视频 WebSocket /vision/ws/vision 都走这一条）
-      '/vision': {
+      //   /person_id/*  → person_id 服务，去掉 /person_id 前缀
+      //                    （REST /person_id/api/* 与实时视频 WebSocket /person_id/ws/vision 都走这一条）
+      '/person_id': {
         target: 'http://123.206.174.158:10003',  // 本地 dev 走公网 (内网 172.17.48.17 仅同区域服务可达)
         changeOrigin: true,
         ws: true,
-        rewrite: (path) => path.replace(/^\/vision/, ''),
+        rewrite: (path) => path.replace(/^\/person_id/, ''),
       }
     }
   }
