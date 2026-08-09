@@ -24,6 +24,13 @@ function compareUid(a?: string, b?: string): number {
   return Number(ams) - Number(bms) || Number(aseq) - Number(bseq);
 }
 
+/** 服务进程启动日志（log_startup_banner 打出）：UI 在该行上方渲染醒目分隔线。
+ *  按消息特征识别，与后端 logger.log_startup_banner 的措辞约定一致；
+ *  同时兼容旧日志里自带 "━━━ 🚀 ... 进程启动 ━━━" 分隔字符的横幅。 */
+function isStartupLog(l: LogEntry): boolean {
+  return l.msg.includes("🚀") && l.msg.includes("进程启动");
+}
+
 /** 对话分析页跳转过来时预填的精确过滤条件 */
 export interface LogJumpFilter {
   deviceSn?: string;
@@ -44,6 +51,9 @@ export function LogMonitor({
   const [search, setSearch] = useState("");
   const [wrap, setWrap] = useState(() => localStorage.getItem("logWrap") === "true");
   const [showSn, setShowSn] = useState(() => localStorage.getItem("logShowSn") !== "false");
+  const [showInstance, setShowInstance] = useState(
+    () => localStorage.getItem("logShowInstance") !== "false"
+  );
   const [showDate, setShowDate] = useState(() => localStorage.getItem("logShowDate") !== "false");
   const [locFixed, setLocFixed] = useState(() => localStorage.getItem("logLocFixed") === "true");
   const [locLen, setLocLen] = useState(() => {
@@ -362,6 +372,18 @@ export function LogMonitor({
         <label className="log-checkbox">
           <input
             type="checkbox"
+            checked={showInstance}
+            onChange={(e) => {
+              setShowInstance(e.target.checked);
+              localStorage.setItem("logShowInstance", String(e.target.checked));
+            }}
+          />
+          显示实例
+        </label>
+
+        <label className="log-checkbox">
+          <input
+            type="checkbox"
             checked={showDate}
             onChange={(e) => {
               setShowDate(e.target.checked);
@@ -530,7 +552,7 @@ export function LogMonitor({
               key={l.uid ?? `${l.time}-${i}`}
               className={`log-row level-${l.level}${
                 i > 0 && filtered[i - 1].trace_id !== l.trace_id ? " trace-break" : ""
-              }`}
+              }${isStartupLog(l) ? " startup-break" : ""}`}
             >
               {/* time 为定宽 "YYYY-MM-DD HH:mm:ss.SSS"；关闭「显示日期」时只取时间部分 */}
               <span className="log-time" data-tip={l.time}>
@@ -539,7 +561,7 @@ export function LogMonitor({
               {l.source && (
                 <span className={`log-source src-${l.source}`}>{l.source}</span>
               )}
-              {l.instance && (
+              {showInstance && l.instance && (
                 <span
                   className="log-instance clickable"
                   data-tip={`实例 ${l.instance}，点击按此实例精确过滤`}

@@ -224,6 +224,19 @@
   margin-top: 1.6em;
 }
 
+/* 服务进程启动日志：行上方画醒目分隔线，标记一次启动的边界
+   （日志文本本身不含分隔字符，由 UI 按消息特征渲染，见 isStartupLog） */
+.log-row.startup-break {
+  margin-top: 1.8em;
+  border-top: 2px solid var(--accent);
+  padding-top: 5px;
+}
+
+.log-row.startup-break .log-msg {
+  font-weight: 700;
+  color: var(--accent);
+}
+
 .log-row:hover {
   background: var(--bg-card);
 }
