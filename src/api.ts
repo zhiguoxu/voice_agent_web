@@ -17,7 +17,7 @@ export interface LogEntry {
   /** epoch 毫秒时间戳（time 字符串仅供展示） */
   ts?: number;
   source?: string;
-git  /** 来源实例标识 "hostname:port"（同 source 多实例部署时区分谁发的；旧日志无） */
+  /** 来源实例标识 "hostname:port"（同 source 多实例部署时区分谁发的；旧日志无） */
   instance?: string;
   time: string;
   level: string;
