@@ -407,25 +407,30 @@ export default function App() {
     return () => { stale = true; };
   }, [selectedSession, turns.length]);
 
-  /* ── 当前会话设备的拉流状态轮询 ──
-     每 10 秒刷新一次会话头部的拉流指示灯（弹窗打开时其内部另有更快的轮询，
-     启停结果经 onStatusChange 即时回填这里）。查询失败保留上次快照，
-     只影响指示灯不打扰主流程。 */
+  /* ── 当前会话设备的拉流状态持续监控 ──
+     选中会话后每 1s 轮询头部拉流指示灯；弹窗打开时内部同频轮询，
+     启停结果经 onStatusChange 即时回填这里。进行中请求不叠加；失败保留上次
+     快照，只影响指示灯不打扰主流程。 */
   const streamDeviceSn = selectedSession?.device_sn ?? null;
   useEffect(() => {
     setStreamStatus(null);
     if (!streamDeviceSn) return;
     let stale = false;
+    let inFlight = false;
     const load = async () => {
+      if (inFlight || stale) return;
+      inFlight = true;
       try {
         const d = await fetchStreamStatus(streamDeviceSn);
         if (!stale) setStreamStatus(d);
       } catch {
         /* 下轮再试 */
+      } finally {
+        inFlight = false;
       }
     };
     load();
-    const timer = setInterval(load, 10000);
+    const timer = setInterval(load, 1000);
     return () => { stale = true; clearInterval(timer); };
   }, [streamDeviceSn]);
 

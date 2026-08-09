@@ -548,15 +548,26 @@
 
 /* ── 配置在线编辑（DB 覆盖层）── */
 
-/* 保存/恢复后的提示条（非 hot 项提示需要重启） */
+/* 提示条挂在零高度 sticky 锚点上：不占文档流（避免插入瞬间把内容顶下去），
+   又始终贴在配置页可视区顶部 */
+.cfg-notice-anchor {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  height: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
 .cfg-notice {
   padding: 10px 16px;
-  margin-bottom: 16px;
+  margin: 8px 0 0;
   font-size: 13px;
   color: var(--text-primary);
   background: var(--accent-soft);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.28);
 }
 
 /* 编辑入口默认弱化，悬停该行时提亮 */

@@ -62,14 +62,20 @@ const SECTION_LABELS: Record<string, string> = {
   tts: "TTS 语音合成",
   wakeup_answers: "唤醒应答语",
   llm: "LLM 对话模型",
+  emote_llm: "动作/表情决策 LLM",
   prompt: "提示词模板",
   memory: "记忆系统",
   bert_intent: "BERT 意图识别",
+  llm_intent: "LLM 意图分类",
   web_search: "联网搜索",
   person_id: "身份识别",
   mqtt: "MQTT 消息通道",
   redis: "Redis",
   cos: "对象存储 COS",
+  agent_server: "上游 agent_server",
+  moderation: "输出侧内容风控",
+  auto_stream: "摄像头自动拉流",
+  voice_embed: "声纹提取",
   // person_id (视觉识别) 服务的顶层配置段
   hardware: "硬件与计算设备",
   detection: "检测 (YOLO)",
@@ -80,12 +86,28 @@ const SECTION_LABELS: Record<string, string> = {
   tracking: "追踪引擎",
   multiframe: "多帧处理",
   vlm: "VLM 仲裁",
-  voice_embed: "声纹提取",
   server: "服务参数",
   // embedding-service / key-extractor (记忆 GPU 服务) 的顶层配置段
   serve: "服务参数（端口 / GPU / 模型）",
   deploy: "部署目标（rsync 推送机器）",
 };
+
+/** 把扁平 path 列表还原成与 yaml/全局配置卡同构的嵌套对象，供分级表格复用 */
+function buildNestedConfig(fields: { path: string; value: unknown }[]): Record<string, unknown> {
+  const root: Record<string, unknown> = {};
+  for (const f of fields) {
+    const parts = f.path.split(".");
+    let cur: Record<string, unknown> = root;
+    for (let i = 0; i < parts.length - 1; i++) {
+      const p = parts[i];
+      const next = cur[p];
+      if (!isPlainObject(next)) cur[p] = {};
+      cur = cur[p] as Record<string, unknown>;
+    }
+    cur[parts[parts.length - 1]] = f.value;
+  }
+  return root;
+}
 
 const LONG_TEXT_THRESHOLD = 120;
 
@@ -120,6 +142,8 @@ interface EditCtx {
   fields: Map<string, EditableField>;
   onSave: SaveOverrideFn;
   onRevert: RevertOverrideFn;
+  /** 设备级面板传入：行徽标切到「设备覆盖 / 跟随全局修改」三层值来源 */
+  deviceFields?: Map<string, DeviceEditableField>;
 }
 
 /** 编辑框里的文本 ←→ 配置值 的互转，按原值(baseline)的类型决定形态 */
@@ -247,13 +271,17 @@ function FieldEditor({
   );
 }
 
-/** 可编辑行的右侧附加区：编辑按钮 + 「已修改」徽标 + 恢复默认 */
+/** 可编辑行的右侧附加区：编辑按钮 + 来源徽标 + 恢复。
+   全局视图：已修改 / 重启生效 / N 台设备覆盖；
+   设备视图（有 deviceField）：设备覆盖 / 跟随全局修改 */
 function EditControls({
   field,
+  deviceField,
   onEdit,
   onRevert,
 }: {
   field: EditableField;
+  deviceField?: DeviceEditableField;
   onEdit: () => void;
   onRevert: () => Promise<void>;
 }) {
@@ -272,34 +300,68 @@ function EditControls({
     setReverting(false);
   };
 
+  const globalModified = deviceField
+    && !deviceField.sensitive
+    && !sameValue(deviceField.global_value, deviceField.baseline);
+
   return (
     <span className="cfg-edit-controls">
-      {field.overridden && (
-        <span className="cfg-badge modified" data-tip={`已被在线编辑覆盖，yaml 原值: ${previewValue(field.baseline)}`}>
-          已修改
-        </span>
-      )}
-      {field.overridden && !field.hot && (
-        <span className="cfg-badge restart" data-tip="该覆盖值需重启对应服务才生效">重启生效</span>
-      )}
-      {field.device_override_count > 0 && (
-        <span
-          className="cfg-badge device"
-          data-tip={`另有 ${field.device_override_count} 台设备对此项做了定向覆盖（那些设备不跟随此处的全局值），详见「设备级配置覆盖」面板`}
-        >
-          {field.device_override_count} 台设备覆盖
-        </span>
+      {deviceField ? (
+        <>
+          {deviceField.overridden ? (
+            <span
+              className="cfg-badge device-override"
+              data-tip={`此值仅对本设备生效。全局生效值: ${deviceField.sensitive ? "***" : previewValue(deviceField.global_value)}`}
+            >
+              设备覆盖
+            </span>
+          ) : globalModified ? (
+            <span
+              className="cfg-badge modified"
+              data-tip={`本设备无定向覆盖，跟随全局在线修改的值。yaml 原值: ${previewValue(deviceField.baseline)}`}
+            >
+              跟随全局修改
+            </span>
+          ) : null}
+        </>
+      ) : (
+        <>
+          {field.overridden && (
+            <span className="cfg-badge modified" data-tip={`已被在线编辑覆盖，yaml 原值: ${previewValue(field.baseline)}`}>
+              已修改
+            </span>
+          )}
+          {field.overridden && !field.hot && (
+            <span className="cfg-badge restart" data-tip="该覆盖值需重启对应服务才生效">重启生效</span>
+          )}
+          {field.device_override_count > 0 && (
+            <span
+              className="cfg-badge device"
+              data-tip={`另有 ${field.device_override_count} 台设备对此项做了定向覆盖（那些设备不跟随此处的全局值），详见「设备级配置覆盖」面板`}
+            >
+              {field.device_override_count} 台设备覆盖
+            </span>
+          )}
+        </>
       )}
       <button
         className="cfg-edit-btn"
         data-tip={
-          (field.description || "在线编辑此配置项（存数据库，可随时恢复默认）") +
-          (field.hot ? "" : "；保存后需重启对应服务生效")
+          deviceField
+            ? ((deviceField.description || "为该设备设置定向覆盖值") +
+              "；只对该设备生效，改完该设备下一轮请求即用新值")
+            : ((field.description || "在线编辑此配置项（存数据库，可随时恢复默认）") +
+              (field.hot ? "" : "；保存后需重启对应服务生效"))
         }
         onClick={onEdit}
       >✏️</button>
-      {field.overridden && (
-        <button className="cfg-edit-btn revert" data-tip="删除数据库里的覆盖值，恢复 yaml 原值" onClick={revert} disabled={reverting}>
+      {(deviceField ? deviceField.overridden : field.overridden) && (
+        <button
+          className="cfg-edit-btn revert"
+          data-tip={deviceField ? "删除该设备的定向覆盖，回落到全局生效值" : "删除数据库里的覆盖值，恢复 yaml 原值"}
+          onClick={revert}
+          disabled={reverting}
+        >
           {reverting ? <span className="spinner inline" /> : "↺"}
         </button>
       )}
@@ -321,6 +383,7 @@ function ConfigRow({
   edit?: EditCtx;
 }) {
   const field = edit?.fields.get(path);
+  const deviceField = edit?.deviceFields?.get(path);
   const [editing, setEditing] = useState(false);
 
   return (
@@ -341,6 +404,7 @@ function ConfigRow({
           {field && edit && (
             <EditControls
               field={field}
+              deviceField={deviceField}
               onEdit={() => setEditing(true)}
               onRevert={() => edit.onRevert(path).then(() => undefined)}
             />
@@ -410,6 +474,52 @@ function ConfigValue({ value, path = "", edit }: { value: unknown; path?: string
   return <span className="cfg-string">{String(value)}</span>;
 }
 
+/** 配置分级表格：顶层标量归入「基础参数」，每个顶层对象/数组单独成段（全局卡与设备级面板共用） */
+function ConfigSections({
+  config,
+  hideSections,
+  edit,
+}: {
+  config: Record<string, unknown>;
+  hideSections?: string[];
+  edit?: EditCtx;
+}) {
+  const scalarEntries = Object.entries(config).filter(([, v]) => !isPlainObject(v) && !Array.isArray(v));
+  const sectionEntries = Object.entries(config).filter(
+    ([k, v]) => (isPlainObject(v) || Array.isArray(v)) && !hideSections?.includes(k));
+
+  return (
+    <>
+      {scalarEntries.length > 0 && (
+        <div className="cfg-section">
+          <h4 className="cfg-section-title">基础参数</h4>
+          <div className="cfg-rows">
+            {scalarEntries.map(([k, v]) => (
+              <ConfigRow name={k} value={v} path={k} edit={edit} key={k} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {sectionEntries.map(([k, v]) => (
+        <div className="cfg-section" key={k}>
+          <h4 className="cfg-section-title">
+            {SECTION_LABELS[k] || k}
+            {SECTION_LABELS[k] && <code className="cfg-section-key">{k}</code>}
+          </h4>
+          <div className="cfg-rows">
+            {Array.isArray(v) ? (
+              <ConfigRow name={k} value={v} path={k} edit={edit} />
+            ) : (
+              <ConfigValue value={v} path={k} edit={edit} />
+            )}
+          </div>
+        </div>
+      ))}
+    </>
+  );
+}
+
 /** 一个服务的配置卡片：顶层标量归入「基础参数」，每个顶层对象/数组单独成段 */
 function ServiceCard({
   icon,
@@ -432,14 +542,6 @@ function ServiceCard({
   /** 在线编辑上下文；后端白名单接口不可用时为 undefined，卡片退化为纯只读 */
   edit?: EditCtx;
 }) {
-  const scalarEntries = data
-    ? Object.entries(data.config).filter(([, v]) => !isPlainObject(v) && !Array.isArray(v))
-    : [];
-  const sectionEntries = data
-    ? Object.entries(data.config).filter(
-        ([k, v]) => (isPlainObject(v) || Array.isArray(v)) && !hideSections?.includes(k))
-    : [];
-
   return (
     <div className="card cfg-card">
       {/* 版本/环境/启动时间/依赖包版本统一在顶部状态条展示，此处不重复 */}
@@ -455,32 +557,7 @@ function ServiceCard({
 
       {data && (
         <>
-          {scalarEntries.length > 0 && (
-            <div className="cfg-section">
-              <h4 className="cfg-section-title">基础参数</h4>
-              <div className="cfg-rows">
-                {scalarEntries.map(([k, v]) => (
-                  <ConfigRow name={k} value={v} path={k} edit={edit} key={k} />
-                ))}
-              </div>
-            </div>
-          )}
-
-          {sectionEntries.map(([k, v]) => (
-            <div className="cfg-section" key={k}>
-              <h4 className="cfg-section-title">
-                {SECTION_LABELS[k] || k}
-                {SECTION_LABELS[k] && <code className="cfg-section-key">{k}</code>}
-              </h4>
-              <div className="cfg-rows">
-                {Array.isArray(v) ? (
-                  <ConfigRow name={k} value={v} path={k} edit={edit} />
-                ) : (
-                  <ConfigValue value={v} path={k} edit={edit} />
-                )}
-              </div>
-            </div>
-          ))}
+          <ConfigSections config={data.config} hideSections={hideSections} edit={edit} />
 
           <details className="cfg-raw">
             <summary>原始 JSON（已脱敏）</summary>
@@ -492,9 +569,14 @@ function ServiceCard({
   );
 }
 
+function sameValue(a: unknown, b: unknown): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
 /* ── 设备级配置覆盖面板 ──
    只对选中 device_sn 生效的定向配置修改（优先级最高：设备覆盖 > 全局覆盖 > yaml），
-   可编辑范围 = hot（热生效）字段。顶部总览列出所有有覆盖的设备（防遗忘入口）。 */
+   可编辑范围 = hot（热生效）字段。顶部总览列出所有有覆盖的设备（防遗忘入口）。
+   字段展示复用全局配置卡的 ConfigSections 分级表格（扁平 path 还原成嵌套树）。 */
 
 type WithPasswordFn = <T>(call: (pw: string) => Promise<T>) => Promise<T>;
 
@@ -502,96 +584,6 @@ const SERVICE_META: { key: ConfigService; icon: string; title: string }[] = [
   { key: "voice", icon: "🎙️", title: "voice_server" },
   { key: "agent", icon: "🤖", title: "agent_server" },
 ];
-
-function sameValue(a: unknown, b: unknown): boolean {
-  return JSON.stringify(a) === JSON.stringify(b);
-}
-
-/** 设备视图的一行可编辑配置：三层值来源徽标（设备覆盖 / 跟随全局修改 / yaml 原值） */
-function DeviceFieldRow({
-  field,
-  onSave,
-  onRevert,
-}: {
-  field: DeviceEditableField;
-  onSave: (value: unknown) => Promise<void>;
-  onRevert: () => Promise<void>;
-}) {
-  const [editing, setEditing] = useState(false);
-  const [reverting, setReverting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  /* 复用全局视图的行内编辑器：设备可编辑字段必为 hot */
-  const editorField: EditableField = { ...field, hot: true, device_override_count: 0 };
-  const globalModified = !field.sensitive && !sameValue(field.global_value, field.baseline);
-
-  const revert = async () => {
-    if (reverting) return;
-    setReverting(true);
-    setError(null);
-    try {
-      await onRevert();
-    } catch (e: any) {
-      setError(e.message || String(e));
-    }
-    setReverting(false);
-  };
-
-  return (
-    <div className="cfg-row editable">
-      <span className="cfg-key">{field.path}</span>
-      {editing ? (
-        <FieldEditor
-          field={editorField}
-          onSave={async (v) => {
-            await onSave(v);
-            setEditing(false);
-          }}
-          onCancel={() => setEditing(false)}
-        />
-      ) : (
-        <>
-          <ConfigValue value={field.value} />
-          <span className="cfg-edit-controls">
-            {field.overridden ? (
-              <span
-                className="cfg-badge device-override"
-                data-tip={`此值仅对本设备生效。全局生效值: ${field.sensitive ? "***" : previewValue(field.global_value)}`}
-              >
-                设备覆盖
-              </span>
-            ) : globalModified ? (
-              <span
-                className="cfg-badge modified"
-                data-tip={`本设备无定向覆盖，跟随全局在线修改的值。yaml 原值: ${previewValue(field.baseline)}`}
-              >
-                跟随全局修改
-              </span>
-            ) : null}
-            <button
-              className="cfg-edit-btn"
-              data-tip={
-                (field.description || "为该设备设置定向覆盖值") +
-                "；只对该设备生效，改完该设备下一轮请求即用新值"
-              }
-              onClick={() => setEditing(true)}
-            >✏️</button>
-            {field.overridden && (
-              <button
-                className="cfg-edit-btn revert"
-                data-tip="删除该设备的定向覆盖，回落到全局生效值"
-                onClick={revert}
-                disabled={reverting}
-              >
-                {reverting ? <span className="spinner inline" /> : "↺"}
-              </button>
-            )}
-            {error && <span className="cfg-error inline">❌ {error}</span>}
-          </span>
-        </>
-      )}
-    </div>
-  );
-}
 
 function DeviceOverridePanel({
   withPassword,
@@ -653,12 +645,13 @@ function DeviceOverridePanel({
     setCandidates([...seen.entries()].map(([sn, name]) => ({ sn, name })));
   }, []);
 
-  const loadDevice = useCallback(async (sn: string) => {
+  const loadDevice = useCallback(async (sn: string, opts?: { silent?: boolean }) => {
     if (!sn) {
       setFields(null);
       return;
     }
-    setLoading(true);
+    /* 保存/恢复后的静默刷新不要闪 loading：否则整表卸掉再挂上，视口会跟着跳一段 */
+    if (!opts?.silent) setLoading(true);
     setError(null);
     const [v, a] = await Promise.allSettled([
       fetchDeviceEditableConfig("voice", sn),
@@ -673,7 +666,7 @@ function DeviceOverridePanel({
     } else {
       setFields(next);
     }
-    setLoading(false);
+    if (!opts?.silent) setLoading(false);
   }, []);
 
   useEffect(() => {
@@ -728,7 +721,7 @@ function DeviceOverridePanel({
   }, [comboOpen]);
 
   const afterMutation = useCallback(async () => {
-    await Promise.all([loadDevice(selected), loadOverview(), onGlobalReload()]);
+    await Promise.all([loadDevice(selected, { silent: true }), loadOverview(), onGlobalReload()]);
   }, [loadDevice, loadOverview, onGlobalReload, selected]);
 
   const deviceLabel = (sn: string, name: string) => (name ? `${name} (${sn})` : sn);
@@ -848,6 +841,30 @@ function DeviceOverridePanel({
                 </div>
               );
             }
+            /* 扁平可编辑项还原成嵌套树，复用全局配置卡的分级表格 */
+            const nested = buildNestedConfig(items);
+            const deviceFields = new Map(items.map((f) => [f.path, f]));
+            const editFields = new Map<string, EditableField>(
+              items.map((f) => [f.path, { ...f, hot: true, device_override_count: 0 }]),
+            );
+            const edit: EditCtx = {
+              fields: editFields,
+              deviceFields,
+              onSave: async (path, value) => {
+                const result = await withPassword((pw) =>
+                  putDeviceConfigOverride(key, selected, path, value, pw));
+                setNotice(`✅ ${path} 已保存为设备 ${selected} 的定向覆盖，仅该设备生效`);
+                await afterMutation();
+                return result;
+              },
+              onRevert: async (path) => {
+                const result = await withPassword((pw) =>
+                  deleteDeviceConfigOverride(key, selected, path, pw));
+                setNotice(`↩️ ${path} 已删除设备 ${selected} 的定向覆盖，回落到全局生效值`);
+                await afterMutation();
+                return result;
+              },
+            };
             return (
               <div className="cfg-section" key={key}>
                 <h4 className="cfg-section-title">
@@ -856,26 +873,7 @@ function DeviceOverridePanel({
                     {items.filter((f) => f.overridden).length} / {items.length} 项被此设备覆盖
                   </span>
                 </h4>
-                <div className="cfg-rows">
-                  {items.map((f) => (
-                    <DeviceFieldRow
-                      field={f}
-                      key={f.path}
-                      onSave={async (v) => {
-                        await withPassword((pw) =>
-                          putDeviceConfigOverride(key, selected, f.path, v, pw));
-                        setNotice(`✅ ${f.path} 已保存为设备 ${selected} 的定向覆盖，仅该设备生效`);
-                        await afterMutation();
-                      }}
-                      onRevert={async () => {
-                        await withPassword((pw) =>
-                          deleteDeviceConfigOverride(key, selected, f.path, pw));
-                        setNotice(`↩️ ${f.path} 已删除设备 ${selected} 的定向覆盖，回落到全局生效值`);
-                        await afterMutation();
-                      }}
-                    />
-                  ))}
-                </div>
+                <ConfigSections config={nested} edit={edit} />
               </div>
             );
           })}
@@ -1172,7 +1170,9 @@ export function ConfigView() {
         embError={embError}
         keyExtError={keyExtError}
       />
-      {notice && <div className="cfg-notice">{notice}</div>}
+      <div className="cfg-notice-anchor">
+        {notice && <div className="cfg-notice">{notice}</div>}
+      </div>
       {pwPrompt && (
         <PasswordDialog
           hint={pwPrompt.hint}

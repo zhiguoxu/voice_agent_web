@@ -31,7 +31,7 @@ const STATE_TEXT: Record<StreamState, string> = {
  * （camera_id = device_sn），并可开启/关闭拉流。
  *
  * 开启 = 经 ISS 让设备推流 + person_id 服务端消费该流；关闭 = 先停消费再停
- * 设备推流。打开期间每 3 秒轮询一次状态；启停结果立即回填。
+ * 设备推流。打开期间每 1 秒轮询一次状态；启停结果立即回填。
  */
 export function StreamControlDialog({ deviceSn, onClose, onStatusChange }: {
   deviceSn: string;
@@ -62,7 +62,7 @@ export function StreamControlDialog({ deviceSn, onClose, onStatusChange }: {
 
   useEffect(() => {
     refresh();
-    const timer = setInterval(refresh, 3000);
+    const timer = setInterval(refresh, 1000);
     return () => clearInterval(timer);
   }, [refresh]);
 
