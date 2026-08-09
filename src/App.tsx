@@ -34,6 +34,7 @@ import { FaceRegisterDialog } from "./FaceRegisterDialog";
 import { StreamControlDialog, deriveStreamState } from "./StreamControlDialog";
 import { MemoryRecallPanel } from "./MemoryRecallPanel";
 import { ConfigView } from "./ConfigView";
+import { ApiTestView } from "./ApiTestView";
 import { SweepMonitor } from "./SweepMonitor";
 import { TrafficMonitor } from "./TrafficMonitor";
 import "./App.css";
@@ -153,7 +154,7 @@ function SpeakerBadge({ speakerId, speakerName, kind, suspected, debug, names, o
 }
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<"conversations" | "deviceControl" | "logs" | "sweep" | "traffic" | "vision" | "config">("conversations");
+  const [activeTab, setActiveTab] = useState<"conversations" | "deviceControl" | "logs" | "sweep" | "traffic" | "vision" | "apiTest" | "config">("conversations");
   /* 对话分析页跳转到日志页时预填的精确过滤条件（一次性，LogMonitor 挂载后消费） */
   const [logJumpFilter, setLogJumpFilter] = useState<LogJumpFilter | null>(null);
   const openLogsWith = (filter: LogJumpFilter) => {
@@ -792,6 +793,13 @@ export default function App() {
             data-tip="person_id 视觉识别仪表盘（实时视频、身份识别、底库管理）"
           >
             视觉识别
+          </button>
+          <button
+            className={`main-tab ${activeTab === 'apiTest' ? 'active' : ''}`}
+            onClick={() => setActiveTab('apiTest')}
+            data-tip="BERT 意图识别、内容风控等与生产同款链路的在线 API 探测"
+          >
+            API 测试
           </button>
           <button
             className={`main-tab ${activeTab === 'config' ? 'active' : ''}`}
@@ -1637,6 +1645,8 @@ export default function App() {
         <Suspense fallback={<div style={{ padding: 24, color: "#888" }}>视觉识别模块加载中…</div>}>
           <VisionView />
         </Suspense>
+      ) : activeTab === 'apiTest' ? (
+        <ApiTestView />
       ) : activeTab === 'config' ? (
         <ConfigView />
       ) : (
