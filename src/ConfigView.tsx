@@ -32,18 +32,12 @@ function formatStartedAt(s: string | null | undefined): string {
   return s.replace("T", " ");
 }
 
-/** 依赖包版本徽标：common / session_store / family_memory 等 */
-function PackageBadges({ packages }: { packages?: Record<string, string> | null }) {
-  if (!packages || Object.keys(packages).length === 0) return null;
-  return (
-    <>
-      {Object.entries(packages).map(([name, ver]) => (
-        <span className="cfg-badge pkg" data-tip={`依赖包 ${name}`} key={name}>
-          {name} v{ver}
-        </span>
-      ))}
-    </>
-  );
+/** 状态条地址：统一展示 host:port */
+function formatServiceAddr(data: ServiceConfig): string | null {
+  if (data.host != null && data.host !== "" && data.port != null) {
+    return `${data.host}:${data.port}`;
+  }
+  return null;
 }
 
 /* 顶层配置段的中文标题：帮助非开发同学快速定位；没收录的段直接显示原始字段名 */
@@ -972,30 +966,35 @@ function ServiceStartStrip({
 
   return (
     <div className="cfg-start-strip">
-      {items.map(({ key, icon, title, data, error }) => (
-        <div className={`cfg-start-item ${error ? "down" : data ? "ok" : ""}`} key={key}>
-          <span className="cfg-start-name">{icon} {title}</span>
-          {error ? (
-            <span className="cfg-start-status" data-tip={error}>● 不可达</span>
-          ) : data ? (
-            <>
-              <span className="cfg-start-status ok">● 在线</span>
-              <span className="cfg-start-time" data-tip="本进程最近一次启动时间（北京时间）">
-                启动于 {formatStartedAt(data.started_at)}
-              </span>
-              <span className="cfg-badges cfg-start-badges">
-                <span className="cfg-badge">v{data.version}</span>
-                <span className="cfg-badge env">env: {data.env}</span>
-              </span>
-              <span className="cfg-start-pkgs">
-                <PackageBadges packages={data.packages} />
-              </span>
-            </>
-          ) : (
-            <span className="cfg-start-status">加载中…</span>
-          )}
-        </div>
-      ))}
+      {items.map(({ key, icon, title, data, error }) => {
+        const addr = data ? formatServiceAddr(data) : null;
+        return (
+          <div className={`cfg-start-item ${error ? "down" : data ? "ok" : ""}`} key={key}>
+            <span className="cfg-start-name">{icon} {title}</span>
+            {error ? (
+              <span className="cfg-start-status" data-tip={error}>● 不可达</span>
+            ) : data ? (
+              <>
+                <span className="cfg-start-status ok">● 在线</span>
+                {addr && (
+                  <span className="cfg-start-addr" data-tip="本进程服务地址（ip:port）">
+                    {addr}
+                  </span>
+                )}
+                <span className="cfg-start-time" data-tip="本进程最近一次启动时间（北京时间）">
+                  启动于 {formatStartedAt(data.started_at)}
+                </span>
+                <span className="cfg-badges cfg-start-badges">
+                  <span className="cfg-badge">v{data.version}</span>
+                  <span className="cfg-badge env">env: {data.env}</span>
+                </span>
+              </>
+            ) : (
+              <span className="cfg-start-status">加载中…</span>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }

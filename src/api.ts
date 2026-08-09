@@ -1059,6 +1059,10 @@ export interface ServiceConfig {
   env: string;
   /** 本进程最近一次启动时刻（naive 北京时间，如 "2026-08-04 20:09:15"） */
   started_at?: string | null;
+  /** 本进程可达 IP（bind 为 0.0.0.0 时为探测到的出口 IP；GPU 服务为 deploy host） */
+  host?: string | null;
+  /** 本进程监听端口 */
+  port?: number | null;
   /** 本进程依赖的内部 packages 版本（如 common / session_store / family_memory） */
   packages?: Record<string, string>;
   config: Record<string, unknown>;

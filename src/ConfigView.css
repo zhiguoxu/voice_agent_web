@@ -199,6 +199,14 @@
   color: var(--red);
 }
 
+.cfg-start-addr {
+  color: var(--text-secondary, #8b95a5);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  word-break: break-all;
+}
+
 .cfg-start-time {
   color: var(--text-secondary, #8b95a5);
   font-variant-numeric: tabular-nums;
@@ -206,18 +214,6 @@
 
 .cfg-start-badges {
   margin-left: auto;
-}
-
-.cfg-start-pkgs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  width: 100%;
-}
-
-.cfg-start-pkgs .cfg-badge {
-  font-size: 11px;
-  padding: 1px 6px;
 }
 
 .cfg-error {
