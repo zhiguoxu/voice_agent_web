@@ -17,6 +17,8 @@ export interface LogEntry {
   /** epoch 毫秒时间戳（time 字符串仅供展示） */
   ts?: number;
   source?: string;
+git  /** 来源实例标识 "hostname:port"（同 source 多实例部署时区分谁发的；旧日志无） */
+  instance?: string;
   time: string;
   level: string;
   msg: string;
@@ -39,6 +41,8 @@ export interface LogSearchParams {
   /** 不低于该级别 */
   level?: string;
   source?: string;
+  /** 来源实例标识，完全匹配 */
+  instance?: string;
   start_ms?: number;
   end_ms?: number;
   /** 上一页最后一行的 id，向更旧翻页 */
@@ -59,6 +63,7 @@ export async function searchLogs(params: LogSearchParams = {}): Promise<LogSearc
   if (params.trace_id) sp.set("trace_id", params.trace_id);
   if (params.level) sp.set("level", params.level);
   if (params.source) sp.set("source", params.source);
+  if (params.instance) sp.set("instance", params.instance);
   if (params.start_ms != null) sp.set("start_ms", String(params.start_ms));
   if (params.end_ms != null) sp.set("end_ms", String(params.end_ms));
   if (params.cursor != null) sp.set("cursor", String(params.cursor));

@@ -52,14 +52,16 @@ export function LogMonitor({
   });
 
   /* ── 服务端检索条件（DB 查询 + 实时流过滤都用它们） ──
-     device_sn / trace_id 完全匹配；日期范围只作用于历史检索 */
+     device_sn / trace_id / instance 完全匹配；日期范围只作用于历史检索 */
   const [deviceSn, setDeviceSn] = useState(initialFilter?.deviceSn ?? "");
   const [traceId, setTraceId] = useState(initialFilter?.traceId ?? "");
+  const [instance, setInstance] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   // 手输时防抖，避免每个字符都打一次 DB 查询 + SSE 重连
   const dSn = useDebounce(deviceSn.trim(), 400);
   const dTrace = useDebounce(traceId.trim(), 400);
+  const dInstance = useDebounce(instance.trim(), 400);
   const startMs = useMemo(() => (startDate ? new Date(startDate).getTime() : null), [startDate]);
   const endMs = useMemo(() => (endDate ? new Date(endDate).getTime() : null), [endDate]);
 
@@ -102,10 +104,11 @@ export function LogMonitor({
       trace_id: dTrace || undefined,
       level: level || undefined,
       source: source !== "all" ? source : undefined,
+      instance: dInstance || undefined,
       start_ms: startMs ?? undefined,
       end_ms: endMs ?? undefined,
     }),
-    [dSn, dTrace, level, source, startMs, endMs]
+    [dSn, dTrace, level, source, dInstance, startMs, endMs]
   );
 
   /* ── 首屏/条件变化：按条件查 DB 历史（新→旧返回，翻转成旧→新展示） ── */
@@ -171,6 +174,7 @@ export function LogMonitor({
     if (dSn) sp.set("device_sn", dSn);
     if (dTrace) sp.set("trace_id", dTrace);
     if (source !== "all") sp.set("source", source);
+    if (dInstance) sp.set("instance", dInstance);
     const es = new EventSource(`${LOGS_API_BASE}/stream?${sp}`);
 
     es.onopen = () => setConnected(true);
@@ -204,7 +208,7 @@ export function LogMonitor({
       window.clearInterval(timer);
       setConnected(false);
     };
-  }, [live, level, dSn, dTrace, source, endMs, scrollToBottom]);
+  }, [live, level, dSn, dTrace, source, dInstance, endMs, scrollToBottom]);
 
   /* ── 滚动监听：上滚则停止自动跟随 ── */
   const handleScroll = useCallback(() => {
@@ -223,6 +227,7 @@ export function LogMonitor({
           l.msg.toLowerCase().includes(kw) ||
           l.trace_id.toLowerCase().includes(kw) ||
           l.device_sn.toLowerCase().includes(kw) ||
+          (l.instance ?? "").toLowerCase().includes(kw) ||
           `${l.name}:${l.function}:${l.line}`.toLowerCase().includes(kw)
       );
     }
@@ -245,6 +250,7 @@ export function LogMonitor({
   const clearFilters = () => {
     setDeviceSn("");
     setTraceId("");
+    setInstance("");
     setStartDate("");
     setEndDate("");
   };
@@ -255,7 +261,7 @@ export function LogMonitor({
     if (el) el.scrollTop = el.scrollHeight;
   };
 
-  const hasFilter = deviceSn || traceId || startDate || endDate;
+  const hasFilter = deviceSn || traceId || instance || startDate || endDate;
 
   return (
     <div className="log-monitor">
@@ -457,6 +463,27 @@ export function LogMonitor({
           </span>
         </label>
         <label className="log-field">
+          实例
+          <span className="log-clearable">
+            <input
+              className="log-exact-input"
+              type="text"
+              placeholder="hostname:port 完全匹配"
+              value={instance}
+              onChange={(e) => setInstance(e.target.value)}
+            />
+            {instance && (
+              <button
+                type="button"
+                className="log-search-clear"
+                onClick={() => setInstance("")}
+              >
+                ×
+              </button>
+            )}
+          </span>
+        </label>
+        <label className="log-field">
           开始
           <input
             type="datetime-local"
@@ -479,7 +506,7 @@ export function LogMonitor({
           </button>
         )}
         <span className="log-filter-hint">
-          SN / Trace 完全匹配，与日期一起在服务端过滤；历史来自数据库（保留 90 天）
+          SN / Trace / 实例 完全匹配，与日期一起在服务端过滤；历史来自数据库（保留 90 天）
         </span>
       </div>
 
@@ -511,6 +538,15 @@ export function LogMonitor({
               </span>
               {l.source && (
                 <span className={`log-source src-${l.source}`}>{l.source}</span>
+              )}
+              {l.instance && (
+                <span
+                  className="log-instance clickable"
+                  data-tip={`实例 ${l.instance}，点击按此实例精确过滤`}
+                  onClick={() => l.instance && setInstance(l.instance)}
+                >
+                  {l.instance}
+                </span>
               )}
               <span className={`log-level badge-${l.level}`}>{l.level}</span>
               {/* 位置 name:function:line；开启「位置定长」时截断前部、保留后部，前缀 …，完整值见 tip */}
