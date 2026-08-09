@@ -1097,6 +1097,26 @@ export async function fetchPersonConfig(): Promise<ServiceConfig> {
   return res.json();
 }
 
+/** 记忆 GPU 服务（嵌入/key 抽取）经 nginx 前缀代理直达，/api/config 与
+    voice/agent 同构（service/version/env/started_at/脱敏 config dump）。 */
+export async function fetchEmbeddingConfig(): Promise<ServiceConfig> {
+  const res = await fetch("/embedding/api/config");
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || "Failed to fetch embedding-service config");
+  }
+  return res.json();
+}
+
+export async function fetchKeyExtractorConfig(): Promise<ServiceConfig> {
+  const res = await fetch("/key_extractor/api/config");
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || "Failed to fetch key-extractor config");
+  }
+  return res.json();
+}
+
 /* ── 配置在线编辑（DB 覆盖层）──
    编辑后的值存数据库，删除覆盖即恢复 yaml 原值。全部叶子配置可编辑
    （锁定项除外），编辑需口令（X-Config-Edit-Password 头，后端校验）。 */

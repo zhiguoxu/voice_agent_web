@@ -15,6 +15,8 @@ import {
   searchDevices,
   fetchIntentLabels,
   classifyIntent,
+  fetchEmbeddingConfig,
+  fetchKeyExtractorConfig,
   type ServiceConfig,
   type ConfigService,
   type EditableField,
@@ -51,11 +53,18 @@ function PackageBadges({ packages }: { packages?: Record<string, string> | null 
 }
 
 /* 顶层配置段的中文标题：帮助非开发同学快速定位；没收录的段直接显示原始字段名 */
-/* 配置卡 tab 条（三个服务切换展示, 与下方 ServiceCard 一一对应） */
-const SERVICE_TABS: { key: ConfigService; icon: string; label: string }[] = [
+/* 配置卡 tab 条（各服务切换展示, 与下方 ServiceCard 一一对应）。
+   emb/keyext 是记忆 GPU 服务：配置来自 yaml(+机器本地 config_local.yaml)的冻结快照,
+   进程启动即定死、不支持在线编辑（改端口/模型需重启, 临时覆盖走远端 config_local.yaml），
+   故只读展示、不进 ConfigService 编辑体系 */
+type ServiceTabKey = ConfigService | "emb" | "keyext";
+
+const SERVICE_TABS: { key: ServiceTabKey; icon: string; label: string }[] = [
   { key: "voice", icon: "🎙️", label: "voice_server" },
   { key: "agent", icon: "🤖", label: "agent_server" },
   { key: "person", icon: "👁️", label: "person_id" },
+  { key: "emb", icon: "🧮", label: "embedding" },
+  { key: "keyext", icon: "🗝️", label: "key-extractor" },
 ];
 
 const SECTION_LABELS: Record<string, string> = {
@@ -85,6 +94,9 @@ const SECTION_LABELS: Record<string, string> = {
   vlm: "VLM 仲裁",
   voice_embed: "声纹提取",
   server: "服务参数",
+  // embedding-service / key-extractor (记忆 GPU 服务) 的顶层配置段
+  serve: "服务参数（端口 / GPU / 模型）",
+  deploy: "部署目标（rsync 推送机器）",
 };
 
 const LONG_TEXT_THRESHOLD = 120;
@@ -1199,25 +1211,33 @@ function PasswordDialog({
   );
 }
 
-/** 顶部服务启动时间状态条：一眼看到 voice / agent / console / person 是否在线与上次启动 */
+/** 顶部服务启动时间状态条：一眼看到 voice / agent / console / person 与记忆 GPU 服务是否在线与上次启动 */
 function ServiceStartStrip({
   voice,
   agent,
   consoleCfg,
   person,
+  emb,
+  keyExt,
   voiceError,
   agentError,
   consoleError,
   personError,
+  embError,
+  keyExtError,
 }: {
   voice: ServiceConfig | null;
   agent: ServiceConfig | null;
   consoleCfg: ServiceConfig | null;
   person: ServiceConfig | null;
+  emb: ServiceConfig | null;
+  keyExt: ServiceConfig | null;
   voiceError: string | null;
   agentError: string | null;
   consoleError: string | null;
   personError: string | null;
+  embError: string | null;
+  keyExtError: string | null;
 }) {
   const items: {
     key: string;
@@ -1230,6 +1250,8 @@ function ServiceStartStrip({
     { key: "agent", icon: "🤖", title: "agent_server", data: agent, error: agentError },
     { key: "console", icon: "🖥️", title: "console_server", data: consoleCfg, error: consoleError },
     { key: "person", icon: "👁️", title: "person_id", data: person, error: personError },
+    { key: "emb", icon: "🧮", title: "embedding", data: emb, error: embError },
+    { key: "keyext", icon: "🗝️", title: "key-extractor", data: keyExt, error: keyExtError },
   ];
 
   return (
@@ -1271,6 +1293,12 @@ export function ConfigView() {
   const [agentError, setAgentError] = useState<string | null>(null);
   const [consoleError, setConsoleError] = useState<string | null>(null);
   const [personError, setPersonError] = useState<string | null>(null);
+  /* 记忆 GPU 服务（嵌入/key 抽取）：经 nginx 前缀代理直连各自 /api/config，
+     与 voice/agent 同款「拿到配置即在线」探活 */
+  const [emb, setEmb] = useState<ServiceConfig | null>(null);
+  const [keyExt, setKeyExt] = useState<ServiceConfig | null>(null);
+  const [embError, setEmbError] = useState<string | null>(null);
+  const [keyExtError, setKeyExtError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   /* 可编辑白名单（path → 字段状态）。接口不可用时为 null，页面退化为纯只读 */
   const [voiceEditable, setVoiceEditable] = useState<Map<string, EditableField> | null>(null);
@@ -1278,12 +1306,12 @@ export function ConfigView() {
   const [personEditable, setPersonEditable] = useState<Map<string, EditableField> | null>(null);
   /* 保存/恢复后的提示条（非 hot 项提示需要重启） */
   const [notice, setNotice] = useState<string | null>(null);
-  /* 三个服务的配置卡用 tab 切换展示（并列三卡信息过密）；选中项跨会话记住 */
-  const [svcTab, setSvcTab] = useState<ConfigService>(() => {
+  /* 各服务的配置卡用 tab 切换展示（并列多卡信息过密）；选中项跨会话记住 */
+  const [svcTab, setSvcTab] = useState<ServiceTabKey>(() => {
     const saved = localStorage.getItem("cfgServiceTab");
-    return saved === "voice" || saved === "agent" || saved === "person" ? saved : "voice";
+    return SERVICE_TABS.some((t) => t.key === saved) ? (saved as ServiceTabKey) : "voice";
   });
-  const selectSvcTab = useCallback((s: ConfigService) => {
+  const selectSvcTab = useCallback((s: ServiceTabKey) => {
     setSvcTab(s);
     localStorage.setItem("cfgServiceTab", s);
   }, []);
@@ -1295,7 +1323,9 @@ export function ConfigView() {
     setAgentError(null);
     setConsoleError(null);
     setPersonError(null);
-    const [v, a, c, p, ve, ae, pe] = await Promise.allSettled([
+    setEmbError(null);
+    setKeyExtError(null);
+    const [v, a, c, p, ve, ae, pe, em, ke] = await Promise.allSettled([
       fetchVoiceConfig(),
       fetchAgentConfig(),
       fetchConsoleConfig(),
@@ -1303,6 +1333,8 @@ export function ConfigView() {
       fetchEditableConfig("voice"),
       fetchEditableConfig("agent"),
       fetchEditableConfig("person"),
+      fetchEmbeddingConfig(),
+      fetchKeyExtractorConfig(),
     ]);
     if (v.status === "fulfilled") setVoice(v.value);
     else setVoiceError(v.reason?.message || String(v.reason));
@@ -1315,6 +1347,10 @@ export function ConfigView() {
     setVoiceEditable(ve.status === "fulfilled" ? new Map(ve.value.items.map((f) => [f.path, f])) : null);
     setAgentEditable(ae.status === "fulfilled" ? new Map(ae.value.items.map((f) => [f.path, f])) : null);
     setPersonEditable(pe.status === "fulfilled" ? new Map(pe.value.items.map((f) => [f.path, f])) : null);
+    if (em.status === "fulfilled") setEmb(em.value);
+    else setEmbError(em.reason?.message || String(em.reason));
+    if (ke.status === "fulfilled") setKeyExt(ke.value);
+    else setKeyExtError(ke.reason?.message || String(ke.reason));
     setLoading(false);
   }, []);
 
@@ -1412,10 +1448,14 @@ export function ConfigView() {
         agent={agent}
         consoleCfg={consoleCfg}
         person={person}
+        emb={emb}
+        keyExt={keyExt}
         voiceError={voiceError}
         agentError={agentError}
         consoleError={consoleError}
         personError={personError}
+        embError={embError}
+        keyExtError={keyExtError}
       />
       {notice && <div className="cfg-notice">{notice}</div>}
       {pwPrompt && (
@@ -1482,6 +1522,28 @@ export function ConfigView() {
             error={personError}
             loading={loading}
             edit={personEdit}
+          />
+        )}
+        {/* 记忆 GPU 服务：配置是进程启动时的冻结快照（yaml + 机器本地 config_local.yaml），
+            不支持在线编辑——改端口/模型本就需要重启，临时覆盖走远端 config_local.yaml */}
+        {svcTab === "emb" && (
+          <ServiceCard
+            icon="🧮"
+            title="embedding-service"
+            subtitle="记忆召回查询侧嵌入（Qwen3-Embedding，只读：改配置需改 yaml 并重启）"
+            data={emb}
+            error={embError}
+            loading={loading}
+          />
+        )}
+        {svcTab === "keyext" && (
+          <ServiceCard
+            icon="🗝️"
+            title="key-extractor"
+            subtitle="记忆召回 key 抽取（双塔微调，只读：改配置需改 yaml 并重启）"
+            data={keyExt}
+            error={keyExtError}
+            loading={loading}
           />
         )}
       </div>
