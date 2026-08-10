@@ -1,5 +1,6 @@
 /**
- * API 测试页：BERT 意图识别、内容风控、火山引擎 ASR 等与生产同款链路的在线探测。
+ * API 测试页：BERT 意图识别、内容风控、ASR 语音识别（火山引擎/百度小度）等
+ * 与生产同款链路的在线探测。
  * 从系统配置拆出，避免把「测接口」和「改配置」混在同一页。
  */
 import { useState, useEffect, useCallback, useRef } from "react";
@@ -294,14 +295,16 @@ function ModerationPanel() {
   );
 }
 
-/** 火山引擎 ASR 在线测试：上传音频（对话详情/原始音频弹窗下载的 WAV 均可），
- *  走生产同款 VolcengineASR 客户端（含热词），三种模式按次可选，不改全局配置。 */
+/** ASR 在线测试：上传音频（对话详情/原始音频弹窗下载的 WAV 均可），
+ *  走生产同款 ASR 客户端（含热词）。提供商按次可选（火山引擎/百度小度），
+ *  火山可再选三种识别模式，均不改全局配置。 */
 function AsrPanel() {
   const [cfg, setCfg] = useState<AsrTestConfig | null>(null);
   const [cfgError, setCfgError] = useState<string | null>(null);
   const [cfgLoading, setCfgLoading] = useState(false);
 
   const [file, setFile] = useState<File | null>(null);
+  const [provider, setProvider] = useState("volcengine");
   const [mode, setMode] = useState("");
   const [realtime, setRealtime] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -313,7 +316,10 @@ function AsrPanel() {
     setCfgLoading(true);
     setCfgError(null);
     try {
-      setCfg(await fetchAsrTestConfig());
+      const c = await fetchAsrTestConfig();
+      setCfg(c);
+      // 默认测生产当前用的提供商（若它支持在线测试）
+      if (c.test_providers.includes(c.provider)) setProvider(c.provider);
     } catch (e: any) {
       setCfgError(e.message || String(e));
     } finally {
@@ -330,7 +336,7 @@ function AsrPanel() {
     setTesting(true);
     setError(null);
     try {
-      const r = await testAsr(file, mode, realtime);
+      const r = await testAsr(file, provider, provider === "volcengine" ? mode : "", realtime);
       setResults((prev) => [r, ...prev].slice(0, 20));
     } catch (e: any) {
       setError(e.message || String(e));
@@ -339,21 +345,22 @@ function AsrPanel() {
     }
   };
 
+  const configured =
+    provider === "volcengine" ? cfg?.volcengine.configured : cfg?.xiaodu.configured;
+
   return (
     <div className="card cfg-card cfg-intent-card">
       <h3>
-        🎙️ 火山引擎 ASR 测试
+        🎙️ ASR 语音识别测试
         <span className="subtitle">
-          上传音频跑生产同款流式识别（含热词），可选三种模式，不落库、不触发对话
+          上传音频跑生产同款流式识别（含热词），火山引擎/百度小度按次可选，不落库、不触发对话
         </span>
         {cfg && (
           <span className="cfg-badges">
-            <span className={`cfg-badge health ${cfg.api_key_configured ? "ok" : "down"}`}>
-              {cfg.api_key_configured ? "● api_key 已配置" : "● api_key 未配置"}
+            <span className={`cfg-badge health ${configured ? "ok" : "down"}`}>
+              {configured ? "● 密钥已配置" : "● 密钥未配置"}
             </span>
-            {cfg.provider !== "volcengine" && (
-              <span className="cfg-badge modified">生产当前 ASR: {cfg.provider}</span>
-            )}
+            <span className="cfg-badge">生产当前 ASR: {cfg.provider}</span>
           </span>
         )}
         <button className="roster-refresh" onClick={loadConfig} disabled={cfgLoading}>
@@ -365,8 +372,17 @@ function AsrPanel() {
 
       {cfg && (
         <div className="cfg-intent-meta">
-          <span>默认模式 <code>{cfg.default_mode}</code></span>
-          <span>资源 <code>{cfg.resource_id}</code></span>
+          {provider === "volcengine" ? (
+            <>
+              <span>默认模式 <code>{cfg.volcengine.default_mode}</code></span>
+              <span>资源 <code>{cfg.volcengine.resource_id}</code></span>
+            </>
+          ) : (
+            <>
+              <span>端点 <code>{cfg.xiaodu.endpoint || "（未配置）"}</code></span>
+              <span>dev_pid <code>{cfg.xiaodu.pid || "（未配置）"}</code></span>
+            </>
+          )}
           <span>输入采样率 <code>{cfg.input_sample_rate} Hz</code>（其他采样率的 WAV 自动转换）</span>
           <span>
             热词{" "}
@@ -388,16 +404,27 @@ function AsrPanel() {
           disabled={testing}
         />
         <select
-          value={mode}
-          onChange={(e) => setMode(e.target.value)}
+          value={provider}
+          onChange={(e) => setProvider(e.target.value)}
           disabled={testing}
-          title="识别模式，仅本次生效，不改全局配置"
+          title="测试的 ASR 提供商，仅本次生效，不改全局配置"
         >
-          <option value="">跟随配置{cfg ? `（${cfg.default_mode}）` : ""}</option>
-          <option value="bigmodel">bigmodel（双向流式）</option>
-          <option value="bigmodel_async">bigmodel_async（流式优化版，官方推荐）</option>
-          <option value="bigmodel_nostream">bigmodel_nostream（句级出结果，无中间结果）</option>
+          <option value="volcengine">火山引擎（豆包大模型）</option>
+          <option value="xiaodu">百度小度</option>
         </select>
+        {provider === "volcengine" && (
+          <select
+            value={mode}
+            onChange={(e) => setMode(e.target.value)}
+            disabled={testing}
+            title="火山引擎识别模式，仅本次生效，不改全局配置"
+          >
+            <option value="">跟随配置{cfg ? `（${cfg.volcengine.default_mode}）` : ""}</option>
+            <option value="bigmodel">bigmodel（双向流式）</option>
+            <option value="bigmodel_async">bigmodel_async（流式优化版，官方推荐）</option>
+            <option value="bigmodel_nostream">bigmodel_nostream（句级出结果，无中间结果）</option>
+          </select>
+        )}
         <label
           className="cfg-asr-realtime"
           title="按 200ms 实时节奏喂入，模拟生产时序（耗时≈音频时长），latency 才有生产参考意义"
@@ -426,7 +453,10 @@ function AsrPanel() {
             <div className="cfg-intent-result cfg-mod-result" key={results.length - i}>
               <div className="cfg-mod-head">
                 <span className="cfg-intent-query">{r.filename || "（未命名文件）"}</span>
-                <span className="cfg-badge">{r.mode}</span>
+                <span className="cfg-badge">
+                  {r.provider === "xiaodu" ? "百度小度" : "火山引擎"}
+                </span>
+                {r.mode && <span className="cfg-badge">{r.mode}</span>}
                 {r.realtime && <span className="cfg-badge modified">实时节奏</span>}
                 <span className={`cfg-badge hit ${r.text ? "ok" : "down"}`}>
                   {r.text ? "✔ 有结果" : "✘ 无结果/超时"}

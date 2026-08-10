@@ -896,7 +896,7 @@ export default function App() {
           <button
             className={`main-tab ${activeTab === 'apiTest' ? 'active' : ''}`}
             onClick={() => setActiveTab('apiTest')}
-            data-tip="BERT 意图识别、内容风控、火山引擎 ASR 等与生产同款链路的在线 API 探测"
+            data-tip="BERT 意图识别、内容风控、ASR 语音识别等与生产同款链路的在线 API 探测"
           >
             API 测试
           </button>

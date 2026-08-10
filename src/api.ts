@@ -1493,13 +1493,25 @@ export async function testModeration(
 
 /** ASR 测试面板用的配置摘要（GET /api/voice/asr/test/config） */
 export interface AsrTestConfig {
-  /** 生产当前使用的 ASR 提供商（asr.name），仅展示；测试接口固定测火山引擎 */
+  /** 生产当前使用的 ASR 提供商（asr.name）；测试的 provider 按次可选，不必等于它 */
   provider: string;
-  /** asr.volcengine.mode 当前配置值（不选模式时用它） */
-  default_mode: string;
-  modes: string[];
-  api_key_configured: boolean;
-  resource_id: string;
+  /** 支持在线测试的提供商 */
+  test_providers: string[];
+  volcengine: {
+    /** asr.volcengine.api_key 是否已配置 */
+    configured: boolean;
+    /** asr.volcengine.mode 当前配置值（不选模式时用它） */
+    default_mode: string;
+    modes: string[];
+    resource_id: string;
+  };
+  xiaodu: {
+    /** asr.xiaodu 的 appid/appkey/endpoint 是否已配置 */
+    configured: boolean;
+    endpoint: string;
+    /** 识别模型 dev_pid */
+    pid: string;
+  };
   /** 当前生效的热词（识别请求会直传） */
   hot_words: string[];
   /** 生产输入采样率（上传音频会转换到该采样率） */
@@ -1515,10 +1527,12 @@ export async function fetchAsrTestConfig(): Promise<AsrTestConfig> {
   return res.json();
 }
 
-/** ASR 在线测试结果（POST /api/voice/asr/test，走生产同款火山引擎客户端） */
+/** ASR 在线测试结果（POST /api/voice/asr/test，走生产同款 ASR 客户端） */
 export interface AsrTestResult {
-  /** 本次实际使用的识别模式 */
-  mode: string;
+  /** 本次实际测试的 ASR 提供商 */
+  provider: string;
+  /** 本次实际使用的识别模式（仅火山引擎，其余为 null） */
+  mode: string | null;
   /** 是否按 200ms 实时节奏喂入（模拟生产时序） */
   realtime: boolean;
   filename: string;
@@ -1536,12 +1550,15 @@ export interface AsrTestResult {
 
 export async function testAsr(
   file: File,
-  /** 空 = 用当前配置 asr.volcengine.mode */
+  /** volcengine / xiaodu；空 = 跟随当前配置 asr.name */
+  provider = "",
+  /** 仅火山引擎有效；空 = 用当前配置 asr.volcengine.mode */
   mode = "",
   realtime = false,
 ): Promise<AsrTestResult> {
   const fd = new FormData();
   fd.append("file", file);
+  if (provider) fd.append("provider", provider);
   if (mode) fd.append("mode", mode);
   fd.append("realtime", String(realtime));
   const res = await fetch("/api/voice/asr/test", { method: "POST", body: fd });
