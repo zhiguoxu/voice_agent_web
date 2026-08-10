@@ -5,6 +5,23 @@
   max-width: 92vw;
 }
 
+/* 头部两行：标题行（标题 + 刷新/关闭右对齐），副标题独立一行不再和按钮抢空间 */
+.raw-audio-dialog h3 {
+  margin-bottom: 4px;
+}
+
+.raw-audio-title {
+  white-space: nowrap;
+}
+
+.raw-audio-subtitle {
+  font-size: 12px;
+  color: var(--text-muted, #94a3b8);
+  line-height: 1.5;
+  margin-bottom: 14px;
+  flex-shrink: 0;
+}
+
 /* 会话头部的录制开关（复用 live-stream-btn 基础样式，加录制态红点） */
 .raw-record-btn.recording {
   border-color: #dc2626;
@@ -66,6 +83,28 @@
   text-decoration: underline;
 }
 
+.raw-audio-delete {
+  font-size: 12px;
+  padding: 2px 8px;
+  background: transparent;
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: var(--radius-sm, 6px);
+  color: var(--text-secondary, #64748b);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s;
+}
+
+.raw-audio-delete:hover:not(:disabled) {
+  border-color: #ef4444;
+  color: #ef4444;
+}
+
+.raw-audio-delete:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 .raw-audio-player {
   width: 100%;
   height: 36px;
@@ -73,8 +112,8 @@
 
 .raw-audio-vad {
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+  flex-direction: column;
+  gap: 4px;
   margin-top: 6px;
 }
 
@@ -83,13 +122,34 @@
   color: var(--text-secondary, #94a3b8);
 }
 
+/* 一行 = 一个 VAD 区间：时间范围 + 该轮 query 文本，点击选中对应对话记录 */
 .raw-audio-interval {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-size: 12px;
-  padding: 1px 8px;
-  border-radius: 10px;
+  padding: 3px 8px;
+  border-radius: 6px;
   background: rgba(37, 99, 235, 0.08);
-  color: #2563eb;
   border: 1px solid rgba(37, 99, 235, 0.25);
+  min-width: 0;
+}
+
+.raw-audio-interval-range {
+  color: #2563eb;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.raw-audio-interval-query {
+  color: var(--text-primary, #1e293b);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.raw-audio-interval-query.muted {
+  color: var(--text-muted, #94a3b8);
 }
 
 .raw-audio-interval.jump {

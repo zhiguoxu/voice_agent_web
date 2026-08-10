@@ -426,6 +426,9 @@ export interface RawAudioVadInterval {
   end_ms: number;
   /** 该区间对应轮次的 trace_id（录制开始前已在途的语音可能为 null） */
   trace_id: string | null;
+  /** 该轮次的 query 文本（列表接口按 trace_id 现查轮次表回填）。
+   *  null = 无对应轮次（被删/未落库）；"" = 拾音未识别（noise 轮） */
+  query?: string | null;
 }
 
 /** 一段原始音频录制（以 1s 无新数据为分割点自动切段） */
@@ -467,6 +470,17 @@ export async function fetchRawAudioList(sessionId: number): Promise<RawAudioItem
   }
   const data = await res.json();
   return data.items ?? [];
+}
+
+/** 删除一个录制段（COS 上的 WAV + 元数据 JSON） */
+export async function deleteRawAudio(sessionId: number, wavKey: string): Promise<void> {
+  const res = await fetch(
+    `${CONVERSATIONS_API_BASE}/sessions/${sessionId}/raw_audio?key=${encodeURIComponent(wavKey)}`,
+    { method: "DELETE" });
+  if (!res.ok) {
+    const detail = await res.text();
+    throw new Error(`删除失败: ${detail}`);
+  }
 }
 
 export async function forceNewSession(sessionId: number, deviceSn: string): Promise<{ new_session_id: number }> {

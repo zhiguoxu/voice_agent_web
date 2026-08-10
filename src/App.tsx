@@ -247,6 +247,28 @@ export default function App() {
     return () => { cancelled = true; };
   }, [selectedSession?.id, selectedSession?.is_online, selectedSession?.device_sn]);
 
+  /* 原始音频对话框点 VAD 区间 → 选中对应对话记录。优先在已加载的轮次里找
+     （命中即高亮并滚动到卡片），翻页外的老轮次按 trace 现查后直接进详情面板 */
+  const selectTurnByTrace = async (traceId: string) => {
+    const scrollToActive = () => requestAnimationFrame(() => {
+      document.querySelector(".turn-card.active")
+        ?.scrollIntoView({ block: "center", behavior: "smooth" });
+    });
+    const loaded = turns.find((t) => t.trace_id === traceId);
+    if (loaded) {
+      setSelectedTurn(loaded);
+      scrollToActive();
+      return;
+    }
+    try {
+      const result = await fetchTurnByTrace(traceId);
+      setSelectedTurn(result.turn);
+      scrollToActive();
+    } catch {
+      alert("未找到该轮对话记录（可能已被删除）");
+    }
+  };
+
   const toggleRawRecording = async () => {
     if (!selectedSession) return;
     setRawRecLoading(true);
@@ -1777,15 +1799,16 @@ export default function App() {
           }}
         />
       )}
-      {/* 原始音频列表对话框（VAD 前拾音分段，含 VAD 激活区间；点区间可跳日志） */}
+      {/* 原始音频列表对话框（VAD 前拾音分段，含 VAD 激活区间与对应 query；
+          点区间关闭对话框并选中该条对话记录） */}
       {rawAudioDialog && (
         <RawAudioDialog
           sessionId={rawAudioDialog.sessionId}
           deviceSn={rawAudioDialog.deviceSn}
           onClose={() => setRawAudioDialog(null)}
-          onJumpTrace={(traceId) => {
+          onSelectTrace={(traceId) => {
             setRawAudioDialog(null);
-            openLogsWith({ traceId });
+            selectTurnByTrace(traceId);
           }}
         />
       )}
