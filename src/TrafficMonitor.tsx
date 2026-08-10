@@ -54,7 +54,7 @@ const TTS_PROVIDERS: ProviderDef[] = [
   },
 ];
 
-/** ASR 双 provider：同一区块内用标签页切换（同一时刻只有一个在生效） */
+/** ASR 多 provider：同一区块内用标签页切换（同一时刻只有一个在生效） */
 const ASR_PROVIDERS: ProviderDef[] = [
   {
     id: "xiaodu_asr",
@@ -69,6 +69,13 @@ const ASR_PROVIDERS: ProviderDef[] = [
     reqLabel: "识别会话",
     hasConn: true,
     hint: "识别会话 = 每轮语音一次 finish_stream；建连 = 每次识别启动的连续识别会话；失败 = 启动失败 + SDK canceled(Error) + 等待最终结果超时。未启用 azure 时恒为 0",
+  },
+  {
+    id: "volcengine_asr",
+    title: "火山引擎 ASR",
+    reqLabel: "识别会话",
+    hasConn: true,
+    hint: "识别会话 = 每轮语音一次 finish_stream；建连 = 每次识别新建的 WebSocket + full client request；失败 = 建连失败 + 服务端错误帧 + 等待最终结果超时。未启用 volcengine 时恒为 0",
   },
 ];
 

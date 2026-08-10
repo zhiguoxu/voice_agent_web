@@ -1100,7 +1100,7 @@ export interface TrafficMinuteSample {
 
 /** 一个上游最近 N 分钟的逐分钟访问次数（时间正序，空分钟补 0；
  *  最后一个元素是当前尚未走完的分钟，读数会继续涨）。
- *  provider ∈ minimax_tts | azure_tts | xiaodu_asr | azure_asr | agent_chat。 */
+ *  provider ∈ minimax_tts | azure_tts | xiaodu_asr | azure_asr | volcengine_asr | agent_chat。 */
 export async function fetchTrafficMetrics(
   provider: string,
   minutes: number,

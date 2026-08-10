@@ -116,7 +116,7 @@ const LONG_TEXT_THRESHOLD = 120;
    llm.name 的候选须与 LLMConfig 的方案字段(doubao/gemini)保持一致，
    后端 validator 也会拦，但下拉让操作者根本不用记方案名 */
 const ENUM_OPTIONS: Record<string, string[]> = {
-  "asr.name": ["xiaodu", "azure"],
+  "asr.name": ["xiaodu", "azure", "volcengine"],
   "tts.name": ["minimax", "azure"],
   "llm.name": ["doubao", "gemini"],
   // 摄像头自动拉流：与 AutoStreamConfig 的 Literal 取值保持一致
