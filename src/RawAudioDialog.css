@@ -1,0 +1,101 @@
+/* 原始音频列表对话框（复用 roster-dialog 基础样式，见 RosterDialog.css） */
+
+.raw-audio-dialog {
+  width: 720px;
+  max-width: 92vw;
+}
+
+/* 会话头部的录制开关（复用 live-stream-btn 基础样式，加录制态红点） */
+.raw-record-btn.recording {
+  border-color: #dc2626;
+  color: #dc2626;
+}
+
+.raw-record-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #94a3b8;
+  margin-right: 5px;
+}
+
+.raw-record-dot.on {
+  background: #dc2626;
+  animation: raw-record-blink 1.2s ease-in-out infinite;
+}
+
+@keyframes raw-record-blink {
+  50% { opacity: 0.3; }
+}
+
+.raw-audio-card {
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+  background: var(--bg-card, #fff);
+}
+
+.raw-audio-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+  font-size: 13px;
+}
+
+.raw-audio-time {
+  font-weight: 600;
+}
+
+.raw-audio-dur,
+.raw-audio-sr {
+  color: var(--text-secondary, #64748b);
+  font-size: 12px;
+}
+
+.raw-audio-download {
+  margin-left: auto;
+  font-size: 12px;
+  text-decoration: none;
+  color: var(--accent, #2563eb);
+}
+
+.raw-audio-download:hover {
+  text-decoration: underline;
+}
+
+.raw-audio-player {
+  width: 100%;
+  height: 36px;
+}
+
+.raw-audio-vad {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.raw-audio-novad {
+  font-size: 12px;
+  color: var(--text-secondary, #94a3b8);
+}
+
+.raw-audio-interval {
+  font-size: 12px;
+  padding: 1px 8px;
+  border-radius: 10px;
+  background: rgba(37, 99, 235, 0.08);
+  color: #2563eb;
+  border: 1px solid rgba(37, 99, 235, 0.25);
+}
+
+.raw-audio-interval.jump {
+  cursor: pointer;
+}
+
+.raw-audio-interval.jump:hover {
+  background: rgba(37, 99, 235, 0.18);
+}
