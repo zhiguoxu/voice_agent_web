@@ -478,7 +478,14 @@ function ConfigValue({ value, path = "", edit }: { value: unknown; path?: string
   return <span className="cfg-string">{String(value)}</span>;
 }
 
-/** 配置分级表格：顶层标量归入「基础参数」，每个顶层对象/数组单独成段（全局卡与设备级面板共用） */
+/* 「基础参数」tab 的内部 key：顶层标量的归集段，不是真实配置段名，
+   用带下划线的哨兵值避免与某个真实顶层段撞名 */
+const BASIC_TAB_KEY = "__basic__";
+
+/** 配置分级表格：顶层标量归入「基础参数」，每个顶层对象/数组单独成段，
+    以 tab 形式切换展示（全局卡与设备级面板共用）。
+    tab 上的黄色角标 = 该分类下被在线修改（设备视图为被此设备覆盖）的条数，
+    避免内容折进 tab 后覆盖项被藏住看不见 */
 function ConfigSections({
   config,
   hideSections,
@@ -492,9 +499,52 @@ function ConfigSections({
   const sectionEntries = Object.entries(config).filter(
     ([k, v]) => (isPlainObject(v) || Array.isArray(v)) && !hideSections?.includes(k));
 
+  const tabs: { key: string; label: string }[] = [
+    ...(scalarEntries.length > 0 ? [{ key: BASIC_TAB_KEY, label: "基础参数" }] : []),
+    ...sectionEntries.map(([k]) => ({ key: k, label: SECTION_LABELS[k] || k })),
+  ];
+
+  const [active, setActive] = useState(tabs[0]?.key ?? "");
+  /* 刷新后段列表可能变化（如服务重启后配置结构变了）：选中项失效时回落到第一个 tab */
+  const activeKey = tabs.some((t) => t.key === active) ? active : tabs[0]?.key;
+
+  /* 该分类下被覆盖条数（设备视图 fields 的 overridden 即「被此设备覆盖」，语义同样成立） */
+  const overriddenCount = (tabKey: string): number => {
+    if (!edit) return 0;
+    let n = 0;
+    for (const f of edit.fields.values()) {
+      if (!f.overridden) continue;
+      const inTab = tabKey === BASIC_TAB_KEY
+        ? !f.path.includes(".")
+        : f.path === tabKey || f.path.startsWith(tabKey + ".");
+      if (inTab) n++;
+    }
+    return n;
+  };
+
+  if (tabs.length === 0) return null;
+
   return (
     <>
-      {scalarEntries.length > 0 && (
+      <div className="cfg-section-tabs">
+        {tabs.map((t) => {
+          const n = overriddenCount(t.key);
+          return (
+            <button
+              key={t.key}
+              className={`cfg-section-tab ${activeKey === t.key ? "active" : ""}`}
+              onClick={() => setActive(t.key)}
+            >
+              {t.label}
+              {n > 0 && (
+                <span className="cfg-section-tab-count" data-tip="该分类下被在线修改的条数">{n}</span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {activeKey === BASIC_TAB_KEY && (
         <div className="cfg-section">
           <h4 className="cfg-section-title">基础参数</h4>
           <div className="cfg-rows">
@@ -505,7 +555,7 @@ function ConfigSections({
         </div>
       )}
 
-      {sectionEntries.map(([k, v]) => (
+      {sectionEntries.filter(([k]) => k === activeKey).map(([k, v]) => (
         <div className="cfg-section" key={k}>
           <h4 className="cfg-section-title">
             {SECTION_LABELS[k] || k}

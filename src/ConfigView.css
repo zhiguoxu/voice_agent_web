@@ -226,6 +226,53 @@
   margin-bottom: 16px;
 }
 
+/* 配置卡内的分类 tab 条（基础参数 / 音频参数 / 唤醒应答语…）：
+   分类多（voice 十几个段），用可换行的胶囊小 tab，与服务级大 tab 区分 */
+.cfg-section-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.cfg-section-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.cfg-section-tab:hover {
+  color: var(--text-primary);
+  border-color: var(--purple);
+}
+
+.cfg-section-tab.active {
+  color: var(--purple);
+  background: var(--accent-soft);
+  border-color: var(--purple);
+  font-weight: 600;
+}
+
+/* tab 上的「该分类下被在线修改条数」角标（黄色, 同「已修改」徽标） */
+.cfg-section-tab-count {
+  min-width: 16px;
+  padding: 0 5px;
+  border-radius: 8px;
+  font-size: 11px;
+  line-height: 16px;
+  text-align: center;
+  background: rgba(251, 191, 36, 0.14);
+  color: var(--yellow, #fbbf24);
+}
+
 .cfg-section {
   margin-bottom: 18px;
 }
