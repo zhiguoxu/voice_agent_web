@@ -6,10 +6,13 @@
  * trace_id，内嵌播放器与下载链接。数据来源见后端
  * GET /api/conversations/sessions/{id}/raw_audio。
  */
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   fetchRawAudioList,
   deleteRawAudio,
+  testSessionAudio,
+  testSessionAudioUpload,
+  testSessionAudioStop,
   type RawAudioItem,
   CONVERSATIONS_API_BASE,
 } from "./api";
@@ -43,6 +46,48 @@ export function RawAudioDialog({ sessionId, deviceSn, onClose, onSelectTrace }: 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null); // 删除中的 wav_key
+  // 回放中的 wav_key；本地上传文件回放时为 UPLOAD_KEY
+  const [replayKey, setReplayKey] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const UPLOAD_KEY = "__upload__";
+
+  // 回放按录音真实节奏进行，前端按时长到点自动恢复按钮（+2s 补的静音尾余量）
+  const markReplaying = (key: string, durationMs: number) => {
+    setReplayKey(key);
+    window.setTimeout(
+      () => setReplayKey((k) => (k === key ? null : k)),
+      durationMs + 2000,
+    );
+  };
+
+  // 回放整段链路：音频从识别器入口喂入，VAD/ASR/对话与设备真实拾音完全一致
+  const handleReplay = async (it: RawAudioItem) => {
+    try {
+      await testSessionAudio(sessionId, deviceSn, it.wav_key);
+      markReplaying(it.wav_key, it.duration_ms);
+    } catch (e: any) {
+      alert(e.message || String(e));
+    }
+  };
+
+  // 本地 WAV 文件回放（如下载后剪辑过的录音），链路与上面完全相同
+  const handleUploadReplay = async (file: File) => {
+    try {
+      const durationMs = await testSessionAudioUpload(sessionId, deviceSn, file);
+      markReplaying(UPLOAD_KEY, durationMs);
+    } catch (e: any) {
+      alert(e.message || String(e));
+    }
+  };
+
+  const handleStopReplay = async () => {
+    try {
+      await testSessionAudioStop(sessionId, deviceSn);
+    } catch (e: any) {
+      alert(e.message || String(e));
+    }
+    setReplayKey(null);
+  };
 
   const handleDelete = async (it: RawAudioItem) => {
     if (!window.confirm("确定删除这段录音？COS 上的音频和元数据将一并删除，不可恢复。")) return;
@@ -82,6 +127,28 @@ export function RawAudioDialog({ sessionId, deviceSn, onClose, onSelectTrace }: 
       <div className="roster-dialog raw-audio-dialog" onClick={(e) => e.stopPropagation()}>
         <h3>
           <span className="raw-audio-title">🎞️ 原始音频</span>
+          <button
+            className={`roster-refresh raw-audio-upload ${replayKey === UPLOAD_KEY ? "on" : ""}`}
+            data-tip={replayKey === UPLOAD_KEY
+              ? "停止回放"
+              : "选择本地 WAV 文件回放到在线会话（16-bit PCM，链路与设备拾音一致）"}
+            onClick={() => (replayKey === UPLOAD_KEY
+              ? handleStopReplay()
+              : fileInputRef.current?.click())}
+          >
+            {replayKey === UPLOAD_KEY ? "⏹ 停止回放" : "⬆ 回放本地文件"}
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".wav,audio/wav,audio/x-wav"
+            hidden
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              e.target.value = ""; // 允许连续选同一个文件
+              if (f) handleUploadReplay(f);
+            }}
+          />
           <button className="roster-refresh" onClick={load} disabled={loading}>
             {loading ? <span className="spinner inline" /> : "🔄 刷新"}
           </button>
@@ -108,6 +175,15 @@ export function RawAudioDialog({ sessionId, deviceSn, onClose, onSelectTrace }: 
                   {formatDuration(it.duration_ms)}
                 </span>
                 <span className="raw-audio-sr">{it.sample_rate / 1000}kHz</span>
+                <button
+                  className={`raw-audio-replay ${replayKey === it.wav_key ? "on" : ""}`}
+                  data-tip={replayKey === it.wav_key
+                    ? "停止回放"
+                    : "回放到在线会话：走与设备拾音完全一致的 VAD→ASR→对话链路"}
+                  onClick={() => (replayKey === it.wav_key ? handleStopReplay() : handleReplay(it))}
+                >
+                  {replayKey === it.wav_key ? "⏹ 停止回放" : "▶ 回放链路"}
+                </button>
                 <a
                   className="raw-audio-download"
                   href={mediaUrl(it.wav_key, true)}

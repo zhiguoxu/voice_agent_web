@@ -479,6 +479,48 @@ export async function fetchRawAudioList(sessionId: number): Promise<RawAudioItem
   return data.items ?? [];
 }
 
+/** 回放一段原始录音：音频走与设备上行完全一致的 VAD→ASR→对话链路（test_input 的语音版）。
+ *  立即返回，后台按录音真实节奏回放；回放期间设备上行音频被丢弃。 */
+export async function testSessionAudio(sessionId: number, deviceSn: string, wavKey: string, realtime = true): Promise<void> {
+  const res = await fetch(`${LIVE_CONVERSATIONS_API_BASE}/sessions/${sessionId}/test_audio?device_sn=${encodeURIComponent(deviceSn)}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ wav_key: wavKey, realtime }),
+  });
+  if (!res.ok) {
+    const detail = await res.text();
+    throw new Error(`回放失败: ${detail}`);
+  }
+}
+
+/** 上传本地 WAV 文件回放（testSessionAudio 的上传版，回放语义相同）；返回音频时长 ms */
+export async function testSessionAudioUpload(sessionId: number, deviceSn: string, file: File, realtime = true): Promise<number> {
+  const fd = new FormData();
+  fd.append("file", file);
+  fd.append("realtime", String(realtime));
+  const res = await fetch(`${LIVE_CONVERSATIONS_API_BASE}/sessions/${sessionId}/test_audio/upload?device_sn=${encodeURIComponent(deviceSn)}`, {
+    method: "POST",
+    body: fd,
+  });
+  if (!res.ok) {
+    const detail = await res.text();
+    throw new Error(`回放失败: ${detail}`);
+  }
+  const data = await res.json();
+  return data.duration_ms ?? 0;
+}
+
+/** 停止在途的录音回放（幂等） */
+export async function testSessionAudioStop(sessionId: number, deviceSn: string): Promise<void> {
+  const res = await fetch(`${LIVE_CONVERSATIONS_API_BASE}/sessions/${sessionId}/test_audio/stop?device_sn=${encodeURIComponent(deviceSn)}`, {
+    method: "POST",
+  });
+  if (!res.ok) {
+    const detail = await res.text();
+    throw new Error(`停止回放失败: ${detail}`);
+  }
+}
+
 /** 删除一个录制段（COS 上的 WAV + 元数据 JSON） */
 export async function deleteRawAudio(sessionId: number, wavKey: string): Promise<void> {
   const res = await fetch(

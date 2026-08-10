@@ -72,8 +72,31 @@
   font-size: 12px;
 }
 
-.raw-audio-download {
+/* 回放按钮把自己和后面的下载/删除一起推到右侧 */
+.raw-audio-replay {
   margin-left: auto;
+  font-size: 12px;
+  padding: 2px 8px;
+  background: transparent;
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: var(--radius-sm, 6px);
+  color: var(--accent, #2563eb);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s;
+}
+
+.raw-audio-replay:hover {
+  border-color: var(--accent, #2563eb);
+}
+
+.raw-audio-replay.on,
+.raw-audio-upload.on {
+  border-color: #dc2626;
+  color: #dc2626;
+}
+
+.raw-audio-download {
   font-size: 12px;
   text-decoration: none;
   color: var(--accent, #2563eb);
