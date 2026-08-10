@@ -117,6 +117,7 @@ const LONG_TEXT_THRESHOLD = 120;
    后端 validator 也会拦，但下拉让操作者根本不用记方案名 */
 const ENUM_OPTIONS: Record<string, string[]> = {
   "asr.name": ["xiaodu", "azure", "volcengine"],
+  "asr.volcengine.mode": ["bigmodel", "bigmodel_async", "bigmodel_nostream"],
   "tts.name": ["minimax", "azure"],
   "llm.name": ["doubao", "gemini"],
   // 摄像头自动拉流：与 AutoStreamConfig 的 Literal 取值保持一致
