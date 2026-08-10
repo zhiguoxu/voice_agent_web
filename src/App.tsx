@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef, lazy, Suspense } from "react";
 import {
   fetchSessions,
+  fetchSessionById,
   fetchTurns,
   fetchTurnByTrace,
   deleteSession,
@@ -414,7 +415,13 @@ export default function App() {
       });
       // 翻页期间筛选条件变了会触发新查询，本次追加已过期，丢弃
       if (seq !== sessionsReqSeq.current) return;
-      setSessions((prev) => [...prev, ...data.items]);
+      // 去重 + 重排：分享链接直查插入的会话可能远比已加载页老，翻页加载出
+      // 比它新的页时要让它沉回真实位置；翻到它所在页时服务端会再次返回它
+      setSessions((prev) => {
+        const seen = new Set(prev.map((x) => x.id));
+        return [...prev, ...data.items.filter((x) => !seen.has(x.id))]
+          .sort((a, b) => b.id - a.id);
+      });
       setSessionsHasMore(data.has_more);
       setSessionsCursor(data.next_cursor);
     } finally {
@@ -787,25 +794,54 @@ export default function App() {
   const restoredTurnRef = useRef(false);
 
   useEffect(() => {
-    if (!restoredSessionRef.current && initSessionId && sessions.length > 0) {
-      const s = sessions.find((s) => s.id.toString() === initSessionId);
-      if (s) {
-        setSelectedSession(s);
-        loadTurns(s.id);
-        restoredSessionRef.current = true;
-      }
+    if (restoredSessionRef.current || !initSessionId || sessions.length === 0) return;
+    restoredSessionRef.current = true;
+    const s = sessions.find((s) => s.id.toString() === initSessionId);
+    if (s) {
+      setSelectedSession(s);
+      loadTurns(s.id);
+      return;
     }
+    // 目标会话不在首页列表里（老会话默认没加载）：按 id 直查后插入列表并选中
+    (async () => {
+      try {
+        const fetched = await fetchSessionById(Number(initSessionId));
+        setSessions((prev) =>
+          prev.some((x) => x.id === fetched.id)
+            ? prev
+            : [...prev, fetched].sort((a, b) => b.id - a.id));
+        setSelectedSession(fetched);
+        // 注入的会话通常排在已加载列表末尾（它比首页的都老），滚动到它让用户看得见
+        requestAnimationFrame(() => {
+          document.querySelector(".session-card.active")
+            ?.scrollIntoView({ block: "center" });
+        });
+        loadTurns(fetched.id);
+      } catch {
+        /* 会话已被删除等场景：保持默认列表即可 */
+      }
+    })();
   }, [sessions, initSessionId, loadTurns]);
 
   useEffect(() => {
-    if (!restoredTurnRef.current && initTurnId && turns.length > 0) {
-      const t = turns.find((t) => t.id.toString() === initTurnId);
-      if (t) {
-        setSelectedTurn(t);
-        restoredTurnRef.current = true;
-      }
+    if (restoredTurnRef.current || !initTurnId || turns.length === 0) return;
+    // 只对分享链接指向的会话做恢复，避免用户中途手动切会话时误翻页
+    if (initSessionId && selectedSession?.id.toString() !== initSessionId) return;
+    const t = turns.find((t) => t.id.toString() === initTurnId);
+    if (t) {
+      setSelectedTurn(t);
+      restoredTurnRef.current = true;
+      requestAnimationFrame(() => {
+        document.querySelector(".turn-card.active")
+          ?.scrollIntoView({ block: "center" });
+      });
+      return;
     }
-  }, [turns, initTurnId]);
+    // 目标轮次不在已加载分页里：继续向更早翻页直到加载到它（或翻完为止）
+    if (turnsHasMore && turnsCursor != null && !turnsLoading) {
+      loadMoreTurns();
+    }
+  }, [turns, initTurnId, initSessionId, selectedSession, turnsHasMore, turnsCursor, turnsLoading]);
 
 
   const isLoading = sessionsLoading || traceLoading;

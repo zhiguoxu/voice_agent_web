@@ -309,6 +309,13 @@ export async function fetchSessions(
   return normalizeCursorResult<Session>(await res.json());
 }
 
+/** 按 id 精确查单个会话（分享链接直达列表首页之外的老会话用） */
+export async function fetchSessionById(sessionId: number): Promise<Session> {
+  const res = await fetch(`${CONVERSATIONS_API_BASE}/sessions/${sessionId}`);
+  if (!res.ok) throw new Error("Failed to fetch session");
+  return res.json();
+}
+
 export async function fetchTurns(
   sessionId: number,
   params: { cursor?: number; page_size?: number } = {}
