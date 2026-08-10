@@ -416,6 +416,59 @@ export async function testSessionInput(sessionId: number, deviceSn: string, text
   }
 }
 
+// ── VAD 前原始音频录制（调试）────────────────────────────────────────────
+// 控制走 console 转发（须命中持有设备 WebSocket 的 voice 实例）；
+// 列表走 voice 的 CRUD 接口（数据在 COS，任意实例可查）。
+
+/** 一段录制内的 VAD 激活区间（相对段起点的毫秒偏移） */
+export interface RawAudioVadInterval {
+  start_ms: number;
+  end_ms: number;
+  /** 该区间对应轮次的 trace_id（录制开始前已在途的语音可能为 null） */
+  trace_id: string | null;
+}
+
+/** 一段原始音频录制（以 1s 无新数据为分割点自动切段） */
+export interface RawAudioItem {
+  device_sn: string;
+  session_id: number;
+  /** 段起始时间（产品时区 ISO） */
+  start_time: string;
+  duration_ms: number;
+  sample_rate: number;
+  /** WAV 的 COS key，经 /media?key= 换临时链接播放/下载 */
+  wav_key: string;
+  vad_intervals: RawAudioVadInterval[];
+}
+
+async function rawRecordControl(sessionId: number, deviceSn: string, op: "start" | "stop" | "status"): Promise<{ recording: boolean }> {
+  const res = await fetch(`${LIVE_CONVERSATIONS_API_BASE}/sessions/${sessionId}/raw_record/${op}?device_sn=${encodeURIComponent(deviceSn)}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: op === "start" ? JSON.stringify({ max_seconds: 1800 }) : undefined,
+  });
+  if (!res.ok) {
+    const detail = await res.text();
+    throw new Error(`raw_record ${op} failed: ${detail}`);
+  }
+  return res.json();
+}
+
+export const rawRecordStart = (sessionId: number, deviceSn: string) => rawRecordControl(sessionId, deviceSn, "start");
+export const rawRecordStop = (sessionId: number, deviceSn: string) => rawRecordControl(sessionId, deviceSn, "stop");
+export const rawRecordStatus = (sessionId: number, deviceSn: string) => rawRecordControl(sessionId, deviceSn, "status");
+
+/** 拉取该会话已落 COS 的原始音频段列表（新→旧） */
+export async function fetchRawAudioList(sessionId: number): Promise<RawAudioItem[]> {
+  const res = await fetch(`${CONVERSATIONS_API_BASE}/sessions/${sessionId}/raw_audio`);
+  if (!res.ok) {
+    const detail = await res.text();
+    throw new Error(`获取原始音频列表失败: ${detail}`);
+  }
+  const data = await res.json();
+  return data.items ?? [];
+}
+
 export async function forceNewSession(sessionId: number, deviceSn: string): Promise<{ new_session_id: number }> {
   const res = await fetch(`${LIVE_CONVERSATIONS_API_BASE}/sessions/${sessionId}/force_new?device_sn=${encodeURIComponent(deviceSn)}`, {
     method: "POST",

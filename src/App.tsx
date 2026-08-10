@@ -9,6 +9,9 @@ import {
   replayTurn,
   testSessionInput,
   forceNewSession,
+  rawRecordStart,
+  rawRecordStop,
+  rawRecordStatus,
   updateDeviceName,
   fetchRoster,
   fetchExtractedTraces,
@@ -32,6 +35,7 @@ import { MemoryDialog } from "./MemoryDialog";
 import { MemoryIngestDialog } from "./MemoryIngestDialog";
 import { FaceRegisterDialog } from "./FaceRegisterDialog";
 import { StreamControlDialog, deriveStreamState } from "./StreamControlDialog";
+import { RawAudioDialog } from "./RawAudioDialog";
 import { MemoryRecallPanel } from "./MemoryRecallPanel";
 import { ConfigView } from "./ConfigView";
 import { ApiTestView } from "./ApiTestView";
@@ -225,6 +229,38 @@ export default function App() {
     return saved ? saved === "true" : true;
   });
   const [testInputLoading, setTestInputLoading] = useState(false);
+
+  /* ── 原始音频录制（VAD 调试）── 开关作用在持有设备连接的 voice 实例上，
+     切会话时查一次真实状态回填按钮；列表对话框展示已落 COS 的分段 */
+  const [rawRecording, setRawRecording] = useState(false);
+  const [rawRecLoading, setRawRecLoading] = useState(false);
+  const [rawAudioDialog, setRawAudioDialog] = useState<
+    { sessionId: number; deviceSn: string } | null>(null);
+
+  useEffect(() => {
+    setRawRecording(false);
+    if (!selectedSession?.is_online) return;
+    let cancelled = false;
+    rawRecordStatus(selectedSession.id, selectedSession.device_sn)
+      .then((r) => { if (!cancelled) setRawRecording(r.recording); })
+      .catch(() => { /* 设备刚离线等场景，按钮保持未录制态即可 */ });
+    return () => { cancelled = true; };
+  }, [selectedSession?.id, selectedSession?.is_online, selectedSession?.device_sn]);
+
+  const toggleRawRecording = async () => {
+    if (!selectedSession) return;
+    setRawRecLoading(true);
+    try {
+      const r = rawRecording
+        ? await rawRecordStop(selectedSession.id, selectedSession.device_sn)
+        : await rawRecordStart(selectedSession.id, selectedSession.device_sn);
+      setRawRecording(r.recording);
+    } catch (err: any) {
+      alert(`录制操作失败: ${err.message || String(err)}`);
+    } finally {
+      setRawRecLoading(false);
+    }
+  };
 
   /* ── Live Stream State ── */
   const [liveStreamEnabled, setLiveStreamEnabled] = useState(() => {
@@ -976,13 +1012,58 @@ export default function App() {
           {selectedSession ? (
             <>
               <div className="content-header">
-                <h2>
-                  会话 #{selectedSession.id} — {
-                    selectedSession.device_name
-                      ? `${selectedSession.device_name} (${selectedSession.device_sn})`
-                      : selectedSession.device_sn
-                  }
-                  <span className="header-user">👤 {selectedSession.user_id || "-"}</span>
+                {/* 第一行：会话标题 + 会话级操作（右对齐） */}
+                <div className="content-header-top">
+                  <h2>
+                    会话 #{selectedSession.id} — {
+                      selectedSession.device_name
+                        ? `${selectedSession.device_name} (${selectedSession.device_sn})`
+                        : selectedSession.device_sn
+                    }
+                    <span className="header-user">👤 {selectedSession.user_id || "-"}</span>
+                  </h2>
+                  <div className="content-header-actions">
+                    {selectedSession.is_online && (
+                      <button
+                        className={`live-stream-btn raw-record-btn ${rawRecording ? "recording" : ""}`}
+                        disabled={rawRecLoading}
+                        data-tip={rawRecording
+                          ? "正在录制 VAD 前的原始拾音（1s 无数据自动分段存入 COS），点击停止"
+                          : "录制喂给 VAD 的原始拾音（调试 VAD 用）：自动分段存入 COS 并关联本会话，超时 30 分钟自动停止"}
+                        onClick={toggleRawRecording}
+                      >
+                        <span className={`raw-record-dot ${rawRecording ? "on" : ""}`} />
+                        {rawRecLoading ? "处理中..." : rawRecording ? "录制中" : "录制拾音"}
+                      </button>
+                    )}
+                    <button
+                      className="live-stream-btn"
+                      data-tip="查看本会话已录制的原始拾音分段（含 VAD 激活区间标注）"
+                      onClick={() => setRawAudioDialog({
+                        sessionId: selectedSession.id,
+                        deviceSn: selectedSession.device_sn,
+                      })}
+                    >
+                      🎞️ 原始音频
+                    </button>
+                    {selectedSession.is_online && (
+                      <button
+                        className={`live-stream-btn ${liveStreamEnabled ? "active" : ""}`}
+                        data-tip="开启后无需刷新即可查看该在线设备的实时对话流"
+                        onClick={() => {
+                          const val = !liveStreamEnabled;
+                          setLiveStreamEnabled(val);
+                          localStorage.setItem("liveStreamEnabled", String(val));
+                        }}
+                      >
+                        <span className={`live-dot ${liveStreamEnabled ? "active" : ""}`} />
+                        实时反馈
+                      </button>
+                    )}
+                  </div>
+                </div>
+                {/* 第二行：设备工具条（按设备维度的查看/操作入口，统一小按钮样式） */}
+                <div className="content-header-toolbar">
                   <button
                     className="roster-open-btn"
                     data-tip="查看/编辑该设备所属家庭的花名册"
@@ -1033,23 +1114,6 @@ export default function App() {
                       {deriveStreamState(streamStatus) === "on" ? "拉流中" : "拉流"}
                     </button>
                   )}
-                </h2>
-                <div className="content-header-actions">
-                  {selectedSession.is_online && (
-                    <button
-                      className={`live-stream-btn ${liveStreamEnabled ? "active" : ""}`}
-                      data-tip="开启后无需刷新即可查看该在线设备的实时对话流"
-                      onClick={() => {
-                        const val = !liveStreamEnabled;
-                        setLiveStreamEnabled(val);
-                        localStorage.setItem("liveStreamEnabled", String(val));
-                      }}
-                    >
-                      <span className={`live-dot ${liveStreamEnabled ? "active" : ""}`} />
-                      实时反馈
-                    </button>
-                  )}
-
                 </div>
               </div>
 
@@ -1710,6 +1774,18 @@ export default function App() {
           onClose={() => setStreamDialogSn(null)}
           onStatusChange={(d) => {
             if (selectedSession?.device_sn === streamDialogSn) setStreamStatus(d);
+          }}
+        />
+      )}
+      {/* 原始音频列表对话框（VAD 前拾音分段，含 VAD 激活区间；点区间可跳日志） */}
+      {rawAudioDialog && (
+        <RawAudioDialog
+          sessionId={rawAudioDialog.sessionId}
+          deviceSn={rawAudioDialog.deviceSn}
+          onClose={() => setRawAudioDialog(null)}
+          onJumpTrace={(traceId) => {
+            setRawAudioDialog(null);
+            openLogsWith({ traceId });
           }}
         />
       )}
