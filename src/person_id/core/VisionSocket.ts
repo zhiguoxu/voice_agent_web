@@ -8,6 +8,7 @@
  */
 import type { FrameResult, VisionEvent } from "../types";
 import type { FrameSink } from "./VideoCapture";
+import { FpsMeter } from "./fpsMeter";
 
 export class VisionSocket implements FrameSink {
   connected = false;
@@ -22,10 +23,10 @@ export class VisionSocket implements FrameSink {
   private disposed = false;
 
   // 统计
-  // - 服务端拉流观看: FPS 由 StreamViewer 上屏回调刷新 (见 refreshFpsFromViewer)
-  // - 本地上传: 仍按 frame_result 到达间隔
-  private lastResultTime = 0;
-  private fpsHistory: number[] = [];
+  // - 服务端拉流: 优先用 frame_result.process_fps（与状态接口同口径）
+  // - 否则 StreamViewer 上屏吞吐 / 本地上传收包吞吐
+  private readonly fpsMeter = new FpsMeter();
+  private serverProcessFps: number | null = null;
   private latencyHistory: number[] = [];
 
   /* ── 回调（由 VisionView 装配） ── */
@@ -148,20 +149,14 @@ export class VisionSocket implements FrameSink {
     }
   }
 
-  /** 更新延迟 / 本地采集自适应帧率; 服务端拉流时 FPS 由 StreamViewer 负责 */
+  /** 更新延迟 / 本地采集自适应帧率; 拉流时角标优先用服务端 process_fps */
   private updateStats(result: FrameResult): void {
-    // 本地上传模式才用收包间隔计 FPS; 拉流观看时收包突发会虚高到上百
-    const viewerFps = this.getViewerFPS?.();
-    if (viewerFps == null) {
-      const now = performance.now();
-      if (this.lastResultTime > 0) {
-        const dt = now - this.lastResultTime;
-        if (dt >= 8 && dt < 5000) {
-          this.fpsHistory.push(1000 / dt);
-          if (this.fpsHistory.length > 30) this.fpsHistory.shift();
-        }
-      }
-      this.lastResultTime = now;
+    if (typeof result.process_fps === "number" && Number.isFinite(result.process_fps)) {
+      this.serverProcessFps = result.process_fps;
+    } else {
+      this.serverProcessFps = null;
+      // 本地上传: 无服务端帧率字段, 按结果到达记吞吐
+      this.fpsMeter.record();
     }
 
     if (result.processing_ms) {
@@ -179,16 +174,16 @@ export class VisionSocket implements FrameSink {
     this.emitStats();
   }
 
-  /** 服务端拉流观看: 按 canvas 实际绘制间隔刷新角标 */
+  /** 服务端拉流观看: 绘制后刷新角标（无 process_fps 时回退下屏吞吐） */
   refreshFpsFromViewer(): void {
     this.emitStats();
   }
 
   get currentFPS(): number {
+    if (this.serverProcessFps != null) return this.serverProcessFps;
     const viewerFps = this.getViewerFPS?.();
     if (viewerFps != null) return viewerFps;
-    if (this.fpsHistory.length === 0) return 0;
-    return this.fpsHistory.reduce((a, b) => a + b, 0) / this.fpsHistory.length;
+    return this.fpsMeter.value();
   }
 
   get currentLatency(): number {
@@ -224,5 +219,7 @@ export class VisionSocket implements FrameSink {
       this.ws = null;
     }
     this.connected = false;
+    this.serverProcessFps = null;
+    this.fpsMeter.reset();
   }
 }

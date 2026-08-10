@@ -551,9 +551,10 @@ export interface FaceRegisterResult {
   /** 尽量透传 person_id 原始状态。成功: registered(新入库) | already_known
    *  (人已在库，细节看 message)；前置检查失败: person_id_disabled |
    *  memory_disabled | busy | person_id_unreachable(服务查询失败，非摄像头
-   *  问题) | stream_off | duplicate_name；探测失败(透传失败码): 3 轮均失败时
-   *  透传最后一次 (camera_offline | no_target | no_face | low_face_quality
-   *  等，兜底 enroll_failed)，服务调用失败则立即中止 (error | disabled)；
+   *  问题) | camera_open_failed(未拉流且自动开流失败) | duplicate_name；
+   *  探测失败(透传失败码): 3 轮均失败时透传最后一次 (camera_offline |
+   *  no_target | no_face | low_face_quality 等，兜底 enroll_failed)，
+   *  服务调用失败则立即中止 (error | disabled)；
    *  其他: name_save_failed (人脸已入库但名字没写上，重试注册可自愈，
    *  person_id 有值) | internal_error */
   status: string;
@@ -561,15 +562,17 @@ export interface FaceRegisterResult {
   person_id: string | null;
 }
 
-/** 触发一次引导式人脸注册。同步接口：阻塞到流程结束（最多 3 轮 × 每轮 4 次
- *  带质量门槛的注册探测，通常几十秒），期间设备会语音引导用户；返回最终结果。 */
+/** 触发一次引导式人脸注册。同步接口：阻塞到流程结束（未拉流会先自动开启
+ *  摄像头，再最多 3 轮 × 每轮 4 次带质量门槛的注册探测，通常几十秒），
+ *  期间设备会语音引导用户；返回最终结果。
+ *  env: 设备推流所在的 ISS 环境（自动开流用，与拉流控制的 env 同源）。 */
 export async function registerFace(
-  deviceSn: string, name: string,
+  deviceSn: string, name: string, env: string,
 ): Promise<FaceRegisterResult> {
   const res = await fetch("/api/agent/face/register", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ device_sn: deviceSn, name }),
+    body: JSON.stringify({ device_sn: deviceSn, name, env }),
   });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));

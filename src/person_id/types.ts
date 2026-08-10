@@ -73,6 +73,8 @@ export interface FrameResult {
   /** 服务端处理帧尺寸（拉流观看模式下识别坐标的基准） */
   frame_w?: number;
   frame_h?: number;
+  /** 服务端拉流处理帧率（与 consume/status.process_fps 同口径） */
+  process_fps?: number | null;
 }
 
 export interface MatchCandidate {

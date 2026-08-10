@@ -35,7 +35,9 @@ export function FaceRegisterDialog({ deviceSn, onClose }: {
     setResult(null);
     setError(null);
     try {
-      setResult(await registerFace(deviceSn, trimmed));
+      // ISS 环境与拉流控制对话框同一份选择（未拉流时后端自动开流用）
+      const env = localStorage.getItem("streamIssEnv") || "test";
+      setResult(await registerFace(deviceSn, trimmed, env));
     } catch (e: any) {
       setError(e.message || String(e));
     } finally {
@@ -54,9 +56,10 @@ export function FaceRegisterDialog({ deviceSn, onClose }: {
 
         <div className="roster-dialog-body">
           <p className="face-register-hint">
-            输入要注册的人名后开始。需要设备摄像头处于拉流状态；注册过程由
-            设备语音引导（请让用户注视 mini 头部，每轮约 8 秒、最多 3 轮，
-            按更高的人脸质量标准采集底片），本页面会一直等到流程结束并展示结果。
+            输入要注册的人名后开始。摄像头未在拉流时会自动开启（多等约十几秒）；
+            注册过程由设备语音引导（请让用户注视 mini 头部，每轮约 8 秒、最多
+            3 轮，按更高的人脸质量标准采集底片），本页面会一直等到流程结束并
+            展示结果。
           </p>
           <div className="face-register-form">
             <input
@@ -78,7 +81,7 @@ export function FaceRegisterDialog({ deviceSn, onClose }: {
           </div>
           {submitting && (
             <div className="face-register-result running">
-              ⏳ 注册进行中（典型几十秒，最长约一分半）……请让用户按设备语音提示注视 mini 头部
+              ⏳ 注册进行中（典型几十秒，最长约两分钟，未拉流会先自动开启摄像头）……请让用户按设备语音提示注视 mini 头部
             </div>
           )}
           {result && (

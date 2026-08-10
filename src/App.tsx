@@ -1006,7 +1006,7 @@ export default function App() {
                   </button>
                   <button
                     className="roster-open-btn"
-                    data-tip="触发该设备的引导式人脸注册（需摄像头拉流中，注册过程由设备语音引导）"
+                    data-tip="触发该设备的引导式人脸注册（未拉流会自动开启摄像头，注册过程由设备语音引导）"
                     onClick={() => setFaceRegDeviceSn(selectedSession.device_sn)}
                   >
                     📷 注册人脸

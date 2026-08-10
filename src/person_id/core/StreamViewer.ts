@@ -8,6 +8,7 @@
  * 提供与 VideoCapture.getVideoRect() 相同结构的坐标基准。
  */
 import type { VideoRect } from "../types";
+import { FpsMeter } from "./fpsMeter";
 
 export class StreamViewer {
   active = false;
@@ -25,9 +26,8 @@ export class StreamViewer {
   private decoding = false;
   private pendingBuf: ArrayBuffer | null = null;
 
-  // 绘制帧率 (角标用真实上屏速率, 不用 WS 收包间隔 — 收包突发会虚高到上百)
-  private lastDrawTime = 0;
-  private fpsHistory: number[] = [];
+  // 绘制帧率: 滑动时间窗吞吐 (不用帧间隔倒数平均 — pending 连画会虚高到 ~30)
+  private readonly fpsMeter = new FpsMeter();
 
   /** 每成功画一帧回调（刷新 FPS 角标） */
   onDraw: (() => void) | null = null;
@@ -61,8 +61,7 @@ export class StreamViewer {
     }
     this.active = false;
     this.pendingBuf = null;
-    this.fpsHistory = [];
-    this.lastDrawTime = 0;
+    this.fpsMeter.reset();
     const canvas = this.getCanvas();
     if (canvas && canvas.width) {
       canvas.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height);
@@ -80,8 +79,7 @@ export class StreamViewer {
   }
 
   get currentFPS(): number {
-    if (this.fpsHistory.length === 0) return 0;
-    return this.fpsHistory.reduce((a, b) => a + b, 0) / this.fpsHistory.length;
+    return this.fpsMeter.value();
   }
 
   /** 收到服务端推送的二进制 JPEG 帧 */
@@ -120,16 +118,7 @@ export class StreamViewer {
       canvas.getContext("2d")?.drawImage(bitmap, 0, 0);
       bitmap.close();
 
-      const now = performance.now();
-      if (this.lastDrawTime > 0) {
-        const dt = now - this.lastDrawTime;
-        // 过滤异常突发 (<8ms ≈ >125fps, 多半是积压连画), 避免角标虚高
-        if (dt >= 8 && dt < 5000) {
-          this.fpsHistory.push(1000 / dt);
-          if (this.fpsHistory.length > 30) this.fpsHistory.shift();
-        }
-      }
-      this.lastDrawTime = now;
+      this.fpsMeter.record();
       this.onDraw?.();
     } catch (e) {
       console.error("[StreamViewer] Frame decode failed:", e);
