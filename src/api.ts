@@ -1491,6 +1491,67 @@ export async function testModeration(
   return res.json();
 }
 
+/** ASR 测试面板用的配置摘要（GET /api/voice/asr/test/config） */
+export interface AsrTestConfig {
+  /** 生产当前使用的 ASR 提供商（asr.name），仅展示；测试接口固定测火山引擎 */
+  provider: string;
+  /** asr.volcengine.mode 当前配置值（不选模式时用它） */
+  default_mode: string;
+  modes: string[];
+  api_key_configured: boolean;
+  resource_id: string;
+  /** 当前生效的热词（识别请求会直传） */
+  hot_words: string[];
+  /** 生产输入采样率（上传音频会转换到该采样率） */
+  input_sample_rate: number;
+}
+
+export async function fetchAsrTestConfig(): Promise<AsrTestConfig> {
+  const res = await fetch("/api/voice/asr/test/config");
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || "获取 ASR 测试配置失败");
+  }
+  return res.json();
+}
+
+/** ASR 在线测试结果（POST /api/voice/asr/test，走生产同款火山引擎客户端） */
+export interface AsrTestResult {
+  /** 本次实际使用的识别模式 */
+  mode: string;
+  /** 是否按 200ms 实时节奏喂入（模拟生产时序） */
+  realtime: boolean;
+  filename: string;
+  /** 转换后音频时长（秒） */
+  audio_seconds: number;
+  /** 最终识别文本；无有效语音或等待超时为 null */
+  text: string | null;
+  /** 发送负包到拿到最终结果的耗时（毫秒），realtime 时才有生产参考意义 */
+  latency_ms: number;
+  /** 建连+喂音频+等结果的总耗时（毫秒） */
+  elapsed_ms: number;
+  /** 中间识别结果（bigmodel_nostream 模式没有） */
+  mid_texts: { t_ms: number; text: string }[];
+}
+
+export async function testAsr(
+  file: File,
+  /** 空 = 用当前配置 asr.volcengine.mode */
+  mode = "",
+  realtime = false,
+): Promise<AsrTestResult> {
+  const fd = new FormData();
+  fd.append("file", file);
+  if (mode) fd.append("mode", mode);
+  fd.append("realtime", String(realtime));
+  const res = await fetch("/api/voice/asr/test", { method: "POST", body: fd });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || "ASR 测试请求失败");
+  }
+  return res.json();
+}
+
 export async function sendAction(
   device_sn: string,
   device_type_id: string,

@@ -1,15 +1,19 @@
 /**
- * API 测试页：BERT 意图识别、内容风控等与生产同款链路的在线探测。
+ * API 测试页：BERT 意图识别、内容风控、火山引擎 ASR 等与生产同款链路的在线探测。
  * 从系统配置拆出，避免把「测接口」和「改配置」混在同一页。
  */
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   fetchIntentLabels,
   classifyIntent,
   testModeration,
+  fetchAsrTestConfig,
+  testAsr,
   type IntentLabels,
   type IntentClassifyResult,
   type ModerationTestResult,
+  type AsrTestConfig,
+  type AsrTestResult,
 } from "./api";
 import "./ApiTestView.css";
 
@@ -290,6 +294,186 @@ function ModerationPanel() {
   );
 }
 
+/** 火山引擎 ASR 在线测试：上传音频（对话详情/原始音频弹窗下载的 WAV 均可），
+ *  走生产同款 VolcengineASR 客户端（含热词），三种模式按次可选，不改全局配置。 */
+function AsrPanel() {
+  const [cfg, setCfg] = useState<AsrTestConfig | null>(null);
+  const [cfgError, setCfgError] = useState<string | null>(null);
+  const [cfgLoading, setCfgLoading] = useState(false);
+
+  const [file, setFile] = useState<File | null>(null);
+  const [mode, setMode] = useState("");
+  const [realtime, setRealtime] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [results, setResults] = useState<AsrTestResult[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const loadConfig = useCallback(async () => {
+    setCfgLoading(true);
+    setCfgError(null);
+    try {
+      setCfg(await fetchAsrTestConfig());
+    } catch (e: any) {
+      setCfgError(e.message || String(e));
+    } finally {
+      setCfgLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadConfig();
+  }, [loadConfig]);
+
+  const runTest = async () => {
+    if (!file || testing) return;
+    setTesting(true);
+    setError(null);
+    try {
+      const r = await testAsr(file, mode, realtime);
+      setResults((prev) => [r, ...prev].slice(0, 20));
+    } catch (e: any) {
+      setError(e.message || String(e));
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  return (
+    <div className="card cfg-card cfg-intent-card">
+      <h3>
+        🎙️ 火山引擎 ASR 测试
+        <span className="subtitle">
+          上传音频跑生产同款流式识别（含热词），可选三种模式，不落库、不触发对话
+        </span>
+        {cfg && (
+          <span className="cfg-badges">
+            <span className={`cfg-badge health ${cfg.api_key_configured ? "ok" : "down"}`}>
+              {cfg.api_key_configured ? "● api_key 已配置" : "● api_key 未配置"}
+            </span>
+            {cfg.provider !== "volcengine" && (
+              <span className="cfg-badge modified">生产当前 ASR: {cfg.provider}</span>
+            )}
+          </span>
+        )}
+        <button className="roster-refresh" onClick={loadConfig} disabled={cfgLoading}>
+          {cfgLoading ? <span className="spinner inline" /> : "🔄 刷新"}
+        </button>
+      </h3>
+
+      {cfgError && <div className="cfg-error">❌ 加载配置失败: {cfgError}</div>}
+
+      {cfg && (
+        <div className="cfg-intent-meta">
+          <span>默认模式 <code>{cfg.default_mode}</code></span>
+          <span>资源 <code>{cfg.resource_id}</code></span>
+          <span>输入采样率 <code>{cfg.input_sample_rate} Hz</code>（其他采样率的 WAV 自动转换）</span>
+          <span>
+            热词{" "}
+            {cfg.hot_words.length > 0 ? (
+              <code>{cfg.hot_words.join("、")}</code>
+            ) : (
+              "（无）"
+            )}
+          </span>
+        </div>
+      )}
+
+      <div className="cfg-intent-test cfg-asr-test">
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".wav,.pcm,.raw,audio/wav,audio/x-wav"
+          onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+          disabled={testing}
+        />
+        <select
+          value={mode}
+          onChange={(e) => setMode(e.target.value)}
+          disabled={testing}
+          title="识别模式，仅本次生效，不改全局配置"
+        >
+          <option value="">跟随配置{cfg ? `（${cfg.default_mode}）` : ""}</option>
+          <option value="bigmodel">bigmodel（双向流式）</option>
+          <option value="bigmodel_async">bigmodel_async（流式优化版，官方推荐）</option>
+          <option value="bigmodel_nostream">bigmodel_nostream（句级出结果，无中间结果）</option>
+        </select>
+        <label
+          className="cfg-asr-realtime"
+          title="按 200ms 实时节奏喂入，模拟生产时序（耗时≈音频时长），latency 才有生产参考意义"
+        >
+          <input
+            type="checkbox"
+            checked={realtime}
+            onChange={(e) => setRealtime(e.target.checked)}
+            disabled={testing}
+          />
+          实时节奏喂入
+        </label>
+        <button onClick={runTest} disabled={testing || !file}>
+          {testing ? <span className="spinner inline" /> : "识别"}
+        </button>
+      </div>
+      <div className="cfg-asr-tip">
+        支持对话详情下载的「输入语音」和原始音频弹窗下载的 WAV（16-bit PCM，任意采样率/声道），
+        以及裸 PCM（按 16kHz 单声道 int16 解释）。
+      </div>
+      {error && <div className="cfg-error">❌ 识别失败: {error}</div>}
+
+      {results.length > 0 && (
+        <div className="cfg-intent-results">
+          {results.map((r, i) => (
+            <div className="cfg-intent-result cfg-mod-result" key={results.length - i}>
+              <div className="cfg-mod-head">
+                <span className="cfg-intent-query">{r.filename || "（未命名文件）"}</span>
+                <span className="cfg-badge">{r.mode}</span>
+                {r.realtime && <span className="cfg-badge modified">实时节奏</span>}
+                <span className={`cfg-badge hit ${r.text ? "ok" : "down"}`}>
+                  {r.text ? "✔ 有结果" : "✘ 无结果/超时"}
+                </span>
+              </div>
+              <div className="cfg-asr-text">
+                {r.text ?? "（未识别出文本）"}
+              </div>
+              <div className="cfg-mod-layers">
+                <span className="cfg-mod-layer">
+                  音频 <span className="cfg-number">{r.audio_seconds.toFixed(2)}s</span>
+                </span>
+                <span className="cfg-mod-layer">
+                  尾包延迟 <span className="cfg-number">{r.latency_ms}ms</span>
+                  {!r.realtime && (
+                    <span className="cfg-mod-elapsed">（全速喂入，无生产参考意义）</span>
+                  )}
+                </span>
+                <span className="cfg-mod-layer">
+                  总耗时 <span className="cfg-number">{r.elapsed_ms}ms</span>
+                </span>
+                <span className="cfg-mod-layer">
+                  中间结果 <span className="cfg-number">{r.mid_texts.length}</span> 条
+                </span>
+              </div>
+              {r.mid_texts.length > 0 && (
+                <details className="cfg-asr-mid">
+                  <summary>
+                    中间结果（最后一条：{r.mid_texts[r.mid_texts.length - 1].text}）
+                  </summary>
+                  <div className="cfg-asr-mid-list">
+                    {r.mid_texts.map((m, j) => (
+                      <div key={j}>
+                        <span className="cfg-number">{(m.t_ms / 1000).toFixed(2)}s</span> {m.text}
+                      </div>
+                    ))}
+                  </div>
+                </details>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function ApiTestView() {
   return (
     <div className="api-test-container">
@@ -298,6 +482,7 @@ export function ApiTestView() {
       </div>
       <IntentPanel />
       <ModerationPanel />
+      <AsrPanel />
     </div>
   );
 }
