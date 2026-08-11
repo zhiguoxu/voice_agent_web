@@ -43,6 +43,7 @@ import { ConfigView } from "./ConfigView";
 import { ApiTestView } from "./ApiTestView";
 import { SweepMonitor } from "./SweepMonitor";
 import { TrafficMonitor } from "./TrafficMonitor";
+import { VideosView } from "./VideosView";
 import "./App.css";
 
 // 视觉识别模块体量大（含 vision.css 与全套面板组件），按需加载单独分包，
@@ -160,7 +161,7 @@ function SpeakerBadge({ speakerId, speakerName, kind, suspected, debug, names, o
 }
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<"conversations" | "deviceControl" | "logs" | "sweep" | "traffic" | "vision" | "apiTest" | "config">("conversations");
+  const [activeTab, setActiveTab] = useState<"conversations" | "deviceControl" | "logs" | "sweep" | "traffic" | "vision" | "videos" | "apiTest" | "config">("conversations");
   /* 对话分析页跳转到日志页时预填的精确过滤条件（一次性，LogMonitor 挂载后消费） */
   const [logJumpFilter, setLogJumpFilter] = useState<LogJumpFilter | null>(null);
   const openLogsWith = (filter: LogJumpFilter) => {
@@ -923,6 +924,13 @@ export default function App() {
             data-tip="person_id 视觉识别仪表盘（实时视频、身份识别、底库管理）"
           >
             视觉识别
+          </button>
+          <button
+            className={`main-tab ${activeTab === 'videos' ? 'active' : ''}`}
+            onClick={() => setActiveTab('videos')}
+            data-tip="拉流录像查询、预览与下载（按开始时间范围）"
+          >
+            视频录像
           </button>
           <button
             className={`main-tab ${activeTab === 'apiTest' ? 'active' : ''}`}
@@ -1803,6 +1811,8 @@ export default function App() {
         <Suspense fallback={<div style={{ padding: 24, color: "#888" }}>视觉识别模块加载中…</div>}>
           <VisionView />
         </Suspense>
+      ) : activeTab === 'videos' ? (
+        <VideosView />
       ) : activeTab === 'apiTest' ? (
         <ApiTestView />
       ) : activeTab === 'config' ? (

@@ -1225,6 +1225,64 @@ export async function fetchPersonConfig(): Promise<ServiceConfig> {
   return res.json();
 }
 
+/* ── 拉流录像（person_id 自动录制 → COS）── */
+
+export interface VideoRecordingItem {
+  id: number;
+  device_sn: string;
+  stream_session_id: string;
+  started_at: string;
+  ended_at: string | null;
+  duration_ms: number;
+  width: number;
+  height: number;
+  fps: number;
+  frame_count: number;
+  cos_key: string | null;
+  status: string;
+  error_message: string | null;
+}
+
+export async function fetchVideoList(params: {
+  start_from?: string;
+  start_to?: string;
+  device_sn?: string;
+  status?: string;
+  limit?: number;
+  offset?: number;
+}): Promise<VideoRecordingItem[]> {
+  const sp = new URLSearchParams();
+  if (params.start_from) sp.set("start_from", params.start_from);
+  if (params.start_to) sp.set("start_to", params.start_to);
+  if (params.device_sn) sp.set("device_sn", params.device_sn);
+  if (params.status !== undefined) sp.set("status", params.status);
+  if (params.limit != null) sp.set("limit", String(params.limit));
+  if (params.offset != null) sp.set("offset", String(params.offset));
+  const res = await fetch(`/person_id/api/videos?${sp}`);
+  if (!res.ok) {
+    const detail = await res.text();
+    throw new Error(`获取录像列表失败: ${detail}`);
+  }
+  const data = await res.json();
+  return data.items ?? [];
+}
+
+/** 预览/下载：经 person_id 307 跳转到 COS 临时链 */
+export function videoMediaUrl(videoId: number, download = false): string {
+  const sp = new URLSearchParams();
+  if (download) sp.set("download", "true");
+  const q = sp.toString();
+  return `/person_id/api/videos/${videoId}/media${q ? `?${q}` : ""}`;
+}
+
+export async function deleteVideo(videoId: number): Promise<void> {
+  const res = await fetch(`/person_id/api/videos/${videoId}`, { method: "DELETE" });
+  if (!res.ok) {
+    const detail = await res.text();
+    throw new Error(`删除录像失败: ${detail}`);
+  }
+}
+
 /** 记忆 GPU 服务（嵌入/key 抽取）经 nginx 前缀代理直达，/api/config 与
     voice/agent 同构（service/version/env/started_at/脱敏 config dump）。 */
 export async function fetchEmbeddingConfig(): Promise<ServiceConfig> {
