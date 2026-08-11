@@ -20,6 +20,7 @@ import {
   type StreamStatusData,
   type Session,
   type Turn,
+  type TraceResult,
   type IdentityDebug,
   type ReplayResult,
   CONVERSATIONS_API_BASE,
@@ -249,7 +250,9 @@ export default function App() {
   }, [selectedSession?.id, selectedSession?.is_online, selectedSession?.device_sn]);
 
   /* 原始音频对话框点 VAD 区间 → 选中对应对话记录。优先在已加载的轮次里找
-     （命中即高亮并滚动到卡片），翻页外的老轮次按 trace 现查后直接进详情面板 */
+     （命中即高亮并滚动到卡片）；翻页外的老轮次按 trace 现查进详情面板后，
+     继续向更早翻页把它补进列表——否则列表里没有这张卡片，无法高亮/滚动，
+     看起来就像"点了没跳过去" */
   const selectTurnByTrace = async (traceId: string) => {
     const scrollToActive = () => requestAnimationFrame(() => {
       document.querySelector(".turn-card.active")
@@ -261,13 +264,41 @@ export default function App() {
       scrollToActive();
       return;
     }
+    let result: TraceResult;
     try {
-      const result = await fetchTurnByTrace(traceId);
-      setSelectedTurn(result.turn);
-      scrollToActive();
+      result = await fetchTurnByTrace(traceId);
     } catch {
       alert("未找到该轮对话记录（可能已被删除）");
+      return;
     }
+    setSelectedTurn(result.turn);
+    if (result.session.id === selectedSession?.id) {
+      // 借 turnsLoading 禁用「加载更早」按钮，避免并发翻页重复前插
+      setTurnsLoading(true);
+      let cursor = turnsCursor;
+      let hasMore = turnsHasMore;
+      const older: Turn[] = [];
+      try {
+        while (hasMore && cursor != null) {
+          const data = await fetchTurns(result.session.id, { cursor, page_size: 50 });
+          // 每往前翻一页记录更早，反转成正序后整页插到累积结果的最前面
+          older.unshift(...[...data.items].reverse());
+          hasMore = data.has_more;
+          cursor = data.next_cursor;
+          if (data.items.some((t) => t.id === result.turn.id)) break;
+        }
+        if (older.length) {
+          setTurns((prev) => [...older, ...prev]);
+          setTurnsHasMore(hasMore);
+          setTurnsCursor(cursor);
+        }
+      } catch {
+        /* 翻页失败不影响详情面板展示，静默即可 */
+      } finally {
+        setTurnsLoading(false);
+      }
+    }
+    scrollToActive();
   };
 
   const toggleRawRecording = async () => {
