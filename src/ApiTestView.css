@@ -402,3 +402,181 @@
   color: var(--text-primary);
   font-size: 13px;
 }
+
+/* ── VAD 触发调参 ── */
+
+.api-test-container .vad-upload-row input[type="file"] {
+  flex: initial;
+}
+
+.api-test-container .vad-device-sn {
+  width: 300px;
+  flex: initial !important;
+}
+
+.api-test-container .vad-files {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 8px 0;
+}
+
+.api-test-container .vad-file-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.api-test-container .vad-file-name {
+  min-width: 220px;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.api-test-container .vad-file-row select {
+  padding: 3px 6px;
+  background: var(--bg-input, var(--bg-secondary));
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.api-test-container .vad-file-remove {
+  padding: 2px 8px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.api-test-container .vad-file-remove:hover {
+  color: var(--red, #f87171);
+  border-color: var(--red, #f87171);
+}
+
+.api-test-container .vad-action-row {
+  margin-top: 8px;
+}
+
+.api-test-container .vad-json-input {
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+}
+
+.api-test-container .vad-tune-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+  align-self: center;
+}
+
+.api-test-container .vad-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin: 8px 0;
+}
+
+.api-test-container .vad-file-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.api-test-container .vad-file-card {
+  padding: 8px 10px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.api-test-container .vad-file-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.api-test-container .vad-file-meta {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.api-test-container .vad-file-body {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.api-test-container .vad-bar {
+  position: relative;
+  flex: 1;
+  min-width: 200px;
+  height: 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.api-test-container .vad-bar-seg {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: var(--green, #4ade80);
+  opacity: 0.75;
+}
+
+.api-test-container .vad-file-segs {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-family: var(--font-mono, monospace);
+  white-space: nowrap;
+}
+
+.api-test-container .vad-combo-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  margin: 8px 0;
+}
+
+.api-test-container .vad-combo-table th,
+.api-test-container .vad-combo-table td {
+  padding: 5px 10px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+
+.api-test-container .vad-combo-table th {
+  color: var(--text-muted);
+  font-weight: 500;
+  font-size: 12px;
+}
+
+.api-test-container .vad-combo-table code {
+  font-size: 12px;
+}
+
+.api-test-container .vad-apply-btn {
+  padding: 2px 10px;
+  font-size: 12px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.api-test-container .vad-apply-btn:hover {
+  border-color: var(--accent, #60a5fa);
+  color: var(--accent, #60a5fa);
+}

@@ -10,11 +10,19 @@ import {
   testModeration,
   fetchAsrTestConfig,
   testAsr,
+  fetchVadTestConfig,
+  testVad,
+  tuneVad,
   type IntentLabels,
   type IntentClassifyResult,
   type ModerationTestResult,
   type AsrTestConfig,
   type AsrTestResult,
+  type VadTestConfig,
+  type VadTestResult,
+  type VadTuneResult,
+  type VadFileResult,
+  type VadSummary,
 } from "./api";
 import "./ApiTestView.css";
 
@@ -504,6 +512,343 @@ function AsrPanel() {
   );
 }
 
+/** 触发段时间轴：整条音频为底，触发段画成绿色区块 */
+function VadSegmentBar({ f }: { f: VadFileResult }) {
+  return (
+    <div className="vad-bar" title={`时长 ${f.audio_seconds}s`}>
+      {f.segments.map(([s, e], i) => (
+        <span
+          key={i}
+          className="vad-bar-seg"
+          style={{
+            left: `${(s / f.audio_seconds) * 100}%`,
+            width: `${(Math.max(e - s, 0.05) / f.audio_seconds) * 100}%`,
+          }}
+          title={`${s.toFixed(2)}s → ${e.toFixed(2)}s`}
+        />
+      ))}
+    </div>
+  );
+}
+
+const VERDICT_LABEL: Record<string, { text: string; ok: boolean }> = {
+  ok: { text: "✔ 符合期望", ok: true },
+  miss: { text: "✘ 漏检", ok: false },
+  false_trigger: { text: "✘ 误触发", ok: false },
+  n_a: { text: "— 无标注", ok: true },
+};
+
+function VadFileCard({ f }: { f: VadFileResult }) {
+  const v = VERDICT_LABEL[f.verdict] ?? { text: f.verdict, ok: true };
+  const gainTip = f.gain_track.map(([t, g]) => `${t}s: ${g}dB`).join("\n");
+  return (
+    <div className="vad-file-card">
+      <div className="vad-file-head">
+        <span className="cfg-intent-query">{f.filename}</span>
+        <span className="cfg-badge">{f.expect}</span>
+        <span className={`cfg-badge hit ${v.ok ? "ok" : "down"}`}>{v.text}</span>
+        <span className="vad-file-meta">
+          {f.audio_seconds.toFixed(2)}s · 信噪比 {f.stats.snr_db}dB · 峰值{" "}
+          {f.stats.peak_db}dBFS · 底噪 {f.stats.noise_floor_db}dBFS ·{" "}
+          <span title={gainTip}>增益 {f.final_gain_db}dB</span>
+        </span>
+      </div>
+      <div className="vad-file-body">
+        <VadSegmentBar f={f} />
+        <span className="vad-file-segs">
+          {f.segments.length > 0
+            ? f.segments.map(([s, e]) => `${s.toFixed(2)}-${e.toFixed(2)}s`).join("  ") +
+              (f.tail_seconds != null ? ` （尾部 ${f.tail_seconds.toFixed(2)}s）` : "")
+            : "无触发"}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function vadSummaryChips(m: VadSummary) {
+  return (
+    <>
+      <span className={`cfg-badge hit ${m.speech_detected === m.speech_total ? "ok" : "down"}`}>
+        说话检出 {m.speech_detected}/{m.speech_total}
+      </span>
+      <span className={`cfg-badge hit ${m.noise_rejected === m.noise_total ? "ok" : "down"}`}>
+        噪声拒绝 {m.noise_rejected}/{m.noise_total}
+      </span>
+      <span className="cfg-badge">尾部均值 {m.tail_mean_s}s</span>
+      {m.extra_segments > 0 && <span className="cfg-badge">多余分段 {m.extra_segments}</span>}
+      <span className="cfg-badge">score {m.score}</span>
+    </>
+  );
+}
+
+type VadExpect = "speech" | "noise" | "unknown";
+
+/** 与当前配置不同的参数摘要（全相同返回 "当前配置"） */
+function vadParamsDiff(params: Record<string, number | boolean>, cfg: VadTestConfig | null): string {
+  if (!cfg) return JSON.stringify(params);
+  const diff = Object.fromEntries(
+    Object.entries(params).filter(([k, v]) => String(cfg.current[k]) !== String(v))
+  );
+  return Object.keys(diff).length ? JSON.stringify(diff) : "当前配置";
+}
+
+/** VAD 触发调参：上传实际设备录音，离线回放找最优 vad.* 参数。
+ *  与生产同款 AutoGain/Silero 链路，不落库、不触发 ASR/LLM/TTS。 */
+function VadPanel() {
+  const [cfg, setCfg] = useState<VadTestConfig | null>(null);
+  const [cfgError, setCfgError] = useState<string | null>(null);
+  const [cfgLoading, setCfgLoading] = useState(false);
+
+  const [items, setItems] = useState<{ file: File; expect: VadExpect }[]>([]);
+  const [params, setParams] = useState("");
+  const [grid, setGrid] = useState("");
+  const [deviceSn, setDeviceSn] = useState("");
+  const [busy, setBusy] = useState<"" | "test" | "tune">("");
+  const [error, setError] = useState<string | null>(null);
+  const [testResult, setTestResult] = useState<VadTestResult | null>(null);
+  const [tuneResult, setTuneResult] = useState<VadTuneResult | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const loadConfig = useCallback(async () => {
+    setCfgLoading(true);
+    setCfgError(null);
+    try {
+      setCfg(await fetchVadTestConfig());
+    } catch (e: any) {
+      setCfgError(e.message || String(e));
+    } finally {
+      setCfgLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadConfig();
+  }, [loadConfig]);
+
+  const addFiles = (list: FileList | null) => {
+    if (!list) return;
+    const next = [...items];
+    for (const f of Array.from(list)) next.push({ file: f, expect: "speech" });
+    setItems(next.slice(0, cfg?.limits.max_files ?? 20));
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const runTest = async () => {
+    if (items.length === 0 || busy) return;
+    setBusy("test");
+    setError(null);
+    try {
+      setTestResult(await testVad(items, params, deviceSn.trim()));
+    } catch (e: any) {
+      setError(e.message || String(e));
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const runTune = async () => {
+    if (items.length === 0 || busy) return;
+    setBusy("tune");
+    setError(null);
+    try {
+      setTuneResult(await tuneVad(items, grid, 10, deviceSn.trim()));
+    } catch (e: any) {
+      setError(e.message || String(e));
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const current = cfg?.current ?? {};
+  const defaultGridText = cfg ? JSON.stringify(cfg.default_grid) : "";
+
+  return (
+    <div className="card cfg-card cfg-intent-card">
+      <h3>
+        🎚️ VAD 触发调参
+        <span className="subtitle">
+          上传实际设备录音离线回放 VAD（生产同款增益/高通/Silero 链路），分析触发行为并寻优参数，不触发对话
+        </span>
+        {cfg && (
+          <span className="cfg-badges">
+            <span className="cfg-badge">threshold {String(current.threshold)}</span>
+            <span className="cfg-badge">
+              {current.agc_enabled ? `AGC 开 (目标 ${current.agc_target_db}dB)` : `固定增益 ${current.pre_gain_db}dB`}
+            </span>
+            <span className="cfg-badge">高通 {String(current.highpass_hz)}Hz</span>
+          </span>
+        )}
+        <button className="roster-refresh" onClick={loadConfig} disabled={cfgLoading}>
+          {cfgLoading ? <span className="spinner inline" /> : "🔄 刷新"}
+        </button>
+      </h3>
+
+      {cfgError && <div className="cfg-error">❌ 加载配置失败: {cfgError}</div>}
+
+      <div className="cfg-intent-test vad-upload-row">
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          accept=".wav,.pcm,.raw,audio/wav,audio/x-wav"
+          onChange={(e) => addFiles(e.target.files)}
+          disabled={!!busy}
+        />
+        <input
+          type="text"
+          className="vad-device-sn"
+          placeholder="device_sn（可选，按设备配置覆盖作基准）"
+          value={deviceSn}
+          onChange={(e) => setDeviceSn(e.target.value)}
+          disabled={!!busy}
+        />
+      </div>
+      <div className="cfg-asr-tip">
+        支持对话详情下载的「输入语音」asr_*.wav 和原始音频段 WAV。每个文件标注期望：
+        speech=用户真实说话（应触发）/ noise=误触发留档（不应触发）/ unknown=只看行为。
+        建议混合两类样本，寻优才有拒绝噪声的目标。
+      </div>
+
+      {items.length > 0 && (
+        <div className="vad-files">
+          {items.map((it, i) => (
+            <div className="vad-file-row" key={i}>
+              <span className="vad-file-name">{it.file.name}</span>
+              <select
+                value={it.expect}
+                onChange={(e) =>
+                  setItems(items.map((x, j) => (j === i ? { ...x, expect: e.target.value as VadExpect } : x)))
+                }
+                disabled={!!busy}
+              >
+                <option value="speech">speech 应触发</option>
+                <option value="noise">noise 不应触发</option>
+                <option value="unknown">unknown 只看行为</option>
+              </select>
+              <button
+                className="vad-file-remove"
+                onClick={() => setItems(items.filter((_, j) => j !== i))}
+                disabled={!!busy}
+                title="移除"
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="cfg-intent-test vad-action-row">
+        <input
+          type="text"
+          className="vad-json-input"
+          placeholder='参数覆盖 JSON（可选），如 {"threshold":0.75,"agc_target_db":-20}；空=当前配置'
+          value={params}
+          onChange={(e) => setParams(e.target.value)}
+          disabled={!!busy}
+        />
+        <button onClick={runTest} disabled={!!busy || items.length === 0}>
+          {busy === "test" ? <span className="spinner inline" /> : "触发分析"}
+        </button>
+      </div>
+      <div className="cfg-intent-test vad-action-row">
+        <input
+          type="text"
+          className="vad-json-input"
+          placeholder={`扫描网格 JSON（可选），空=默认 ${defaultGridText}`}
+          value={grid}
+          onChange={(e) => setGrid(e.target.value)}
+          disabled={!!busy}
+        />
+        <button onClick={runTune} disabled={!!busy || items.length === 0}>
+          {busy === "tune" ? <span className="spinner inline" /> : "参数寻优"}
+        </button>
+        {busy === "tune" && <span className="vad-tune-hint">网格扫描中，可能需要几十秒到几分钟…</span>}
+      </div>
+      {error && <div className="cfg-error">❌ {error}</div>}
+
+      {testResult && (
+        <>
+          <h4 className="cfg-section-title">
+            触发分析
+            <span className="cfg-section-key">参数: {vadParamsDiff(testResult.params, cfg)}</span>
+          </h4>
+          <div className="vad-summary">{vadSummaryChips(testResult.summary)}</div>
+          <div className="vad-file-list">
+            {testResult.files.map((f, i) => (
+              <VadFileCard key={i} f={f} />
+            ))}
+          </div>
+        </>
+      )}
+
+      {tuneResult && (
+        <>
+          <h4 className="cfg-section-title">
+            参数寻优（{tuneResult.n_combos} 组合 × {tuneResult.audio_seconds}s 音频）
+            <span className="cfg-section-key">{tuneResult.scoring}</span>
+          </h4>
+          <div className="vad-summary">
+            <span className="cfg-badge modified">当前配置基准</span>
+            {vadSummaryChips(tuneResult.baseline.metrics)}
+          </div>
+          <table className="vad-combo-table">
+            <thead>
+              <tr>
+                <th>score</th>
+                <th>参数变更</th>
+                <th>说话检出</th>
+                <th>噪声拒绝</th>
+                <th>尾部均值</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {tuneResult.results.map((c, i) => (
+                <tr key={i}>
+                  <td className="cfg-number">{c.metrics.score}</td>
+                  <td>
+                    <code>{Object.keys(c.overrides).length ? JSON.stringify(c.overrides) : "（当前配置）"}</code>
+                  </td>
+                  <td>
+                    {c.metrics.speech_detected}/{c.metrics.speech_total}
+                  </td>
+                  <td>
+                    {c.metrics.noise_rejected}/{c.metrics.noise_total}
+                  </td>
+                  <td>{c.metrics.tail_mean_s}s</td>
+                  <td>
+                    <button
+                      className="vad-apply-btn"
+                      title="填入上方参数框，可再点「触发分析」看逐文件详情"
+                      onClick={() => setParams(JSON.stringify(c.overrides))}
+                      disabled={!!busy}
+                    >
+                      用此参数
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <h4 className="cfg-section-title">
+            最优组合的逐文件详情
+            <span className="cfg-section-key">
+              找到满意组合后，到「系统配置」页在线修改 vad.*（AGC 内部参数需改代码缺省值）
+            </span>
+          </h4>
+          <div className="vad-file-list">
+            {tuneResult.best_files.map((f, i) => (
+              <VadFileCard key={i} f={f} />
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 export function ApiTestView() {
   return (
     <div className="api-test-container">
@@ -513,6 +858,7 @@ export function ApiTestView() {
       <IntentPanel />
       <ModerationPanel />
       <AsrPanel />
+      <VadPanel />
     </div>
   );
 }

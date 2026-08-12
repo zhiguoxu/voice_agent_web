@@ -1669,6 +1669,145 @@ export async function testAsr(
   return res.json();
 }
 
+// ── VAD 触发调参（POST /api/voice/vad/test|tune，纯离线仿真不触发对话） ──
+
+/** VAD 调参面板配置摘要（GET /api/voice/vad/test/config） */
+export interface VadTestConfig {
+  /** 当前生效的完整仿真参数（vad.* 配置 + AGC 内部参数缺省值） */
+  current: Record<string, number | boolean>;
+  /** 可调参数清单（key → {default}） */
+  tunable: Record<string, { default: number | boolean }>;
+  /** 寻优默认扫描网格 */
+  default_grid: Record<string, number[]>;
+  /** 打分公式说明 */
+  scoring: string;
+  limits: {
+    max_files: number;
+    max_test_seconds: number;
+    max_tune_seconds: number;
+    max_combos: number;
+  };
+  input_sample_rate: number;
+}
+
+export interface VadFileStats {
+  peak_db: number;
+  noise_floor_db: number;
+  speech_db: number;
+  snr_db: number;
+}
+
+/** 单个文件的触发分析结果 */
+export interface VadFileResult {
+  filename: string;
+  /** 标注: speech / noise / unknown */
+  expect: string;
+  audio_seconds: number;
+  stats: VadFileStats;
+  /** 触发段 [start_s, end_s] 列表 */
+  segments: number[][];
+  /** ok / miss / false_trigger / n_a */
+  verdict: string;
+  /** 末段结束到音频结尾的时长（speech 文件的尾部拖延），无触发为 null */
+  tail_seconds: number | null;
+  /** 回放结束时的增益（AGC 收敛值或固定值） */
+  final_gain_db: number;
+  /** 增益轨迹 [t_s, gain_db]，每秒一点 */
+  gain_track: number[][];
+}
+
+/** 按标注汇总的指标与得分 */
+export interface VadSummary {
+  speech_detected: number;
+  speech_total: number;
+  noise_rejected: number;
+  noise_total: number;
+  tail_mean_s: number;
+  extra_segments: number;
+  score: number;
+}
+
+export interface VadTestResult {
+  params: Record<string, number | boolean>;
+  files: VadFileResult[];
+  summary: VadSummary;
+}
+
+export interface VadComboResult {
+  /** 与当前配置不同的参数（空对象=就是当前配置） */
+  overrides: Record<string, number | boolean>;
+  metrics: VadSummary;
+}
+
+export interface VadTuneResult {
+  n_files: number;
+  audio_seconds: number;
+  n_combos: number;
+  scoring: string;
+  /** 当前生效配置的表现（对照基准） */
+  baseline: VadComboResult;
+  /** 按 score 降序的 top 组合 */
+  results: VadComboResult[];
+  /** 最优组合下每个文件的触发详情 */
+  best_files: VadFileResult[];
+}
+
+export async function fetchVadTestConfig(): Promise<VadTestConfig> {
+  const res = await fetch("/api/voice/vad/test/config");
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || "获取 VAD 调参配置失败");
+  }
+  return res.json();
+}
+
+function vadFormData(
+  items: { file: File; expect: string }[],
+  deviceSn: string,
+): FormData {
+  const fd = new FormData();
+  for (const it of items) fd.append("files", it.file);
+  fd.append("expects", items.map((it) => it.expect).join(","));
+  if (deviceSn) fd.append("device_sn", deviceSn);
+  return fd;
+}
+
+/** 触发分析：按指定参数（空=当前配置）离线回放上传的音频 */
+export async function testVad(
+  items: { file: File; expect: string }[],
+  /** 参数覆盖 JSON 字符串，如 '{"threshold":0.8}'；空=当前配置 */
+  params: string,
+  deviceSn = "",
+): Promise<VadTestResult> {
+  const fd = vadFormData(items, deviceSn);
+  if (params.trim()) fd.append("params", params.trim());
+  const res = await fetch("/api/voice/vad/test", { method: "POST", body: fd });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || "VAD 触发分析请求失败");
+  }
+  return res.json();
+}
+
+/** 参数寻优：网格扫描找最优参数组合（可能需要几十秒到几分钟） */
+export async function tuneVad(
+  items: { file: File; expect: string }[],
+  /** 扫描网格 JSON 字符串；空=默认网格 */
+  grid: string,
+  topN = 10,
+  deviceSn = "",
+): Promise<VadTuneResult> {
+  const fd = vadFormData(items, deviceSn);
+  if (grid.trim()) fd.append("grid", grid.trim());
+  fd.append("top_n", String(topN));
+  const res = await fetch("/api/voice/vad/tune", { method: "POST", body: fd });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || "VAD 参数寻优请求失败");
+  }
+  return res.json();
+}
+
 export async function sendAction(
   device_sn: string,
   device_type_id: string,

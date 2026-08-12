@@ -115,17 +115,33 @@ const LONG_TEXT_THRESHOLD = 120;
    （填错服务商名会导致下一轮识别/合成/对话报错，选择框从源头杜绝手滑）。
    llm.name 的候选须与 LLMConfig 的方案字段(doubao/gemini/qwen)保持一致，
    后端 validator 也会拦，但下拉让操作者根本不用记方案名 */
+
+/* LLM 协议适配方案(provider)字段的候选值：与后端协议分支保持一致
+   (voice_agent_common/utils/llm.py 的 shared_llm 与 voice_server/core/moderation.py)。
+   空串 = 方舟/标准 OpenAI 协议（下拉里展示为可读标签，见 EMPTY_OPTION_LABEL） */
+const LLM_PROVIDERS = ["", "doubao", "gemini", "qwen"];
+
+/* 下拉里空串选项的展示文案（值仍是 ""，只是显示得可读） */
+const EMPTY_OPTION_LABEL = "（空 = 方舟/标准 OpenAI 协议）";
+
 const ENUM_OPTIONS: Record<string, string[]> = {
   "asr.name": ["xiaodu", "azure", "volcengine"],
   "asr.volcengine.mode": ["bigmodel", "bigmodel_async", "bigmodel_nostream"],
   "tts.name": ["minimax", "azure"],
   "llm.name": ["doubao", "gemini", "qwen"],
+  // 各处 LLM endpoint 的协议适配方案：agent 三处 + voice 风控一处
+  "emote_llm.provider": LLM_PROVIDERS,
+  "llm_intent.llm.provider": LLM_PROVIDERS,
+  "memory.llm.provider": LLM_PROVIDERS,
+  "moderation.llm.provider": LLM_PROVIDERS,
   // 摄像头自动拉流：与 AutoStreamConfig 的 Literal 取值保持一致
   "auto_stream.mode": ["connection", "wake"],
   "auto_stream.env": ["test", "prod"],
   // person_id (视觉识别) 的模型选择字段
   "face.recognition_backend": ["arcface", "adaface"],
   "gallery.ediffiqa_enroll_variant": ["tiny", "small", "medium", "large"],
+  // person_id 声纹提取的 ONNX 执行设备（硬件 provider，与 LLM provider 无关）
+  "voice_embed.provider": ["cuda", "cpu"],
 };
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {
@@ -235,7 +251,7 @@ function FieldEditor({
           {/* 当前值不在选项里时（如后端已在线改成未知值）也列出来，避免下拉悄悄换值 */}
           {!enumOptions.includes(draft) && <option value={draft}>{draft}</option>}
           {enumOptions.map((o) => (
-            <option value={o} key={o}>{o}</option>
+            <option value={o} key={o}>{o === "" ? EMPTY_OPTION_LABEL : o}</option>
           ))}
         </select>
       ) : typeof sample === "boolean" ? (
