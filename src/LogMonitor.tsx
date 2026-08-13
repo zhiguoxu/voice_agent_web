@@ -40,9 +40,12 @@ export interface LogJumpFilter {
 export function LogMonitor({
   initialFilter,
   onInitialFilterConsumed,
+  onJumpToConversation,
 }: {
   initialFilter?: LogJumpFilter;
   onInitialFilterConsumed?: () => void;
+  /** 从日志行的 Trace ID 跳回对话分析页对应轮次 */
+  onJumpToConversation?: (traceId: string) => void;
 }) {
   /* ── 设置（持久化到 localStorage） ── */
   const [level, setLevel] = useState(() => localStorage.getItem("logLevel") || "INFO");
@@ -527,6 +530,16 @@ export function LogMonitor({
             清除条件
           </button>
         )}
+        {traceId.trim() && onJumpToConversation && (
+          <button
+            type="button"
+            className="log-btn"
+            data-tip="跳转到该 Trace 对应的对话记录"
+            onClick={() => onJumpToConversation(traceId.trim())}
+          >
+            查看对话
+          </button>
+        )}
         <span className="log-filter-hint">
           SN / Trace / 实例 完全匹配，与日期一起在服务端过滤；历史来自数据库（保留 90 天）
         </span>
@@ -603,11 +616,28 @@ export function LogMonitor({
               <span className="log-sep">|</span>
               <span
                 className={`log-trace ${l.trace_id ? "clickable" : ""}`}
-                data-tip={l.trace_id ? "点击按此 Trace ID 精确过滤" : undefined}
+                data-tip={
+                  l.trace_id
+                    ? "点击按此 Trace ID 精确过滤；点「对话」跳转到对应轮次"
+                    : undefined
+                }
                 onClick={() => l.trace_id && setTraceId(l.trace_id)}
               >
                 {l.trace_id}
               </span>
+              {l.trace_id && onJumpToConversation && (
+                <button
+                  type="button"
+                  className="log-jump-conv"
+                  data-tip="跳转到该 Trace 对应的对话记录"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onJumpToConversation(l.trace_id);
+                  }}
+                >
+                  对话
+                </button>
+              )}
               <span className="log-sep">|</span>
               <span className="log-msg">{l.msg}</span>
               {l.exc && (

@@ -369,6 +369,32 @@
   opacity: 1;
 }
 
+/* 日志行 Trace 旁：跳回对话分析对应轮次。默认淡显，悬停行时加重，避免每行都抢视线 */
+.log-jump-conv {
+  flex-shrink: 0;
+  align-self: center;
+  padding: 0 6px;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 16px;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border: 1px solid rgba(108, 99, 255, 0.35);
+  border-radius: 4px;
+  cursor: pointer;
+  opacity: 0.55;
+}
+
+.log-row:hover .log-jump-conv,
+.log-jump-conv:focus-visible {
+  opacity: 1;
+}
+
+.log-jump-conv:hover {
+  opacity: 1;
+  background: rgba(108, 99, 255, 0.28);
+}
+
 .log-msg {
   color: var(--text-primary);
   flex: 1;

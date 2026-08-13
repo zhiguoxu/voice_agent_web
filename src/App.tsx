@@ -448,6 +448,8 @@ export default function App() {
 
   /* ── Trace lookup loading ── */
   const [traceLoading, setTraceLoading] = useState(false);
+  /* 日志页/Trace 查询定位到轮次后递增，驱动对话列表滚到高亮卡片 */
+  const [turnScrollNonce, setTurnScrollNonce] = useState(0);
 
   /* ── 说话人名字映射（按当前会话设备的家庭花名册现查） ── */
   const { speakerNames, reloadSpeakerNames } = useSpeakerNames(selectedSession?.device_sn);
@@ -756,32 +758,78 @@ export default function App() {
     reloadSpeakerNames();
   };
 
-  /* ── Trace lookup ── */
-  const handleTraceLookup = async () => {
-    const tid = filterTrace.trim();
-    if (!tid) return;
+  /* ── Trace lookup：按 trace_id 定位会话+轮次，翻页直到列表里有这张卡片 ── */
+  const lookupTurnByTrace = useCallback(async (rawId?: string): Promise<boolean> => {
+    const tid = (rawId ?? filterTrace).trim();
+    if (!tid) return false;
     setTraceLoading(true);
     try {
       const result = await fetchTurnByTrace(tid);
-      // Auto-select the session
+      if (!result.session) {
+        alert("找到了轮次但所属会话已不存在");
+        return false;
+      }
       setSelectedSession(result.session);
-      // Add session to list if not present
       setSessions((prev) => {
         const exists = prev.some((s) => s.id === result.session.id);
         return exists ? prev : [result.session, ...prev];
       });
-      // Load turns for the session, then select the matching turn
-      const turnsData = await fetchTurns(result.session.id, { page_size: 50 });
-      setTurns(turnsData.items);
-      setTurnsHasMore(turnsData.has_more);
-      setTurnsCursor(turnsData.next_cursor);
+      // API 最新优先，反转成时间正序；目标不在首页时继续向更早翻页
+      const first = await fetchTurns(result.session.id, { page_size: 50 });
+      let items = [...first.items].reverse();
+      let hasMore = first.has_more;
+      let cursor = first.next_cursor;
+      if (!items.some((t) => t.id === result.turn.id)) {
+        const older: Turn[] = [];
+        while (hasMore && cursor != null) {
+          const data = await fetchTurns(result.session.id, { cursor, page_size: 50 });
+          older.unshift(...[...data.items].reverse());
+          hasMore = data.has_more;
+          cursor = data.next_cursor;
+          if (data.items.some((t) => t.id === result.turn.id)) break;
+        }
+        items = [...older, ...items];
+      }
+      setTurns(items);
+      setTurnsHasMore(hasMore);
+      setTurnsCursor(cursor);
       setSelectedTurn(result.turn);
+      setTurnScrollNonce((n) => n + 1);
+      return true;
     } catch {
       alert("未找到该 Trace ID 对应的记录");
+      return false;
     } finally {
       setTraceLoading(false);
     }
+  }, [filterTrace]);
+
+  const handleTraceLookup = () => {
+    void lookupTurnByTrace();
   };
+
+  /* 日志页 Trace → 对话分析对应轮次。当前已选中同一轮时只切页并滚动，免重复查询 */
+  const openConversationWithTrace = (traceId: string) => {
+    const tid = traceId.trim();
+    if (!tid) return;
+    setFilterTrace(tid);
+    setActiveTab("conversations");
+    if (selectedTurn?.trace_id === tid) {
+      setTurnScrollNonce((n) => n + 1);
+      return;
+    }
+    void lookupTurnByTrace(tid);
+  };
+
+  useEffect(() => {
+    if (!turnScrollNonce || activeTab !== "conversations" || !selectedTurn) return;
+    const turnId = selectedTurn.id;
+    const id = requestAnimationFrame(() => {
+      document.querySelector(`[data-turn-id="${turnId}"]`)
+        ?.scrollIntoView({ block: "center", behavior: "smooth" });
+    });
+    return () => cancelAnimationFrame(id);
+  }, [turnScrollNonce, activeTab, selectedTurn]);
 
   /* ── SSE Live Streaming ── */
   useEffect(() => {
@@ -1342,7 +1390,12 @@ export default function App() {
                   </div>
                 )}
                 {turns.map((t) => t.kind === "wake" ? (
-                  <div key={t.id} className="turn-card wake-turn">
+                  <div
+                    key={t.id}
+                    data-turn-id={t.id}
+                    className={`turn-card wake-turn${selectedTurn?.id === t.id ? " active" : ""}`}
+                    onClick={() => setSelectedTurn(t)}
+                  >
                     <span className="wake-icon">🔔</span>
                     <span className="wake-text">
                       {t.query
@@ -1370,7 +1423,12 @@ export default function App() {
                     </button>
                   </div>
                 ) : t.kind === "noise" ? (
-                  <div key={t.id} className="turn-card wake-turn noise-turn">
+                  <div
+                    key={t.id}
+                    data-turn-id={t.id}
+                    className={`turn-card wake-turn noise-turn${selectedTurn?.id === t.id ? " active" : ""}`}
+                    onClick={() => setSelectedTurn(t)}
+                  >
                     <span className="wake-icon">🔇</span>
                     <span className="wake-text"
                           data-tip="VAD 判定有人声但 ASR 识别结果为空（误触发/环境噪音/听不清）">
@@ -1414,6 +1472,7 @@ export default function App() {
                 ) : (
                   <div
                     key={t.id}
+                    data-turn-id={t.id}
                     className={`turn-card ${selectedTurn?.id === t.id ? "active" : ""}`}
                     onClick={() => setSelectedTurn(t)}
                   >
@@ -1965,6 +2024,7 @@ export default function App() {
         <LogMonitor
           initialFilter={logJumpFilter ?? undefined}
           onInitialFilterConsumed={() => setLogJumpFilter(null)}
+          onJumpToConversation={openConversationWithTrace}
         />
       )}
       {/* 身份融合调试弹窗（点轮次卡片的说话人标签打开） */}
