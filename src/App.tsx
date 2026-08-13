@@ -1640,6 +1640,33 @@ export default function App() {
                       )}
                     </span>
                   </div>
+                  {selectedTurn.vision_gate && (
+                    <div className="meta-intent-row">
+                      <label>视觉门控</label>
+                      <span>
+                        <code data-tip={selectedTurn.vision_gate.decision === "skip"
+                          ? "门控判定本轮无需视觉：LLM 请求未带摄像头画面（省图片上传+视觉 prefill）"
+                          : "门控判定本轮需要视觉：LLM 请求携带摄像头画面"}>
+                          {selectedTurn.vision_gate.decision === "skip" ? "省图" : "带图"}
+                          {selectedTurn.vision_gate.p_vision != null && (
+                            <span className="bert-conf">
+                              P(vision) {(selectedTurn.vision_gate.p_vision * 100).toFixed(1)}%
+                              {selectedTurn.vision_gate.threshold != null &&
+                                ` ${selectedTurn.vision_gate.decision === "skip" ? "<" : "≥"} 阈值 ${(selectedTurn.vision_gate.threshold * 100).toFixed(0)}%`}
+                            </span>
+                          )}
+                        </code>
+                        {selectedTurn.vision_gate.reason === "error" && (
+                          <>
+                            <span className="intent-arrow">›</span>
+                            <code data-tip={selectedTurn.vision_gate.error || "门控服务异常"}>
+                              门控异常(fail-open)
+                            </code>
+                          </>
+                        )}
+                      </span>
+                    </div>
+                  )}
                 </div>
               </section>
 

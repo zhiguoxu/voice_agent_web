@@ -180,6 +180,20 @@ export interface IdentityDebug {
   };
 }
 
+/** 单轮视觉门控决策快照（agent_server vision_gate 的 debug dict）。
+ *  仅门控真实评估过的轮次有值（无图/未启用轮为 null）。 */
+export interface VisionGate {
+  /** attach=带图 / skip=省图（本轮是否把摄像头画面给 LLM） */
+  decision: "attach" | "skip";
+  /** 模型输出的 P(需要视觉)；服务异常 fail-open 时无 */
+  p_vision?: number;
+  /** 判定时生效的阈值（P ≥ 阈值才带图） */
+  threshold?: number;
+  /** error=门控服务异常（fail-open 照常带图） */
+  reason?: string;
+  error?: string;
+}
+
 export interface Turn {
   id: number;
   trace_id: string;
@@ -197,6 +211,8 @@ export interface Turn {
   speaker_suspected: boolean | null;
   /** 身份融合过程记录：点说话人标签展示；无融合过程的轮次为 null */
   identity_debug: IdentityDebug | null;
+  /** 视觉门控决策快照：带图/省图、P(vision)、阈值；未评估的轮次为 null */
+  vision_gate: VisionGate | null;
   reply_text: string | null;
   /** 输出侧风控：true=本轮回复被拦截替换（reply_text 已是替代话术，
    *  下一轮 LLM 历史只见替代文本） */
@@ -222,6 +238,9 @@ export interface Turn {
   t_agent_start: number | null;
   t_history_done: number | null;
   t_identity_done: number | null;
+  /** 视觉门控（与历史/身份并发的第三条腿，仅带图轮才调用） */
+  t_vision_gate_start: number | null;
+  t_vision_gate_done: number | null;
   t_names_done: number | null;
   t_memory_done: number | null;
   t_stateless_start: number | null;

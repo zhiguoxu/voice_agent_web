@@ -21,6 +21,7 @@ export function LatencyChart({ turn }: { turn: Turn }) {
     turn.t_memory_done || 0,
     turn.t_names_done || 0,
     turn.t_identity_done || 0,
+    turn.t_vision_gate_done || 0,
     turn.t_history_done || 0,
   );
   if (tEnd <= t0) return <div className="empty-media">暂无完整耗时数据</div>;
@@ -55,6 +56,19 @@ export function LatencyChart({ turn }: { turn: Turn }) {
   };
   pushIfVisible("历史查询", turn.t_agent_start, turn.t_history_done, "var(--blue)");
   pushIfVisible("身份识别", turn.t_agent_start, turn.t_identity_done, "var(--purple)");
+  // 视觉门控：与历史/身份并发的第三条腿（仅带图轮才有）；决策快照见详情面板
+  if (turn.t_vision_gate_start && turn.t_vision_gate_done
+      && turn.t_vision_gate_done - turn.t_vision_gate_start > 0.001) {
+    const g = turn.vision_gate;
+    const tip = g ? [
+      g.decision === "skip" ? "决策: 省图" : "决策: 带图",
+      g.p_vision != null ? `P(vision)=${g.p_vision.toFixed(3)}` : null,
+      g.threshold != null ? `阈值=${g.threshold}` : null,
+      g.reason === "error" ? "门控异常(fail-open)" : null,
+    ].filter(Boolean).join('\n') : undefined;
+    phases.push({ label: "视觉门控", start: turn.t_vision_gate_start,
+                  end: turn.t_vision_gate_done, color: "var(--cyan)", tooltip: tip });
+  }
   const ctxGatherDone = Math.max(turn.t_history_done || 0, turn.t_identity_done || 0) || null;
   pushIfVisible("名字查询", ctxGatherDone, turn.t_names_done, "var(--cyan)");
   pushIfVisible("记忆召回", turn.t_names_done, turn.t_memory_done, "var(--green)");
