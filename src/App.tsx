@@ -23,6 +23,7 @@ import {
   type TraceResult,
   type IdentityDebug,
   type ReplayResult,
+  type ReplayModeration,
   CONVERSATIONS_API_BASE,
   LIVE_CONVERSATIONS_API_BASE,
 } from "./api";
@@ -157,6 +158,115 @@ function SpeakerBadge({ speakerId, speakerName, kind, suspected, debug, names, o
       {marks.length > 0 && <b className="speaker-mark">{marks.join("·")}</b>}
       {text}
     </span>
+  );
+}
+
+function ReplayModerationPanel({ moderation }: { moderation: ReplayModeration }) {
+  const submitted = moderation.submitted;
+  const final = moderation.final;
+  const sourceLabel = final?.source === "rule" ? "正则规则" : final?.source === "llm" ? "风控模型" : final?.source;
+  const originHint = submitted?.reply_origin === "checked"
+    ? "【机器人回复】用当时跨阈值送审的前缀（checked_text）"
+    : submitted?.reply_origin === "original"
+      ? "【机器人回复】用规则命中时的累计全文"
+      : submitted?.reply_origin === "reply"
+        ? "【机器人回复】用未拦截轮的完整落库回复"
+        : submitted?.reply_origin === "original_fallback"
+          ? "该轮拦截时未记录送审前缀，退回命中时刻全量原文（可能比当时送审更长）"
+          : "送审文本与【最近对话】按该轮落库记录重建（不含本次 agent 新出文）";
+
+  return (
+    <section className="detail-section replay-moderation">
+      <h4>🛡️ 风控复现</h4>
+      <p className="replay-mod-hint">{originHint}</p>
+      {submitted?.reply_origin === "original_fallback" && (
+        <div className="replay-mod-warn">
+          存量拦截轮没有 moderation_checked_text。original_text 是命中瞬间的全量累计，不是跨阈值送进模型的那份前缀。
+        </div>
+      )}
+      {moderation.replay_reply_differs && (
+        <div className="replay-mod-warn">
+          本次 agent 出文与当时送审文本不同；风控按下述当时上下文审核，未使用本次新出文。
+        </div>
+      )}
+      {moderation.error && <div className="replay-error">❌ {moderation.error}</div>}
+      {moderation.skipped && <div className="replay-mod-skip">⏭ {moderation.skipped}</div>}
+      {submitted && (
+        <details className="replay-mod-payload" open>
+          <summary>
+            当时送审上下文
+            {submitted.history_turn_count > 0
+              ? `（前 ${submitted.history_turn_count} 轮，窗口 ${submitted.context_turns}）`
+              : "（无最近对话）"}
+            {submitted.turn_moderated && (
+              <span className="badge moderation">
+                当时已拦截{submitted.turn_moderation_source === "rule" ? " · 规则" : submitted.turn_moderation_source === "llm" ? " · 模型" : ""}
+              </span>
+            )}
+          </summary>
+          {submitted.checked_text && submitted.original_text
+            && submitted.checked_text !== submitted.original_text && (
+            <div className="replay-mod-diff">
+              <div><label>实际送审前缀</label><pre>{submitted.checked_text}</pre></div>
+              <div><label>命中时刻全量原文</label><pre>{submitted.original_text}</pre></div>
+            </div>
+          )}
+          <pre className="replay-mod-user-content">{submitted.user_content || "(空)"}</pre>
+        </details>
+      )}
+      {final && (
+        <>
+          <div className="replay-mod-head">
+            <span className={`replay-mod-badge ${final.risky ? "risky" : "ok"}`}>
+              {final.risky ? `⛔ 有风险 · ${sourceLabel}` : "✔ 无风险"}
+            </span>
+            {moderation.enabled === false && (
+              <span className="replay-mod-badge off">风控开关当前关闭（复现仍按开启审核）</span>
+            )}
+          </div>
+          <div className="replay-mod-layers">
+            {moderation.rule && (
+              <span>
+                规则层（{moderation.rule.rule_count} 条）:{" "}
+                {moderation.rule.hit ? (
+                  <>命中 <code>{moderation.rule.pattern}</code></>
+                ) : (
+                  "未命中"
+                )}
+              </span>
+            )}
+            {moderation.llm && (
+              <span>
+                模型层:{" "}
+                {!moderation.llm.checked ? (
+                  "未配置风控模型"
+                ) : moderation.llm.error ? (
+                  <>调用失败（生产按无风险放行）: {moderation.llm.error}</>
+                ) : moderation.llm.risky ? (
+                  "判定有风险"
+                ) : (
+                  "判定无风险"
+                )}
+                {moderation.llm.elapsed_ms != null && (
+                  <span className="replay-mod-elapsed">
+                    {" "}· 首token {moderation.llm.ttft_ms ?? "?"}ms / 总 {moderation.llm.elapsed_ms}ms
+                  </span>
+                )}
+                {moderation.llm.model && <code>{moderation.llm.model}</code>}
+              </span>
+            )}
+            {moderation.llm?.raw_output != null && (
+              <span>
+                模型输出: <code>{moderation.llm.raw_output}</code>
+              </span>
+            )}
+          </div>
+          {final.risky && final.replacement && (
+            <div className="replay-mod-replacement">替代话术：{final.replacement}</div>
+          )}
+        </>
+      )}
+    </section>
   );
 }
 
@@ -715,6 +825,7 @@ export default function App() {
                moderated: true,
                moderation_source: data.source ?? null,
                moderation_original_text: data.original_text ?? "",
+               moderation_checked_text: data.checked_text ?? null,
                reply_text: data.replacement_text ?? "",
              } : t));
           } else if (data.event === "moderation_chunk") {
@@ -1691,6 +1802,7 @@ export default function App() {
                         location: selectedSession?.location ?? null,
                         client_ip: selectedSession?.client_ip ?? null,
                         image_url: cr?.image_url ?? null,
+                        turn_id: selectedTurn.id,
                       };
                       setReplayInput(JSON.stringify(replayData, null, 2));
                       setReplayResult(null);
@@ -1806,9 +1918,14 @@ export default function App() {
                       {replayResult.command_type && <span>指令: <b>{replayResult.command_type}</b></span>}
                     </div>
                     <div className="replay-reply">
-                      <label>回复文本</label>
+                      <label>回复文本（本次 agent 复现）</label>
                       <div className="replay-reply-text">{replayResult.reply_text || '(无文本回复)'}</div>
                     </div>
+                    {replayResult.moderation && (
+                      <ReplayModerationPanel
+                        moderation={replayResult.moderation}
+                      />
+                    )}
                     <section className="detail-section">
                       <h4>📊 链路耗时可视化</h4>
                       <LatencyChart turn={{

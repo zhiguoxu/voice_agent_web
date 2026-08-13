@@ -1514,8 +1514,8 @@ body {
     border-radius: var(--radius-lg);
     width: 90vw;
     max-width: 1100px;
-    height: 80vh;
-    max-height: 700px;
+    height: 85vh;
+    max-height: 820px;
     display: flex;
     flex-direction: column;
     box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
@@ -1644,6 +1644,151 @@ body {
     justify-content: center;
     color: var(--text-muted);
     font-size: 14px;
+}
+
+.replay-moderation h4 {
+    margin: 0 0 6px;
+}
+
+.replay-mod-hint {
+    margin: 0 0 8px;
+    font-size: 12px;
+    color: var(--text-muted);
+    line-height: 1.5;
+}
+
+.replay-mod-warn {
+    background: rgba(251, 191, 36, 0.12);
+    border: 1px solid rgba(251, 191, 36, 0.35);
+    border-radius: var(--radius-sm);
+    padding: 8px 10px;
+    font-size: 12px;
+    color: var(--yellow, #fbbf24);
+    margin-bottom: 8px;
+}
+
+.replay-mod-skip {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+}
+
+.replay-mod-payload {
+    margin: 0 0 10px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 8px 10px;
+}
+
+.replay-mod-payload summary {
+    cursor: pointer;
+    font-size: 12px;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.replay-mod-diff {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin: 8px 0;
+}
+
+.replay-mod-diff label {
+    display: block;
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+}
+
+.replay-mod-diff pre {
+    margin: 0;
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--text-primary);
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 8px;
+    max-height: 140px;
+    overflow-y: auto;
+}
+
+.replay-mod-user-content {
+    margin: 8px 0 0;
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 12px;
+    line-height: 1.55;
+    color: var(--text-primary);
+    max-height: 220px;
+    overflow-y: auto;
+}
+
+.replay-mod-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+}
+
+.replay-mod-badge {
+    font-size: 12px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 10px;
+}
+
+.replay-mod-badge.ok {
+    background: rgba(74, 222, 128, 0.12);
+    color: var(--green, #4ade80);
+}
+
+.replay-mod-badge.risky {
+    background: rgba(248, 113, 113, 0.12);
+    color: var(--red, #f87171);
+}
+
+.replay-mod-badge.off {
+    background: rgba(251, 191, 36, 0.14);
+    color: var(--yellow, #fbbf24);
+}
+
+.replay-mod-layers {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.replay-mod-layers code {
+    color: var(--yellow, #fbbf24);
+    word-break: break-all;
+}
+
+.replay-mod-elapsed {
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+}
+
+.replay-mod-replacement {
+    margin-top: 8px;
+    padding: 6px 10px;
+    border-left: 3px solid var(--green, #4ade80);
+    background: rgba(74, 222, 128, 0.06);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    font-size: 13px;
 }
 
 /* ── Test Input Panel ── */

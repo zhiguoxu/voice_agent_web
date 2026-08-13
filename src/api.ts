@@ -221,6 +221,8 @@ export interface Turn {
   moderation_source: string | null;
   /** 被拦截的原始已产出文本（可能不完整），仅审计展示，不进 LLM 上下文 */
   moderation_original_text: string | null;
+  /** 实际送审被判风险的文本。模型层=跨阈值前缀（与 original 可能不同）；规则层=命中时全文 */
+  moderation_checked_text: string | null;
   /** 本轮异常/失败信息，正常轮为 null。chat 轮：处理异常（轮次照常落库，
    *  query/部分回复尽力保存）；wake 轮：应答语没播出去（更早的存量失败行
    *  没有本字段，表现为 reply_text 为 null 的旧标记法） */
@@ -380,12 +382,45 @@ export async function deleteTurn(turnId: number): Promise<void> {
   if (!res.ok) throw new Error("Failed to delete turn");
 }
 
+/** 对话复现时重建的当时风控送审上下文（与生产 open_reply_check user 消息同构造） */
+export interface ReplayModerationSubmitted {
+  query: string;
+  history: string;
+  /** 本次复现实际送进风控的【机器人回复】 */
+  reply_text: string;
+  /** checked=跨阈值送审前缀; original=规则层全文; original_fallback=存量无前缀; reply=未拦截完整回复 */
+  reply_origin: "checked" | "original" | "original_fallback" | "reply" | "missing";
+  /** 命中时刻全量累计原文（可能比送审前缀长） */
+  original_text: string | null;
+  /** 落库的实际送审前缀；存量拦截轮可能为空 */
+  checked_text: string | null;
+  /** 实际发给风控 LLM 的 user 正文 */
+  user_content: string;
+  context_turns: number;
+  history_turn_count: number;
+  turn_moderated: boolean;
+  turn_moderation_source: string | null;
+}
+
+export interface ReplayModeration {
+  skipped?: string | null;
+  error?: string | null;
+  submitted?: ReplayModerationSubmitted | null;
+  /** 本次 agent 新出文与当时送审文本是否不同 */
+  replay_reply_differs?: boolean;
+  enabled?: boolean;
+  rule?: ModerationTestResult["rule"];
+  llm?: ModerationTestResult["llm"];
+  final?: ModerationTestResult["final"];
+}
+
 export interface ReplayResult {
   reply_text: string;
   intent_source: string | null;
   intent_name: string | null;
   command_type: string | null;
   subagent_name: string | null;
+  moderation?: ReplayModeration | null;
   timing: {
     t_agent_start?: number | null;
     t_history_done?: number | null;
