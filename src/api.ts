@@ -246,11 +246,9 @@ export interface Turn {
   t_names_done: number | null;
   t_memory_done: number | null;
   t_stateless_start: number | null;
-  /** 意图分类打点（引擎为 BERT 或 LLM）；后端已兼容旧数据的 t_bert_* 键名 */
+  /** LLM 意图分类打点；后端已兼容旧数据的 t_bert_* 键名 */
   t_intent_start: number | null;
   t_intent_done: number | null;
-  /** 分类置信度：BERT 引擎有值，LLM 引擎恒为空 */
-  intent_confidence: number | null;
   t_subagent_start: number | null;
   t_subagent_done: number | null;
   /** 动作/表情生成（emote_action）：与主链路并行的后台任务；本轮先落库时 done 可能为空 */
@@ -430,7 +428,6 @@ export interface ReplayResult {
     t_stateless_start?: number | null;
     t_intent_start?: number | null;
     t_intent_done?: number | null;
-    intent_confidence?: number | null;
     t_subagent_start?: number | null;
     t_subagent_done?: number | null;
     t_emote_action_start?: number | null;

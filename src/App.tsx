@@ -1776,11 +1776,8 @@ export default function App() {
                     <span>
                       {selectedTurn.intent_source === "llm" && selectedTurn.intent_name ? (
                         <>
-                          <code data-tip="意图分类结果（BERT 或 LLM 分类器）">
+                          <code data-tip="意图分类结果（LLM 分类器）">
                             分类: {selectedTurn.intent_name}
-                            {selectedTurn.intent_confidence != null && (
-                              <span className="bert-conf">{(selectedTurn.intent_confidence * 100).toFixed(1)}%</span>
-                            )}
                           </code>
                           <span className="intent-arrow">›</span>
                           <code>llm</code>
@@ -1791,11 +1788,8 @@ export default function App() {
                           {selectedTurn.intent_name && (
                             <>
                               <span className="intent-arrow">›</span>
-                              <code data-tip="原始意图（规则/BERT/LLM 分类）">
+                              <code data-tip="原始意图（规则/LLM 分类）">
                                 {selectedTurn.intent_name}
-                                {selectedTurn.intent_confidence != null && (
-                                  <span className="bert-conf">{(selectedTurn.intent_confidence * 100).toFixed(1)}%</span>
-                                )}
                               </code>
                             </>
                           )}
