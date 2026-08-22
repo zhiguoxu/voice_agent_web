@@ -365,14 +365,10 @@ export default function App() {
      继续向更早翻页把它补进列表——否则列表里没有这张卡片，无法高亮/滚动，
      看起来就像"点了没跳过去" */
   const selectTurnByTrace = async (traceId: string) => {
-    const scrollToActive = () => requestAnimationFrame(() => {
-      document.querySelector(".turn-card.active")
-        ?.scrollIntoView({ block: "center", behavior: "smooth" });
-    });
     const loaded = turns.find((t) => t.trace_id === traceId);
     if (loaded) {
       setSelectedTurn(loaded);
-      scrollToActive();
+      setTurnScrollNonce((n) => n + 1);
       return;
     }
     let result: TraceResult;
@@ -409,7 +405,7 @@ export default function App() {
         setTurnsLoading(false);
       }
     }
-    scrollToActive();
+    setTurnScrollNonce((n) => n + 1);
   };
 
   const toggleRawRecording = async () => {
@@ -448,7 +444,10 @@ export default function App() {
 
   /* ── Trace lookup loading ── */
   const [traceLoading, setTraceLoading] = useState(false);
-  /* 日志页/Trace 查询定位到轮次后递增，驱动对话列表滚到高亮卡片 */
+  /* 定位到某轮次（日志页/Trace 查询/VAD 区间跳转/分享链接恢复）后递增，
+     驱动下方 effect 在 React 提交 DOM 后按 data-turn-id 滚到高亮卡片。
+     不能在 setSelectedTurn 后直接 rAF 查 .turn-card.active：active 类
+     要等重渲染 commit 才出现，rAF 可能抢先执行导致 querySelector 落空 */
   const [turnScrollNonce, setTurnScrollNonce] = useState(0);
 
   /* ── 说话人名字映射（按当前会话设备的家庭花名册现查） ── */
@@ -1022,10 +1021,7 @@ export default function App() {
     if (t) {
       setSelectedTurn(t);
       restoredTurnRef.current = true;
-      requestAnimationFrame(() => {
-        document.querySelector(".turn-card.active")
-          ?.scrollIntoView({ block: "center" });
-      });
+      setTurnScrollNonce((n) => n + 1);
       return;
     }
     // 目标轮次不在已加载分页里：继续向更早翻页直到加载到它（或翻完为止）
