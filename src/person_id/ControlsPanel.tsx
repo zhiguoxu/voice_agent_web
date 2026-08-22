@@ -2,11 +2,12 @@
  * 阈值控制面板（从 person_id/frontend/js/controls-panel.js 移植）。
  *
  * 按 group 分组渲染滑块，拖动实时显示、防抖 150ms 发送到服务端。
+ * 写入落 DB 配置覆盖（持久化 + 多实例同步），需编辑口令——由 VisionView
+ * 注入的 updateConfig 统一包口令（弹窗/缓存与「系统配置」页共用）。
  * 「恢复默认」回落到服务端初始下发的值（即 yaml/config 的启动值），
  * 前端不硬编码任何阈值，避免与服务端默认漂移。
  */
 import { useEffect, useRef, useState } from "react";
-import { updateVisionConfig } from "./api";
 import type { TunableParams } from "./types";
 
 const GROUP_LABELS: Record<string, string> = {
@@ -23,9 +24,11 @@ const GROUP_COLORS: Record<string, string> = {
   stream: "group-matching",
 };
 
-export function ControlsPanel({ params }: {
+export function ControlsPanel({ params, updateConfig }: {
   /** 服务端下发的可调参数（连接成功后加载；null = 尚未加载） */
   params: TunableParams | null;
+  /** 写参数（VisionView 注入，内部已包编辑口令弹窗/缓存） */
+  updateConfig: (updates: Record<string, unknown>) => Promise<void>;
 }) {
   const [values, setValues] = useState<Record<string, number>>({});
   // 服务端初始值快照，供「恢复默认」使用
@@ -47,7 +50,7 @@ export function ControlsPanel({ params }: {
   }, []);
 
   const sendUpdate = (key: string, value: number) => {
-    updateVisionConfig({ [key]: value }).catch((e) => {
+    updateConfig({ [key]: value }).catch((e) => {
       console.error("[Config] Update failed:", e.message);
     });
   };
@@ -63,7 +66,7 @@ export function ControlsPanel({ params }: {
     if (!Object.keys(defaults).length) return;
     setValues({ ...defaults });
     // 批量发送
-    updateVisionConfig(defaults).catch((e) => {
+    updateConfig(defaults).catch((e) => {
       console.error("[Config] Reset failed:", e.message);
     });
   };

@@ -28,10 +28,14 @@ export function visionWsUrl(cameraId: string): string {
 
 async function toError(res: Response): Promise<Error> {
   const err = await res.json().catch(() => ({} as { detail?: string }));
-  return new Error(err.detail || res.statusText);
+  // 带上状态码: 调用方据此识别 401(编辑口令错误, 清缓存重弹口令框)
+  const e = new Error(err.detail || res.statusText) as Error & { status?: number };
+  e.status = res.status;
+  return e;
 }
 
-/* ── 滑块可调参数（改内存不落库, 原路径 /api/config, 2026-08 改名 /api/params）── */
+/* ── 滑块可调参数（写 DB 配置覆盖: 持久化 + 多实例同步; 原路径 /api/config,
+   2026-08 改名 /api/params。写入需编辑口令, 与「系统配置」页同一口令）── */
 
 export async function fetchVisionConfig(): Promise<VisionConfig> {
   const res = await fetch(`${PERSON_ID_API}/params`);
@@ -39,10 +43,13 @@ export async function fetchVisionConfig(): Promise<VisionConfig> {
   return res.json();
 }
 
-export async function updateVisionConfig(updates: Record<string, unknown>): Promise<void> {
+export async function updateVisionConfig(
+  updates: Record<string, unknown>,
+  password: string,
+): Promise<void> {
   const res = await fetch(`${PERSON_ID_API}/params`, {
     method: "PUT",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "X-Config-Edit-Password": password },
     body: JSON.stringify({ updates }),
   });
   if (!res.ok) throw await toError(res);

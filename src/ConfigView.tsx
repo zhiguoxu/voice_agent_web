@@ -20,10 +20,10 @@ import {
   type EditableField,
   type DeviceEditableField,
   type DeviceOverrideSummaryItem,
-  type HttpError,
   type OverrideMutationResult,
 } from "./api";
 import { PromptsPanel } from "./PromptsPanel";
+import { useEditPassword } from "./editPassword";
 import "./ConfigView.css";
 
 /** 后端 started_at 已是 naive 北京时间字面量，原样展示即可 */
@@ -151,9 +151,8 @@ function isPlainObject(v: unknown): v is Record<string, unknown> {
 /* ── 在线编辑（DB 覆盖层）──
    编辑后的值存数据库并立即生效（非 hot 项重启后生效）；「恢复默认」删除
    数据库覆盖、回到 yaml 原值。全部叶子配置可编辑（后端锁定项除外），
-   保存/恢复前需输入编辑口令（后端校验，口令在本浏览器标签页内记住）。 */
-
-const PW_STORAGE_KEY = "cfg-edit-password";
+   保存/恢复前需输入编辑口令（弹窗/缓存逻辑在共享的 useEditPassword，
+   与 vision 页 Controls 滑块共用同一口令缓存）。 */
 
 export type SaveOverrideFn = (path: string, value: unknown) => Promise<OverrideMutationResult>;
 export type RevertOverrideFn = (path: string) => Promise<OverrideMutationResult>;
@@ -953,42 +952,6 @@ function DeviceOverridePanel({
   );
 }
 
-/** 编辑口令弹窗：promise 化调用（askPassword() 返回用户输入），Enter 确认、取消即拒绝 */
-function PasswordDialog({
-  hint,
-  onSubmit,
-  onCancel,
-}: {
-  hint: string;
-  onSubmit: (pw: string) => void;
-  onCancel: () => void;
-}) {
-  const [pw, setPw] = useState("");
-  return (
-    <div className="cfg-pw-overlay" onClick={onCancel}>
-      <div className="cfg-pw-dialog" onClick={(e) => e.stopPropagation()}>
-        <h4>🔑 编辑口令</h4>
-        <p className="cfg-pw-hint">{hint}</p>
-        <input
-          type="password"
-          autoFocus
-          value={pw}
-          onChange={(e) => setPw(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && pw) onSubmit(pw);
-            if (e.key === "Escape") onCancel();
-          }}
-          placeholder="请输入口令"
-        />
-        <div className="cfg-edit-actions">
-          <button className="cfg-edit-save" onClick={() => pw && onSubmit(pw)} disabled={!pw}>确认</button>
-          <button className="cfg-edit-cancel" onClick={onCancel}>取消</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 /** 顶部服务启动时间状态条：一眼看到 voice / agent / console / person 与记忆 GPU 服务是否在线与上次启动 */
 function ServiceStartStrip({
   voice,
@@ -1147,41 +1110,8 @@ export function ConfigView() {
     return () => clearTimeout(timer);
   }, [notice]);
 
-  /* 口令弹窗（promise 化）：口令记在 sessionStorage（本标签页有效），401 时清掉重弹 */
-  const [pwPrompt, setPwPrompt] = useState<{
-    hint: string;
-    resolve: (pw: string) => void;
-    reject: (e: Error) => void;
-  } | null>(null);
-
-  const askPassword = useCallback((hint: string) => {
-    return new Promise<string>((resolve, reject) => {
-      setPwPrompt({ hint, resolve, reject });
-    });
-  }, []);
-
-  /* 给编辑请求包上口令：无缓存先弹窗要，口令错(401)清缓存重弹，其余错误原样抛给编辑框展示 */
-  const withPassword = useCallback(
-    async <T,>(call: (pw: string) => Promise<T>): Promise<T> => {
-      let pw = sessionStorage.getItem(PW_STORAGE_KEY)
-        ?? await askPassword("修改配置需要口令验证（保存在本标签页，关闭后需重新输入）");
-      for (;;) {
-        try {
-          const result = await call(pw);
-          sessionStorage.setItem(PW_STORAGE_KEY, pw);
-          return result;
-        } catch (e) {
-          if ((e as HttpError).status === 401) {
-            sessionStorage.removeItem(PW_STORAGE_KEY);
-            pw = await askPassword("口令错误，请重新输入");
-            continue;
-          }
-          throw e;
-        }
-      }
-    },
-    [askPassword],
-  );
+  /* 口令弹窗 + sessionStorage 缓存 + 401 重弹（共享逻辑，与 vision 页 Controls 同一口令缓存） */
+  const { withPassword, passwordDialog } = useEditPassword();
 
   const makeEditCtx = useCallback(
     (service: ConfigService, fields: Map<string, EditableField> | null): EditCtx | undefined => {
@@ -1243,13 +1173,7 @@ export function ConfigView() {
       <div className="cfg-notice-anchor">
         {notice && <div className="cfg-notice">{notice}</div>}
       </div>
-      {pwPrompt && (
-        <PasswordDialog
-          hint={pwPrompt.hint}
-          onSubmit={(pw) => { pwPrompt.resolve(pw); setPwPrompt(null); }}
-          onCancel={() => { pwPrompt.reject(new Error("已取消")); setPwPrompt(null); }}
-        />
-      )}
+      {passwordDialog}
       <DeviceOverridePanel
         withPassword={withPassword}
         setNotice={setNotice}

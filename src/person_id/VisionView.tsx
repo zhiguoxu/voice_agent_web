@@ -33,6 +33,7 @@ import { PipelinePanel } from "./PipelinePanel";
 import { RestreamLogModal } from "./RestreamLogModal";
 import { BodySimilarityModal, FaceSimilarityModal, TestBodyQualityModal } from "./TestModals";
 import { ToastContainer } from "./Toast";
+import { useEditPassword } from "../editPassword";
 import { useToasts } from "./useToasts";
 import type {
   ConsumeStatus,
@@ -467,6 +468,15 @@ function VisionDashboard({ cameraId, onCameraIdChange }: {
     }
   };
 
+  /* ── 参数写入(滑块/畸变矫正): 落 DB 配置覆盖, 需编辑口令。
+     口令弹窗/sessionStorage 缓存与「系统配置」页共用(useEditPassword) ── */
+  const { withPassword, passwordDialog } = useEditPassword();
+  const updateConfig = useCallback(
+    (updates: Record<string, unknown>) =>
+      withPassword((pw) => updateVisionConfig(updates, pw)),
+    [withPassword],
+  );
+
   /* ── 叠加层开关 / 畸变矫正 ── */
   const setOverlayOpt = (key: keyof OverlayOptions, value: boolean) => {
     setOverlayOpts((prev) => ({ ...prev, [key]: value }));
@@ -475,7 +485,7 @@ function VisionDashboard({ cameraId, onCameraIdChange }: {
 
   const toggleCorrection = (checked: boolean) => {
     setCorrectionEnabled(checked);
-    void updateVisionConfig({ IMAGE_CORRECTION_ENABLED: checked }).catch((e: unknown) => {
+    void updateConfig({ IMAGE_CORRECTION_ENABLED: checked }).catch((e: unknown) => {
       console.error("[Vision] Config update failed:", e);
     });
   };
@@ -774,7 +784,7 @@ function VisionDashboard({ cameraId, onCameraIdChange }: {
 
           <aside className="side-panels">
             <PipelinePanel />
-            <ControlsPanel params={params} />
+            <ControlsPanel params={params} updateConfig={updateConfig} />
           </aside>
         </main>
 
@@ -793,6 +803,7 @@ function VisionDashboard({ cameraId, onCameraIdChange }: {
         {testModal === "face" && <FaceSimilarityModal onClose={() => setTestModal(null)} />}
         {testModal === "body" && <BodySimilarityModal onClose={() => setTestModal(null)} />}
         {lightbox && <ImageLightbox state={lightbox} onClose={() => setLightbox(null)} />}
+        {passwordDialog}
         <ToastContainer toasts={toasts} />
       </div>
     </VisionContext.Provider>
