@@ -184,6 +184,14 @@ function draftToValue(draft: string, sample: unknown): unknown {
   return draft;
 }
 
+/* 写覆盖成功后到重拉之间的沉降等待。后端多实例部署时, 改动经 Redis Pub/Sub
+   通知其他实例 reload(毫秒级), 而 LB 轮询几乎必然把紧随 PUT 的重拉 GET 打到
+   另一台实例——不等一下就会拿到它尚未 reload 的旧值, 表现为"保存后要手动
+   刷新才看到新值"。600ms 比同步窗口(几十毫秒)大一个数量级, 又淹没在行内
+   编辑器本来就有的"保存中"状态里, 用户无感。 */
+const SYNC_SETTLE_MS = 600;
+const syncSettle = () => new Promise<void>((r) => setTimeout(r, SYNC_SETTLE_MS));
+
 /** 值的短预览（「已修改」徽标的 data-tip 展示原值用） */
 function previewValue(v: unknown): string {
   const s = Array.isArray(v) ? v.map(String).join(" | ") : String(v ?? "-");
@@ -790,6 +798,7 @@ function DeviceOverridePanel({
   }, [comboOpen]);
 
   const afterMutation = useCallback(async () => {
+    await syncSettle();
     await Promise.all([loadDevice(selected, { silent: true }), loadOverview(), onGlobalReload()]);
   }, [loadDevice, loadOverview, onGlobalReload, selected]);
 
@@ -1125,6 +1134,7 @@ export function ConfigView() {
           setNotice(r.need_restart
             ? `✅ ${path} 已保存到数据库，重启 ${serverName} 后生效`
             : `✅ ${path} 已保存，立即生效`);
+          await syncSettle();
           await load();
           return r;
         },
@@ -1133,6 +1143,7 @@ export function ConfigView() {
           setNotice(r.need_restart
             ? `↩️ ${path} 已恢复 yaml 原值，重启 ${serverName} 后生效`
             : `↩️ ${path} 已恢复 yaml 原值，立即生效`);
+          await syncSettle();
           await load();
           return r;
         },
