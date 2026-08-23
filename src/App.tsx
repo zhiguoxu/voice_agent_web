@@ -161,6 +161,16 @@ function SpeakerBadge({ speakerId, speakerName, kind, suspected, debug, names, o
   );
 }
 
+/** 存量轮未落 prompt_memory / prompt_context：开「最新提示词」时只能空记忆 + 现生成时间 */
+function replayLacksPromptParts(json: string): boolean {
+  try {
+    const p = JSON.parse(json) as { prompt_memory?: string | null; prompt_context?: string | null };
+    return p.prompt_memory == null && p.prompt_context == null;
+  } catch {
+    return false;
+  }
+}
+
 function ReplayModerationPanel({ moderation }: { moderation: ReplayModeration }) {
   const submitted = moderation.submitted;
   const final = moderation.final;
@@ -470,6 +480,10 @@ export default function App() {
   /* 风控复现送审文本模式：false=当时落库的送审文本，true=本次复现最新出文；跨会话记住 */
   const [replayModUseLatest, setReplayModUseLatest] = useState(() => {
     return localStorage.getItem("replayModUseLatest") === "true";
+  });
+  /* 主对话提示词：false=落库 system_prompt，true=当前生效的 small_talk；跨会话记住 */
+  const [replayUseLatestPrompt, setReplayUseLatestPrompt] = useState(() => {
+    return localStorage.getItem("replayUseLatestPrompt") === "true";
   });
   const [replayLoading, setReplayLoading] = useState(false);
   const [replayResult, setReplayResult] = useState<ReplayResult | null>(null);
@@ -1953,6 +1967,27 @@ export default function App() {
                 />
                 <label
                   className="replay-mod-mode"
+                  data-tip="开：主对话套当前生效的 prompt.small_talk（含控制台在线改和设备覆盖），记忆块与时间/位置用落库的 prompt_memory / prompt_context。存量轮没有这两项时，记忆按空、时间按现在现生成。关：原样使用落库的 system_prompt"
+                >
+                  <input
+                    type="checkbox"
+                    checked={replayUseLatestPrompt}
+                    disabled={replayLoading}
+                    onChange={(e) => {
+                      const val = e.target.checked;
+                      setReplayUseLatestPrompt(val);
+                      localStorage.setItem("replayUseLatestPrompt", String(val));
+                    }}
+                  />
+                  使用当前生效的提示词（关闭时用落库的 system_prompt）
+                </label>
+                {replayUseLatestPrompt && replayLacksPromptParts(replayInput) && (
+                  <div className="replay-mod-warn">
+                    该轮是存量快照，没有 prompt_memory / prompt_context。重装时记忆为空，时间按现在生成；位置用当前会话的 location。
+                  </div>
+                )}
+                <label
+                  className="replay-mod-mode"
                   data-tip="开：风控用本次 agent 复现的最新出文送审（审「这次的输出会怎么判」）。关：用当时落库的送审文本，复现当时那次判定。两种模式的【最近对话】都按该轮落库记录重建"
                 >
                   <input
@@ -1979,6 +2014,7 @@ export default function App() {
                       const result = await replayTurn({
                         ...parsed,
                         moderation_use_replay_output: replayModUseLatest,
+                        use_latest_prompt: replayUseLatestPrompt,
                       });
                       setReplayResult(result);
                     } catch (e: any) {
@@ -1999,11 +2035,22 @@ export default function App() {
                       <span>意图来源: <b>{replayResult.intent_source || '-'}</b></span>
                       {replayResult.intent_name && <span>意图名: <b>{replayResult.intent_name}</b></span>}
                       {replayResult.command_type && <span>指令: <b>{replayResult.command_type}</b></span>}
+                      <span>提示词: <b>{replayResult.used_latest_prompt ? "当前生效" : "落库快照"}</b></span>
                     </div>
                     <div className="replay-reply">
                       <label>回复文本（本次 agent 复现）</label>
                       <div className="replay-reply-text">{replayResult.reply_text || '(无文本回复)'}</div>
                     </div>
+                    {replayResult.chat_request?.system_prompt && (
+                      <details className="replay-mod-payload">
+                        <summary>
+                          {replayResult.used_latest_prompt
+                            ? "实际使用的 system_prompt（当前模板）"
+                            : "实际使用的 system_prompt（落库快照）"}
+                        </summary>
+                        <pre className="replay-mod-user-content">{replayResult.chat_request.system_prompt}</pre>
+                      </details>
+                    )}
                     {replayResult.moderation && (
                       <ReplayModerationPanel
                         moderation={replayResult.moderation}

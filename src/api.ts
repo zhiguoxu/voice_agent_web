@@ -264,7 +264,7 @@ export interface Turn {
   tool_names: string | null;
   tool_arguments: string | null;
   tool_results: string | null;
-  chat_request: { query: string; history: { role: string; content: string }[]; system_prompt: string | null; image_url: string | null; llm: { model: string; base_url: string } | null } | null;
+  chat_request: { query: string; history: { role: string; content: string }[]; system_prompt: string | null; prompt_memory?: string | null; prompt_context?: string | null; image_url: string | null; llm: { model: string; base_url: string } | null } | null;
   /** 本轮记忆召回过程记录；记忆未启用/老数据无此字段时为空 */
   memory_recall: MemoryRecall | null;
   t_llm_start: number | null;
@@ -421,6 +421,9 @@ export interface ReplayResult {
   intent_name: string | null;
   command_type: string | null;
   subagent_name: string | null;
+  /** true=本次用当前生效的 small_talk 重装了 system_prompt */
+  used_latest_prompt?: boolean;
+  chat_request?: { system_prompt?: string | null } | null;
   moderation?: ReplayModeration | null;
   timing: {
     t_agent_start?: number | null;
