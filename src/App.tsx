@@ -161,11 +161,11 @@ function SpeakerBadge({ speakerId, speakerName, kind, suspected, debug, names, o
   );
 }
 
-/** 存量轮未落 prompt_memory / prompt_context：开「最新提示词」时只能空记忆 + 现生成时间 */
+/** 存量轮未落 prompt_memory / prompt_time：开「最新提示词」时只能空记忆 + 现生成时间 */
 function replayLacksPromptParts(json: string): boolean {
   try {
-    const p = JSON.parse(json) as { prompt_memory?: string | null; prompt_context?: string | null };
-    return p.prompt_memory == null && p.prompt_context == null;
+    const p = JSON.parse(json) as { prompt_memory?: string | null; prompt_time?: string | null };
+    return p.prompt_memory == null && p.prompt_time == null;
   } catch {
     return false;
   }
@@ -484,6 +484,10 @@ export default function App() {
   /* 主对话提示词：false=落库 system_prompt，true=当前生效的 small_talk；跨会话记住 */
   const [replayUseLatestPrompt, setReplayUseLatestPrompt] = useState(() => {
     return localStorage.getItem("replayUseLatestPrompt") === "true";
+  });
+  /* 时间/日期块的时刻：false=还原当时对话的时刻（落库 prompt_time），true=用现在；跨会话记住 */
+  const [replayUseLatestTime, setReplayUseLatestTime] = useState(() => {
+    return localStorage.getItem("replayUseLatestTime") === "true";
   });
   const [replayLoading, setReplayLoading] = useState(false);
   const [replayResult, setReplayResult] = useState<ReplayResult | null>(null);
@@ -1982,7 +1986,7 @@ export default function App() {
                 />
                 <label
                   className="replay-mod-mode"
-                  data-tip="开：主对话套当前生效的 prompt.small_talk（含控制台在线改和设备覆盖），记忆块与时间/位置用落库的 prompt_memory / prompt_context。存量轮没有这两项时，记忆按空、时间按现在现生成。关：原样使用落库的 system_prompt"
+                  data-tip="开：主对话套当前生效的 prompt.small_talk 和时间措辞模板（含控制台在线改和设备覆盖），记忆块用落库 prompt_memory，时刻按落库 prompt_time 还原。存量轮没这些字段时，记忆按空、时间按现在现生成。关：原样使用落库的 system_prompt"
                 >
                   <input
                     type="checkbox"
@@ -1998,9 +2002,25 @@ export default function App() {
                 </label>
                 {replayUseLatestPrompt && replayLacksPromptParts(replayInput) && (
                   <div className="replay-mod-warn">
-                    该轮是存量快照，没有 prompt_memory / prompt_context。重装时记忆为空，时间按现在生成；位置用当前会话的 location。
+                    该轮是存量快照，没有 prompt_memory / prompt_time。重装时记忆为空，时间按现在生成；位置用当前会话的 location。
                   </div>
                 )}
+                <label
+                  className="replay-mod-mode"
+                  data-tip="仅在开「最新提示词」时生效。开：时间/日期块用现在的时刻（位置仍用当时会话的 location）。关：还原当时对话的时刻（落库 prompt_time；存量轮没记该字段时只能按现在生成）。不重装提示词时快照原样复现，本选项被忽略"
+                >
+                  <input
+                    type="checkbox"
+                    checked={replayUseLatestTime}
+                    disabled={replayLoading || !replayUseLatestPrompt}
+                    onChange={(e) => {
+                      const val = e.target.checked;
+                      setReplayUseLatestTime(val);
+                      localStorage.setItem("replayUseLatestTime", String(val));
+                    }}
+                  />
+                  时间用当前最新时刻（需开「最新提示词」；关闭时还原当时对话的时间）
+                </label>
                 <label
                   className="replay-mod-mode"
                   data-tip="开：风控用本次 agent 复现的最新出文送审（审「这次的输出会怎么判」）。关：用当时落库的送审文本，复现当时那次判定。两种模式的【最近对话】都按该轮落库记录重建"
@@ -2030,6 +2050,7 @@ export default function App() {
                         ...parsed,
                         moderation_use_replay_output: replayModUseLatest,
                         use_latest_prompt: replayUseLatestPrompt,
+                        use_latest_time: replayUseLatestPrompt && replayUseLatestTime,
                       });
                       setReplayResult(result);
                     } catch (e: any) {
@@ -2051,6 +2072,7 @@ export default function App() {
                       {replayResult.intent_name && <span>意图名: <b>{replayResult.intent_name}</b></span>}
                       {replayResult.command_type && <span>指令: <b>{replayResult.command_type}</b></span>}
                       <span>提示词: <b>{replayResult.used_latest_prompt ? "当前生效" : "落库快照"}</b></span>
+                      <span>时间: <b>{replayResult.used_latest_time ? "当前时刻" : "当时时刻"}</b></span>
                     </div>
                     <div className="replay-reply">
                       <label>回复文本（本次 agent 复现）</label>

@@ -265,7 +265,7 @@ export interface Turn {
   tool_arguments: string | null;
   tool_results: string | null;
   /** attach_image: 本轮 LLM 消息是否实际携带画面（消息构造的唯一开关；存量快照后端已归一成 true） */
-  chat_request: { query: string; history: { role: string; content: string }[]; system_prompt: string | null; prompt_memory?: string | null; prompt_context?: string | null; image_url: string | null; attach_image?: boolean; llm: { model: string; base_url: string } | null } | null;
+  chat_request: { query: string; history: { role: string; content: string }[]; system_prompt: string | null; prompt_memory?: string | null; prompt_time?: string | null; image_url: string | null; attach_image?: boolean; llm: { model: string; base_url: string } | null } | null;
   /** 本轮记忆召回过程记录；记忆未启用/老数据无此字段时为空 */
   memory_recall: MemoryRecall | null;
   t_llm_start: number | null;
@@ -424,6 +424,9 @@ export interface ReplayResult {
   subagent_name: string | null;
   /** true=本次用当前生效的 small_talk 重装了 system_prompt */
   used_latest_prompt?: boolean;
+  /** true=本次重装提示词时时间/日期块用了当前时刻（实际生效值:
+   *  未开 used_latest_prompt 时恒为 false） */
+  used_latest_time?: boolean;
   chat_request?: { system_prompt?: string | null } | null;
   moderation?: ReplayModeration | null;
   timing: {
