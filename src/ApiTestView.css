@@ -121,36 +121,6 @@
   font-size: 12px;
 }
 
-.api-test-container .cfg-intent-labels {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 18px;
-}
-
-.api-test-container .cfg-intent-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 13px;
-  font-family: monospace;
-  color: var(--text-primary);
-  background: var(--bg-secondary);
-  border: 1px solid var(--border);
-  padding: 3px 10px 3px 4px;
-  border-radius: 12px;
-}
-
-.api-test-container .cfg-intent-label-id {
-  font-size: 11px;
-  color: var(--purple);
-  background: var(--accent-soft);
-  min-width: 20px;
-  text-align: center;
-  padding: 1px 4px;
-  border-radius: 8px;
-}
-
 .api-test-container .cfg-intent-test {
   display: flex;
   gap: 8px;
@@ -214,24 +184,6 @@
 .api-test-container .cfg-intent-query {
   color: var(--text-primary);
   font-weight: 500;
-}
-
-.api-test-container .cfg-intent-arrow {
-  color: var(--text-muted);
-}
-
-.api-test-container .cfg-intent-raw {
-  font-family: monospace;
-  color: var(--text-primary);
-}
-
-.api-test-container .cfg-intent-final {
-  color: var(--text-secondary);
-  margin-left: auto;
-}
-
-.api-test-container .cfg-intent-final code {
-  color: var(--cyan);
 }
 
 .api-test-container .cfg-mod-test input.cfg-mod-query {

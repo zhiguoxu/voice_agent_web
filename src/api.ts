@@ -386,8 +386,11 @@ export interface ReplayModerationSubmitted {
   history: string;
   /** 本次复现实际送进风控的【机器人回复】 */
   reply_text: string;
-  /** checked=跨阈值送审前缀; original=规则层全文; original_fallback=存量无前缀; reply=未拦截完整回复 */
-  reply_origin: "checked" | "original" | "original_fallback" | "reply" | "missing";
+  /** checked=跨阈值送审前缀; original=规则层全文; original_fallback=存量无前缀;
+   *  reply=未拦截完整回复; replay=本次 agent 复现的最新出文（模式切换） */
+  reply_origin: "checked" | "original" | "original_fallback" | "reply" | "replay" | "missing";
+  /** 当时落库的送审文本（reply_origin=replay 时用来和最新出文对照） */
+  recorded_reply_text: string | null;
   /** 命中时刻全量累计原文（可能比送审前缀长） */
   original_text: string | null;
   /** 落库的实际送审前缀；存量拦截轮可能为空 */
@@ -1546,46 +1549,6 @@ export async function fetchPrompts(): Promise<PromptTemplateInfo[]> {
   }
   const data = await res.json();
   return data.prompts ?? [];
-}
-
-/** BERT 意图分类的 label_map 与服务状态 */
-export interface IntentLabels {
-  labels: Record<string, string>;
-  count: number;
-  base_url: string;
-  confidence_threshold: number;
-  healthy: boolean;
-}
-
-export interface IntentClassifyResult {
-  query: string;
-  label: string;
-  confidence: number;
-  confidence_threshold: number;
-  hit: boolean;
-  final_intent: string;
-}
-
-export async function fetchIntentLabels(): Promise<IntentLabels> {
-  const res = await fetch("/api/agent/intent/labels");
-  if (!res.ok) {
-    const data = await res.json().catch(() => ({}));
-    throw new Error(data.detail || "Failed to fetch intent labels");
-  }
-  return res.json();
-}
-
-export async function classifyIntent(text: string): Promise<IntentClassifyResult> {
-  const res = await fetch("/api/agent/intent/classify", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text }),
-  });
-  if (!res.ok) {
-    const data = await res.json().catch(() => ({}));
-    throw new Error(data.detail || "Failed to classify intent");
-  }
-  return res.json();
 }
 
 /** 风控在线测试结果（POST /api/voice/moderation/test，与生产守卫同一套审核函数） */

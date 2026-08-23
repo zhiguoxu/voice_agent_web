@@ -165,15 +165,17 @@ function ReplayModerationPanel({ moderation }: { moderation: ReplayModeration })
   const submitted = moderation.submitted;
   const final = moderation.final;
   const sourceLabel = final?.source === "rule" ? "正则规则" : final?.source === "llm" ? "风控模型" : final?.source;
-  const originHint = submitted?.reply_origin === "checked"
-    ? "【机器人回复】用当时跨阈值送审的前缀（checked_text）"
-    : submitted?.reply_origin === "original"
-      ? "【机器人回复】用规则命中时的累计全文"
-      : submitted?.reply_origin === "reply"
-        ? "【机器人回复】用未拦截轮的完整落库回复"
-        : submitted?.reply_origin === "original_fallback"
-          ? "该轮拦截时未记录送审前缀，退回命中时刻全量原文（可能比当时送审更长）"
-          : "送审文本与【最近对话】按该轮落库记录重建（不含本次 agent 新出文）";
+  const originHint = submitted?.reply_origin === "replay"
+    ? "【机器人回复】用本次 agent 复现的最新出文（模式切换，审「这次的输出会怎么判」）"
+    : submitted?.reply_origin === "checked"
+      ? "【机器人回复】用当时跨阈值送审的前缀（checked_text）"
+      : submitted?.reply_origin === "original"
+        ? "【机器人回复】用规则命中时的累计全文"
+        : submitted?.reply_origin === "reply"
+          ? "【机器人回复】用未拦截轮的完整落库回复"
+          : submitted?.reply_origin === "original_fallback"
+            ? "该轮拦截时未记录送审前缀，退回命中时刻全量原文（可能比当时送审更长）"
+            : "送审文本与【最近对话】按该轮落库记录重建（不含本次 agent 新出文）";
 
   return (
     <section className="detail-section replay-moderation">
@@ -186,7 +188,9 @@ function ReplayModerationPanel({ moderation }: { moderation: ReplayModeration })
       )}
       {moderation.replay_reply_differs && (
         <div className="replay-mod-warn">
-          本次 agent 出文与当时送审文本不同；风控按下述当时上下文审核，未使用本次新出文。
+          {submitted?.reply_origin === "replay"
+            ? "本次复现出文与当时送审文本不同；风控已按本次最新出文审核，结论与当时判定不可直接对比。"
+            : "本次 agent 出文与当时送审文本不同；风控按下述当时上下文审核，未使用本次新出文。"}
         </div>
       )}
       {moderation.error && <div className="replay-error">❌ {moderation.error}</div>}
@@ -194,7 +198,7 @@ function ReplayModerationPanel({ moderation }: { moderation: ReplayModeration })
       {submitted && (
         <details className="replay-mod-payload" open>
           <summary>
-            当时送审上下文
+            {submitted.reply_origin === "replay" ? "送审上下文（最新出文）" : "当时送审上下文"}
             {submitted.history_turn_count > 0
               ? `（前 ${submitted.history_turn_count} 轮，窗口 ${submitted.context_turns}）`
               : "（无最近对话）"}
@@ -204,7 +208,14 @@ function ReplayModerationPanel({ moderation }: { moderation: ReplayModeration })
               </span>
             )}
           </summary>
-          {submitted.checked_text && submitted.original_text
+          {submitted.reply_origin === "replay" && submitted.recorded_reply_text
+            && submitted.recorded_reply_text !== submitted.reply_text && (
+            <div className="replay-mod-diff">
+              <div><label>本次送审（最新出文）</label><pre>{submitted.reply_text || "(空)"}</pre></div>
+              <div><label>当时落库的送审文本</label><pre>{submitted.recorded_reply_text}</pre></div>
+            </div>
+          )}
+          {submitted.reply_origin !== "replay" && submitted.checked_text && submitted.original_text
             && submitted.checked_text !== submitted.original_text && (
             <div className="replay-mod-diff">
               <div><label>实际送审前缀</label><pre>{submitted.checked_text}</pre></div>
@@ -456,6 +467,10 @@ export default function App() {
   /* ── Replay modal ── */
   const [replayOpen, setReplayOpen] = useState(false);
   const [replayInput, setReplayInput] = useState('');
+  /* 风控复现送审文本模式：false=当时落库的送审文本，true=本次复现最新出文；跨会话记住 */
+  const [replayModUseLatest, setReplayModUseLatest] = useState(() => {
+    return localStorage.getItem("replayModUseLatest") === "true";
+  });
   const [replayLoading, setReplayLoading] = useState(false);
   const [replayResult, setReplayResult] = useState<ReplayResult | null>(null);
   const [replayError, setReplayError] = useState<string | null>(null);
@@ -1090,7 +1105,7 @@ export default function App() {
           <button
             className={`main-tab ${activeTab === 'apiTest' ? 'active' : ''}`}
             onClick={() => setActiveTab('apiTest')}
-            data-tip="BERT 意图识别、内容风控、ASR 语音识别、VAD 触发调参等与生产同款链路的在线 API 探测"
+            data-tip="内容风控、ASR 语音识别、VAD 触发调参等与生产同款链路的在线 API 探测"
           >
             API 测试
           </button>
@@ -1936,6 +1951,22 @@ export default function App() {
                   onChange={e => setReplayInput(e.target.value)}
                   spellCheck={false}
                 />
+                <label
+                  className="replay-mod-mode"
+                  data-tip="开：风控用本次 agent 复现的最新出文送审（审「这次的输出会怎么判」）。关：用当时落库的送审文本，复现当时那次判定。两种模式的【最近对话】都按该轮落库记录重建"
+                >
+                  <input
+                    type="checkbox"
+                    checked={replayModUseLatest}
+                    disabled={replayLoading}
+                    onChange={(e) => {
+                      const val = e.target.checked;
+                      setReplayModUseLatest(val);
+                      localStorage.setItem("replayModUseLatest", String(val));
+                    }}
+                  />
+                  风控用本次复现的最新出文送审（关闭时用当时落库的送审文本）
+                </label>
                 <button
                   className="replay-run-btn"
                   disabled={replayLoading}
@@ -1945,7 +1976,10 @@ export default function App() {
                     setReplayResult(null);
                     try {
                       const parsed = JSON.parse(replayInput);
-                      const result = await replayTurn(parsed);
+                      const result = await replayTurn({
+                        ...parsed,
+                        moderation_use_replay_output: replayModUseLatest,
+                      });
                       setReplayResult(result);
                     } catch (e: any) {
                       setReplayError(e.message || String(e));

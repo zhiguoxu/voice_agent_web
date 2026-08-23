@@ -1564,6 +1564,20 @@ body {
     border-color: var(--text-muted);
 }
 
+.replay-mod-mode {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--text-muted);
+    cursor: pointer;
+    user-select: none;
+}
+
+.replay-mod-mode input {
+    cursor: pointer;
+}
+
 .replay-run-btn {
     padding: 10px 20px;
     background: linear-gradient(135deg, #6366f1, #8b5cf6);
