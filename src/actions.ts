@@ -222,6 +222,21 @@ export const INTENT_ACTIONS = [
     "icon": "👟"
   },
   {
+    "en_name": "take_photo",
+    "zh_name": "拍照片",
+    "payload": {
+      "type": "instruction",
+      "instruction_type": "device_control",
+      "instruction": [
+        {
+          "name": "take_photo_atomic",
+          "param": {}
+        }
+      ]
+    },
+    "icon": "📷"
+  },
+  {
     "en_name": "stand_up",
     "zh_name": "爬起",
     "payload": {
