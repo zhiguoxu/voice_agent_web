@@ -264,7 +264,8 @@ export interface Turn {
   tool_names: string | null;
   tool_arguments: string | null;
   tool_results: string | null;
-  chat_request: { query: string; history: { role: string; content: string }[]; system_prompt: string | null; prompt_memory?: string | null; prompt_context?: string | null; image_url: string | null; llm: { model: string; base_url: string } | null } | null;
+  /** attach_image: 本轮 LLM 消息是否实际携带画面（消息构造的唯一开关；存量快照后端已归一成 true） */
+  chat_request: { query: string; history: { role: string; content: string }[]; system_prompt: string | null; prompt_memory?: string | null; prompt_context?: string | null; image_url: string | null; attach_image?: boolean; llm: { model: string; base_url: string } | null } | null;
   /** 本轮记忆召回过程记录；记忆未启用/老数据无此字段时为空 */
   memory_recall: MemoryRecall | null;
   t_llm_start: number | null;

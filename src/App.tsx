@@ -1829,15 +1829,21 @@ export default function App() {
                       )}
                     </span>
                   </div>
-                  {selectedTurn.vision_gate && (
+                  {/* 带图与否以 chat_request.attach_image 为准（LLM 消息构造的唯一开关）；
+                      门控 P(vision) 只是判定依据。有图或有门控记录的轮次都显示本行。 */}
+                  {(selectedTurn.vision_gate || selectedTurn.image_cos_key) && (
                     <div className="meta-intent-row">
                       <label>视觉门控</label>
                       <span>
-                        <code data-tip={selectedTurn.vision_gate.decision === "skip"
-                          ? "门控判定本轮无需视觉：LLM 请求未带摄像头画面（省图片上传+视觉 prefill）"
-                          : "门控判定本轮需要视觉：LLM 请求携带摄像头画面"}>
-                          {selectedTurn.vision_gate.decision === "skip" ? "省图" : "带图"}
-                          {selectedTurn.vision_gate.p_vision != null && (
+                        <code data-tip={selectedTurn.chat_request
+                          ? (selectedTurn.chat_request.attach_image !== false
+                            ? "本轮 LLM 请求实际携带了摄像头画面（chat_request.attach_image）"
+                            : "本轮 LLM 请求实际未带摄像头画面（chat_request.attach_image；门控省图，省图片上传+视觉 prefill）")
+                          : "本轮无入参快照（meta 前被打断），是否带图未知"}>
+                          {selectedTurn.chat_request
+                            ? (selectedTurn.chat_request.attach_image !== false ? "带图" : "省图")
+                            : "未知"}
+                          {selectedTurn.vision_gate?.p_vision != null && (
                             <span className="bert-conf">
                               P(vision) {(selectedTurn.vision_gate.p_vision * 100).toFixed(1)}%
                               {selectedTurn.vision_gate.threshold != null &&
@@ -1845,11 +1851,20 @@ export default function App() {
                             </span>
                           )}
                         </code>
-                        {selectedTurn.vision_gate.reason === "error" && (
+                        {selectedTurn.vision_gate?.reason === "error" && (
                           <>
                             <span className="intent-arrow">›</span>
                             <code data-tip={selectedTurn.vision_gate.error || "门控服务异常"}>
                               门控异常(fail-open)
+                            </code>
+                          </>
+                        )}
+                        {selectedTurn.intent_source === "rule" &&
+                          selectedTurn.chat_request?.attach_image !== false && (
+                          <>
+                            <span className="intent-arrow">›</span>
+                            <code data-tip="本轮命中规则意图，未调用主对话 LLM——即便标记带图，这张图实际没进任何模型">
+                              规则意图轮·未调主对话
                             </code>
                           </>
                         )}
