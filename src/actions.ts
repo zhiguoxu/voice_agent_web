@@ -200,6 +200,28 @@ export const INTENT_ACTIONS = [
     "icon": "🚶"
   },
   {
+    "en_name": "boot_clamp",
+    "zh_name": "卡脚",
+    "payload": {
+      "type": "boot_control",
+      "payload": {
+        "status": "on"
+      }
+    },
+    "icon": "🦶"
+  },
+  {
+    "en_name": "boot_retract",
+    "zh_name": "收脚",
+    "payload": {
+      "type": "boot_control",
+      "payload": {
+        "status": "off"
+      }
+    },
+    "icon": "👟"
+  },
+  {
     "en_name": "stand_up",
     "zh_name": "爬起",
     "payload": {
