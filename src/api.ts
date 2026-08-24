@@ -1626,6 +1626,9 @@ export interface DeviceStatusResult {
     ip: string;
     wifi_ssid: string;
   } | null;
+  /** Redis hash 原始键值（含 status 未收录的字段）；不存在或读取失败为 null。
+   *  found=false 而 raw 非空说明是模型解析失败而非数据缺失 */
+  raw: Record<string, string> | null;
 }
 
 export async function fetchDeviceStatus(deviceSn: string): Promise<DeviceStatusResult> {

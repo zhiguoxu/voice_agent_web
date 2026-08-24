@@ -110,6 +110,18 @@ function DeviceStatusPanel() {
                   </span>
                 </div>
               )}
+              {r.raw && (
+                <details className="cfg-asr-mid">
+                  <summary>Redis 原始数据（{Object.keys(r.raw).length} 个字段）</summary>
+                  <div className="cfg-asr-mid-list">
+                    {Object.entries(r.raw).map(([k, v]) => (
+                      <div key={k}>
+                        <code>{k}</code> = {v}
+                      </div>
+                    ))}
+                  </div>
+                </details>
+              )}
             </div>
           ))}
         </div>
