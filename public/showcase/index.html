@@ -1,0 +1,1051 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>M1 IFA INTERACTIVE DASHBOARD</title>
+<!--
+  销售展示大屏（独立静态页，与主控制台完全隔离）。
+
+  访问: /showcase/?device_sn=XXX
+  只读消费既有接口，不发任何写请求:
+    GET /api/voice/conversations/sessions?device_sn=      会话定位（含 is_online）
+    GET /api/voice/conversations/sessions/{id}/turns      历史对话
+    SSE /api/console/conversations/sessions/{id}/stream   实时对话流
+    WS  /person_id/ws/vision?camera_id={sn}               视觉帧 + 识别结果
+    GET /person_id/api/params                             视觉阈值参数
+-->
+<style>
+:root {
+  --bg: #030609;
+  --panel: rgba(8, 16, 26, 0.72);
+  --line: #10283d;
+  --line-bright: #1b4059;
+  --cyan: #22d3ee;
+  --cyan-dim: #0e7490;
+  --green: #34d399;
+  --amber: #fbbf24;
+  --red: #f87171;
+  --text: #c4d6e6;
+  --dim: #587189;
+  --faint: #33465c;
+  --mono: "SF Mono", "JetBrains Mono", "Cascadia Code", Menlo, Consolas, "Liberation Mono", monospace;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: clamp(11px, 0.85vw, 15px);
+  overflow: hidden;
+}
+/* 背景氛围: 网格 + 径向光晕 + 扫描纹 */
+body::before {
+  content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 0;
+  background:
+    radial-gradient(ellipse 80% 60% at 50% -10%, rgba(34, 211, 238, 0.06), transparent 60%),
+    radial-gradient(ellipse 60% 50% at 90% 110%, rgba(52, 211, 153, 0.04), transparent 60%),
+    repeating-linear-gradient(0deg, transparent 0 39px, rgba(27, 64, 89, 0.12) 39px 40px),
+    repeating-linear-gradient(90deg, transparent 0 39px, rgba(27, 64, 89, 0.12) 39px 40px);
+}
+body::after {
+  content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 100;
+  background: repeating-linear-gradient(0deg, rgba(0,0,0,0.08) 0 1px, transparent 1px 3px);
+  opacity: 0.5;
+}
+
+#app {
+  position: relative; z-index: 1;
+  height: 100%; display: flex; flex-direction: column;
+  padding: 1.2vh 1vw; gap: 1.2vh;
+}
+
+/* ── 顶栏 ── */
+header {
+  display: flex; align-items: center; gap: 1.4em;
+  padding: 0.7em 1.1em;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  backdrop-filter: blur(4px);
+}
+.brand { display: flex; align-items: center; gap: 0.8em; }
+.brand-mark {
+  width: 0.9em; height: 0.9em; background: var(--cyan);
+  box-shadow: 0 0 12px var(--cyan);
+  animation: pulse 2.4s ease-in-out infinite;
+}
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.45; } }
+.brand h1 {
+  font-size: 1.25em; font-weight: 700; letter-spacing: 0.28em;
+  color: #e8f4fb; white-space: nowrap;
+}
+.brand h1 b { color: var(--cyan); font-weight: 700; }
+.brand .sub { font-size: 0.78em; color: var(--dim); letter-spacing: 0.12em; margin-top: 2px; }
+.device-chip {
+  display: flex; align-items: baseline; gap: 0.6em;
+  padding: 0.35em 0.9em;
+  border: 1px solid var(--line-bright);
+  background: rgba(34, 211, 238, 0.05);
+  font-size: 0.92em; letter-spacing: 0.08em;
+  cursor: pointer; user-select: none;
+}
+.device-chip:hover { border-color: var(--cyan-dim); }
+.device-chip .k { color: var(--dim); font-size: 0.82em; }
+.device-chip .v { color: var(--cyan); font-weight: 700; }
+.device-chip .name { color: var(--text); font-size: 0.85em; }
+header .spacer { flex: 1; }
+.status-pills { display: flex; gap: 1.2em; font-size: 0.8em; letter-spacing: 0.14em; }
+.pill { display: flex; align-items: center; gap: 0.5em; color: var(--dim); white-space: nowrap; }
+.pill .dot {
+  width: 0.55em; height: 0.55em; border-radius: 50%;
+  background: var(--faint); transition: background 0.3s, box-shadow 0.3s;
+}
+.pill.on { color: var(--text); }
+.pill.on .dot { background: var(--green); box-shadow: 0 0 8px var(--green); }
+.pill.warn .dot { background: var(--amber); box-shadow: 0 0 8px var(--amber); }
+#clock { font-size: 0.95em; color: var(--dim); letter-spacing: 0.1em; font-variant-numeric: tabular-nums; }
+.console-link {
+  color: var(--cyan); text-decoration: none; font-size: 0.8em;
+  border: 1px solid var(--cyan-dim); padding: 0.4em 0.9em; letter-spacing: 0.15em;
+  transition: background 0.2s;
+}
+.console-link:hover { background: rgba(34, 211, 238, 0.1); }
+
+/* ── 主区 ── */
+main { flex: 1; display: grid; grid-template-columns: 1fr 30vw; gap: 1vw; min-height: 0; }
+.col-right { display: grid; grid-template-rows: auto 1fr; gap: 1.2vh; min-height: 0; }
+
+.panel {
+  border: 1px solid var(--line);
+  background: var(--panel);
+  backdrop-filter: blur(4px);
+  display: flex; flex-direction: column; min-height: 0;
+  position: relative;
+}
+.panel-head {
+  display: flex; align-items: center; gap: 0.8em;
+  padding: 0.65em 1em;
+  border-bottom: 1px solid var(--line);
+  flex: none;
+}
+.panel-head .tick { width: 3px; height: 1em; background: var(--cyan); box-shadow: 0 0 6px var(--cyan); }
+.panel-head .title { font-size: 0.88em; font-weight: 700; letter-spacing: 0.22em; color: #dcebf5; }
+.panel-head .zh { font-size: 0.75em; color: var(--dim); letter-spacing: 0.1em; }
+.panel-head .right { margin-left: auto; font-size: 0.75em; color: var(--dim); letter-spacing: 0.08em; font-variant-numeric: tabular-nums; }
+
+/* ── 视觉面板 ── */
+.vision-body { flex: 1; position: relative; min-height: 0; margin: 0.9em; }
+.viewport {
+  position: absolute; inset: 0;
+  border: 1px solid var(--line-bright);
+  background: #010304;
+  overflow: hidden;
+}
+.viewport canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+/* 四角框线 */
+.corner { position: absolute; width: 22px; height: 22px; border: 2px solid var(--cyan); z-index: 5; opacity: 0.9; }
+.corner.tl { top: -2px; left: -2px; border-right: none; border-bottom: none; }
+.corner.tr { top: -2px; right: -2px; border-left: none; border-bottom: none; }
+.corner.bl { bottom: -2px; left: -2px; border-right: none; border-top: none; }
+.corner.br { bottom: -2px; right: -2px; border-left: none; border-top: none; }
+/* 扫描横线 */
+.sweep {
+  position: absolute; left: 0; right: 0; height: 90px; z-index: 4; pointer-events: none;
+  background: linear-gradient(to bottom, transparent, rgba(34, 211, 238, 0.07) 70%, rgba(34, 211, 238, 0.22));
+  animation: sweep 5s linear infinite; opacity: 0;
+  transition: opacity 0.6s;
+}
+.viewport.live .sweep { opacity: 1; }
+@keyframes sweep { 0% { top: -90px; } 100% { top: 100%; } }
+/* 待机雷达 */
+.standby {
+  position: absolute; inset: 0; z-index: 6;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2em;
+  background: rgba(1, 3, 4, 0.88);
+  transition: opacity 0.6s; opacity: 1;
+}
+.standby.hidden { opacity: 0; pointer-events: none; }
+.radar {
+  width: min(24vh, 220px); height: min(24vh, 220px); border-radius: 50%;
+  border: 1px solid var(--line-bright); position: relative;
+  background:
+    radial-gradient(circle, transparent 0 32%, rgba(27, 64, 89, 0.6) 32% calc(32% + 1px), transparent 0 65%, rgba(27, 64, 89, 0.6) 65% calc(65% + 1px), transparent 0);
+}
+.radar::before {
+  content: ""; position: absolute; inset: 0; border-radius: 50%;
+  background: conic-gradient(from 0deg, rgba(34, 211, 238, 0.35), transparent 70deg);
+  animation: spin 3s linear infinite;
+}
+.radar::after {
+  content: ""; position: absolute; left: 50%; top: 50%; width: 6px; height: 6px;
+  transform: translate(-50%, -50%); border-radius: 50%;
+  background: var(--cyan); box-shadow: 0 0 10px var(--cyan);
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.standby .msg { letter-spacing: 0.3em; color: var(--dim); font-size: 0.9em; text-align: center; line-height: 2; }
+.standby .msg b { color: var(--cyan); }
+.stream-btn {
+  background: rgba(34, 211, 238, 0.1); border: 1px solid var(--cyan-dim); color: var(--cyan);
+  font-family: var(--mono); font-size: 0.9em; letter-spacing: 0.2em;
+  padding: 0.7em 1.8em; cursor: pointer; transition: background 0.2s;
+}
+.stream-btn:hover { background: rgba(34, 211, 238, 0.22); }
+.stream-btn:disabled { opacity: 0.5; cursor: default; }
+/* 视觉底部 HUD */
+.vision-hud {
+  flex: none; display: flex; gap: 2em; align-items: center;
+  padding: 0.55em 1.2em; border-top: 1px solid var(--line);
+  font-size: 0.78em; letter-spacing: 0.12em; color: var(--dim);
+  font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden;
+}
+.vision-hud b { color: var(--cyan); font-weight: 700; }
+.vision-hud .target-name { color: var(--amber); }
+
+/* ── Pipeline 面板 ── */
+.pipe-body { padding: 0.9em 1.1em; display: flex; flex-direction: column; gap: 0.95em; }
+.stage-row { display: grid; grid-template-columns: 8.5em 1fr 4.2em; align-items: center; gap: 0.9em; font-size: 0.82em; }
+.stage-row .name { color: var(--text); letter-spacing: 0.08em; display: flex; align-items: center; gap: 0.55em; white-space: nowrap; }
+.stage-row .led { width: 0.5em; height: 0.5em; border-radius: 50%; background: var(--faint); flex: none; }
+.stage-row.done .led { background: var(--green); box-shadow: 0 0 6px var(--green); }
+.stage-row.running .led { background: var(--cyan); box-shadow: 0 0 6px var(--cyan); animation: pulse 1s infinite; }
+.stage-row.skipped .led { background: var(--faint); }
+.stage-row.error .led { background: var(--red); box-shadow: 0 0 6px var(--red); }
+.stage-row .bar { height: 4px; background: rgba(27, 64, 89, 0.35); position: relative; overflow: hidden; }
+.stage-row .bar i {
+  position: absolute; left: 0; top: 0; bottom: 0; width: 0;
+  background: linear-gradient(90deg, var(--cyan-dim), var(--cyan));
+  transition: width 0.35s ease; box-shadow: 0 0 6px rgba(34, 211, 238, 0.5);
+}
+.stage-row.skipped .bar i { background: var(--faint); box-shadow: none; }
+.stage-row .ms { text-align: right; color: var(--dim); font-variant-numeric: tabular-nums; }
+.stage-row.done .ms { color: var(--text); }
+
+.divider { border-top: 1px dashed var(--line); margin: 0.1em 0; position: relative; }
+.divider span {
+  position: absolute; top: -0.7em; left: 0; background: var(--bg);
+  padding-right: 0.8em; font-size: 0.72em; letter-spacing: 0.2em; color: var(--cyan-dim);
+}
+
+.gauge-row { display: grid; grid-template-columns: 13.5em 1fr 3.4em; align-items: center; gap: 0.9em; font-size: 0.78em; }
+.gauge-row .name { color: var(--dim); letter-spacing: 0.04em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gauge-row .track { height: 3px; background: rgba(27, 64, 89, 0.35); position: relative; }
+.gauge-row .track i {
+  position: absolute; left: 0; top: 0; bottom: 0;
+  background: linear-gradient(90deg, rgba(52, 211, 153, 0.4), var(--green));
+  transition: width 0.5s;
+}
+.gauge-row .track em {
+  position: absolute; top: -3px; width: 2px; height: 9px; background: #e8f4fb;
+  transition: left 0.5s;
+}
+.gauge-row .val { text-align: right; color: var(--green); font-variant-numeric: tabular-nums; }
+
+.lock-row {
+  display: flex; align-items: center; gap: 1em;
+  padding: 0.6em 0.8em; border: 1px solid var(--line);
+  background: rgba(52, 211, 153, 0.04); font-size: 0.85em;
+}
+.lock-row .label { color: var(--dim); font-size: 0.85em; letter-spacing: 0.15em; }
+.lock-row .who { color: var(--amber); font-weight: 700; letter-spacing: 0.05em; }
+.lock-row .score { margin-left: auto; color: var(--green); font-variant-numeric: tabular-nums; }
+.spark-wrap { display: flex; align-items: center; gap: 0.8em; }
+.spark-wrap .cap { font-size: 0.72em; color: var(--dim); letter-spacing: 0.12em; white-space: nowrap; }
+#spark { flex: 1; height: 30px; }
+
+/* ── 对话流面板 ── */
+.chat-body { flex: 1; overflow-y: auto; padding: 0.9em 1em; display: flex; flex-direction: column; gap: 0.75em; scroll-behavior: smooth; }
+.chat-body::-webkit-scrollbar { width: 4px; }
+.chat-body::-webkit-scrollbar-thumb { background: var(--line-bright); }
+.msg {
+  border-left: 2px solid var(--faint);
+  background: rgba(16, 40, 61, 0.25);
+  padding: 0.6em 0.9em;
+  animation: rise 0.3s ease;
+}
+@keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.msg .meta { display: flex; align-items: center; gap: 0.7em; font-size: 0.7em; letter-spacing: 0.15em; margin-bottom: 0.45em; color: var(--dim); }
+.msg .meta .who { font-weight: 700; }
+.msg .meta .time { margin-left: auto; font-variant-numeric: tabular-nums; }
+.msg .text { font-size: 0.92em; line-height: 1.65; color: var(--text); word-break: break-word; white-space: pre-wrap; }
+.msg.user { border-left-color: var(--cyan); }
+.msg.user .meta .who { color: var(--cyan); }
+.msg.agent { border-left-color: var(--green); background: rgba(52, 211, 153, 0.05); }
+.msg.agent .meta .who { color: var(--green); }
+.msg.system { border-left-color: var(--faint); background: transparent; padding: 0.2em 0.9em; }
+.msg.system .text { font-size: 0.75em; color: var(--dim); letter-spacing: 0.1em; }
+.msg .badge {
+  font-size: 0.85em; padding: 0.1em 0.5em;
+  border: 1px solid var(--line-bright); color: var(--cyan);
+}
+.msg .badge.mod { color: var(--red); border-color: rgba(248, 113, 113, 0.4); }
+.msg .caret { display: inline-block; width: 0.55em; height: 1em; background: var(--green); vertical-align: text-bottom; animation: pulse 0.8s infinite; margin-left: 2px; }
+.msg.error .text { color: var(--red); }
+.chat-empty { margin: auto; text-align: center; color: var(--dim); letter-spacing: 0.2em; line-height: 2.2; font-size: 0.85em; }
+.to-bottom {
+  position: absolute; right: 1.2em; bottom: 1em; z-index: 5;
+  border: 1px solid var(--cyan-dim); background: rgba(3, 6, 9, 0.9); color: var(--cyan);
+  font-family: var(--mono); font-size: 0.75em; letter-spacing: 0.1em;
+  padding: 0.4em 0.9em; cursor: pointer; display: none;
+}
+.to-bottom.show { display: block; }
+
+/* ── 启动/选择设备遮罩 ── */
+.overlay {
+  position: fixed; inset: 0; z-index: 200;
+  background: rgba(1, 3, 5, 0.96);
+  display: flex; align-items: center; justify-content: center;
+  transition: opacity 0.5s;
+}
+.overlay.hidden { opacity: 0; pointer-events: none; }
+.boot-lines { font-size: clamp(12px, 1vw, 16px); letter-spacing: 0.12em; line-height: 2.2; color: var(--dim); min-width: 34em; }
+.boot-lines .ok { color: var(--green); }
+.boot-lines .ln b { color: var(--cyan); }
+.picker { min-width: 30em; max-width: 44em; border: 1px solid var(--line-bright); background: var(--panel); padding: 2em 2.4em; }
+.picker h2 { font-size: 1em; letter-spacing: 0.25em; color: #e8f4fb; margin-bottom: 0.4em; }
+.picker p { font-size: 0.8em; color: var(--dim); margin-bottom: 1.4em; letter-spacing: 0.08em; }
+.picker form { display: flex; gap: 0.8em; margin-bottom: 1.4em; }
+.picker input {
+  flex: 1; background: #04090f; border: 1px solid var(--line-bright); color: var(--cyan);
+  font-family: var(--mono); font-size: 1em; padding: 0.6em 0.9em; letter-spacing: 0.1em; outline: none;
+}
+.picker input:focus { border-color: var(--cyan-dim); box-shadow: 0 0 10px rgba(34, 211, 238, 0.15); }
+.picker button {
+  background: rgba(34, 211, 238, 0.12); border: 1px solid var(--cyan-dim); color: var(--cyan);
+  font-family: var(--mono); letter-spacing: 0.2em; padding: 0 1.6em; cursor: pointer;
+}
+.picker button:hover { background: rgba(34, 211, 238, 0.22); }
+.dev-list { display: flex; flex-direction: column; gap: 0.5em; max-height: 40vh; overflow-y: auto; }
+.dev-item {
+  display: flex; gap: 1em; align-items: center; padding: 0.55em 0.9em;
+  border: 1px solid var(--line); cursor: pointer; font-size: 0.85em;
+}
+.dev-item:hover { border-color: var(--cyan-dim); background: rgba(34, 211, 238, 0.06); }
+.dev-item .sn { color: var(--cyan); font-weight: 700; letter-spacing: 0.06em; }
+.dev-item .nm { color: var(--text); }
+.dev-item .on { margin-left: auto; font-size: 0.85em; color: var(--green); letter-spacing: 0.15em; }
+.dev-hint { font-size: 0.75em; color: var(--faint); letter-spacing: 0.1em; margin-top: 1em; }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="brand">
+      <div class="brand-mark"></div>
+      <div>
+        <h1>M1 <b>IFA</b> INTERACTIVE DASHBOARD</h1>
+        <div class="sub">视觉画面 · 识别管线 · 实时会话流</div>
+      </div>
+    </div>
+    <div class="device-chip" id="deviceChip" title="点击切换设备">
+      <span class="k">DEVICE</span>
+      <span class="v" id="chipSn">--</span>
+      <span class="name" id="chipName"></span>
+    </div>
+    <div class="spacer"></div>
+    <div class="status-pills">
+      <div class="pill" id="pillVision"><span class="dot"></span>VISION</div>
+      <div class="pill" id="pillDialog"><span class="dot"></span>DIALOG</div>
+    </div>
+    <div id="clock">--:--:--</div>
+    <a class="console-link" href="../" target="_blank" rel="noopener">后台控制台 ↗</a>
+  </header>
+
+  <main>
+    <!-- 左: 视觉 -->
+    <section class="panel">
+      <div class="panel-head">
+        <div class="tick"></div>
+        <div class="title">VISION FEED</div>
+        <div class="zh">// M1 眼中的世界</div>
+        <div class="right" id="feedMeta">CAMERA STANDBY</div>
+      </div>
+      <div class="vision-body">
+        <div class="viewport" id="viewport">
+          <canvas id="feed"></canvas>
+          <canvas id="overlayCanvas"></canvas>
+          <div class="sweep"></div>
+          <div class="corner tl"></div><div class="corner tr"></div>
+          <div class="corner bl"></div><div class="corner br"></div>
+          <div class="standby" id="standby">
+            <div class="radar"></div>
+            <div class="msg">SIGNAL STANDBY<br><b id="standbyText">等待视频流接入 …</b></div>
+            <button class="stream-btn" id="streamBtn" style="display:none">▶ 开启视频流</button>
+          </div>
+        </div>
+      </div>
+      <div class="vision-hud">
+        <span>RES <b id="hudRes">----</b></span>
+        <span>FPS <b id="hudFps">--</b></span>
+        <span>PIPELINE <b id="hudMs">--</b></span>
+        <span>TRACKS <b id="hudTracks">0</b></span>
+        <span>TARGET <b class="target-name" id="hudTarget">--</b></span>
+      </div>
+    </section>
+
+    <!-- 右列 -->
+    <div class="col-right">
+      <!-- 右上: 管线与参数 -->
+      <section class="panel">
+        <div class="panel-head">
+          <div class="tick"></div>
+          <div class="title">PIPELINE</div>
+          <div class="zh">// 识别管线</div>
+          <div class="right" id="pipeMeta">IDLE</div>
+        </div>
+        <div class="pipe-body">
+          <div class="stage-row" data-stage="detection">
+            <div class="name"><span class="led"></span>Detection</div>
+            <div class="bar"><i></i></div><div class="ms">--</div>
+          </div>
+          <div class="stage-row" data-stage="face_detect">
+            <div class="name"><span class="led"></span>Face Detect</div>
+            <div class="bar"><i></i></div><div class="ms">--</div>
+          </div>
+          <div class="stage-row" data-stage="face_assess">
+            <div class="name"><span class="led"></span>Face Assess</div>
+            <div class="bar"><i></i></div><div class="ms">--</div>
+          </div>
+          <div class="stage-row" data-stage="reid">
+            <div class="name"><span class="led"></span>ReID Match</div>
+            <div class="bar"><i></i></div><div class="ms">--</div>
+          </div>
+
+          <div class="spark-wrap">
+            <span class="cap">LATENCY TREND</span>
+            <canvas id="spark"></canvas>
+          </div>
+
+          <div class="divider"><span>REID METRICS</span></div>
+          <div id="gauges"></div>
+
+          <div class="lock-row">
+            <span class="label">IDENTITY LOCK</span>
+            <span class="who" id="lockWho">--</span>
+            <span class="score" id="lockScore"></span>
+          </div>
+        </div>
+      </section>
+
+      <!-- 右下: 会话流 -->
+      <section class="panel" style="position:relative">
+        <div class="panel-head">
+          <div class="tick"></div>
+          <div class="title">SESSION FLOW</div>
+          <div class="zh">// 实时会话</div>
+          <div class="right" id="sessMeta">--</div>
+        </div>
+        <div class="chat-body" id="chat">
+          <div class="chat-empty" id="chatEmpty">AWAITING SESSION DATA<br>正在定位设备会话 …</div>
+        </div>
+        <button class="to-bottom" id="toBottom">↓ 回到最新</button>
+      </section>
+    </div>
+  </main>
+</div>
+
+<!-- 启动遮罩: 无 SN 时变成设备选择器 -->
+<div class="overlay" id="overlay">
+  <div class="boot-lines" id="bootLines" style="display:none"></div>
+  <div class="picker" id="picker" style="display:none">
+    <h2>SELECT DEVICE // 选择展示设备</h2>
+    <p>输入设备 SN，或从在线设备中选择。确定后可通过 URL 参数 ?device_sn= 直接进入。</p>
+    <form id="pickerForm">
+      <input id="pickerInput" placeholder="DEVICE SN" autocomplete="off" spellcheck="false">
+      <button type="submit">ENTER</button>
+    </form>
+    <div class="dev-list" id="devList"></div>
+    <div class="dev-hint" id="devHint">正在扫描在线设备 …</div>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* ════════ 常量与工具 ════════ */
+const VOICE_API = "/api/voice/conversations";
+const LIVE_API = "/api/console/conversations";
+const PID_BASE = "/person_id";
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const fmtTime = (iso) => {
+  if (!iso) return "";
+  const d = new Date(iso);
+  return isNaN(d) ? "" : d.toLocaleTimeString("zh-CN", { hour12: false });
+};
+
+const params = new URLSearchParams(location.search);
+const deviceSn = (params.get("device_sn") || params.get("sn") || "").trim();
+
+/* ════════ 时钟 ════════ */
+setInterval(() => {
+  $("clock").textContent = new Date().toLocaleTimeString("zh-CN", { hour12: false });
+}, 1000);
+
+/* ════════ 无 SN → 设备选择器 ════════ */
+if (!deviceSn) {
+  $("picker").style.display = "block";
+  $("pickerForm").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const sn = $("pickerInput").value.trim();
+    if (sn) location.search = "?device_sn=" + encodeURIComponent(sn);
+  });
+  (async () => {
+    try {
+      const res = await fetch(`${VOICE_API}/sessions?page_size=100`);
+      const data = await res.json();
+      const seen = new Set();
+      const online = (data.items || []).filter((s) => s.is_online && !seen.has(s.device_sn) && seen.add(s.device_sn));
+      if (online.length === 0) { $("devHint").textContent = "当前没有在线设备，可手动输入 SN。"; return; }
+      $("devHint").textContent = `发现 ${online.length} 台在线设备`;
+      $("devList").innerHTML = online.map((s) =>
+        `<div class="dev-item" data-sn="${esc(s.device_sn)}">
+          <span class="sn">${esc(s.device_sn)}</span>
+          <span class="nm">${esc(s.device_name || "")}</span>
+          <span class="on">● ONLINE</span>
+        </div>`).join("");
+      $("devList").addEventListener("click", (e) => {
+        const item = e.target.closest(".dev-item");
+        if (item) location.search = "?device_sn=" + encodeURIComponent(item.dataset.sn);
+      });
+    } catch { $("devHint").textContent = "在线设备扫描失败，可手动输入 SN。"; }
+  })();
+  throw new Error("no device_sn: waiting for selection"); // 中止主流程
+}
+
+/* ════════ 启动动画 ════════ */
+document.title = `M1 IFA · ${deviceSn}`;
+$("chipSn").textContent = deviceSn;
+$("deviceChip").addEventListener("click", () => { location.search = ""; });
+(function boot() {
+  const el = $("bootLines");
+  el.style.display = "block";
+  const lines = [
+    ["M1 VISION CORE", "LINK"],
+    ["DIALOG STREAM", "SYNC"],
+    [`DEVICE <b>${esc(deviceSn)}</b>`, "BIND"],
+  ];
+  let i = 0;
+  const next = () => {
+    if (i < lines.length) {
+      el.insertAdjacentHTML("beforeend",
+        `<div class="ln">&gt; ${lines[i][0]} ${".".repeat(Math.max(4, 26 - lines[i][0].length))} <span class="ok">${lines[i][1]} OK</span></div>`);
+      i++; setTimeout(next, 260);
+    } else {
+      setTimeout(() => $("overlay").classList.add("hidden"), 420);
+    }
+  };
+  setTimeout(next, 180);
+})();
+
+/* ════════ 视觉: WebSocket 帧 + 叠加层 ════════ */
+const feed = $("feed"), overlay = $("overlayCanvas");
+const fctx = feed.getContext("2d"), octx = overlay.getContext("2d");
+const viewport = $("viewport");
+let lastBitmap = null;          // 最新解码帧
+let lastResult = null;          // 最新 frame_result
+let lastFrameAt = 0;            // 最近收帧时间(判待机)
+let decoding = false;
+let latHistory = [];            // processing_ms 滑窗(sparkline)
+
+function resizeCanvases() {
+  const r = viewport.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  for (const c of [feed, overlay]) {
+    c.width = Math.round(r.width * dpr);
+    c.height = Math.round(r.height * dpr);
+  }
+}
+new ResizeObserver(resizeCanvases).observe(viewport);
+resizeCanvases();
+
+/* contain-fit: 返回帧在画布上的绘制矩形 */
+function fitRect(srcW, srcH, dstW, dstH) {
+  const s = Math.min(dstW / srcW, dstH / srcH);
+  const w = srcW * s, h = srcH * s;
+  return { x: (dstW - w) / 2, y: (dstH - h) / 2, w, h, s };
+}
+
+/* COCO-17 骨架连线 */
+const SKELETON = [[5,7],[7,9],[6,8],[8,10],[5,6],[5,11],[6,12],[11,12],[11,13],[13,15],[12,14],[14,16],[0,5],[0,6]];
+
+function personColor(p) {
+  if (p.isTarget) return "#fbbf24";
+  const st = p.status || "";
+  if (st === "definite" || st === "confident") return "#22d3ee";
+  if (st === "suspected") return "#f59e0b";
+  return "#64748b";
+}
+
+/* 展平 frame_result 里的人物(兼容嵌套与扁平两种载荷) */
+function flattenPersons(result) {
+  const raw = result.tracked_persons || result.persons || [];
+  return raw.map((p) => {
+    const det = p.person?.detection || {};
+    const idr = p.identity_result || {};
+    return {
+      trackId: p.person?.track_id ?? p.track_id,
+      bbox: det.bbox || p.bbox,
+      keypoints: det.keypoints || p.keypoints,
+      trail: p.person?.trail || p.trail,
+      name: idr.display_name ?? p.display_name,
+      personId: idr.person_id ?? p.person_id,
+      status: idr.status ?? p.identity_status ?? p.status,
+      confidence: idr.confidence ?? p.confidence,
+      isTarget: !!p.is_current_target,
+    };
+  }).filter((p) => p.bbox && p.bbox.length === 4);
+}
+
+function drawFrame() {
+  requestAnimationFrame(drawFrame);
+  const W = feed.width, H = feed.height;
+  if (!lastBitmap || !W || !H) return;
+
+  const srcW = lastResult?.frame_w || lastBitmap.width;
+  const srcH = lastResult?.frame_h || lastBitmap.height;
+  const rect = fitRect(lastBitmap.width, lastBitmap.height, W, H);
+  fctx.fillStyle = "#010304";
+  fctx.fillRect(0, 0, W, H);
+  fctx.drawImage(lastBitmap, rect.x, rect.y, rect.w, rect.h);
+
+  /* 叠加层: 识别坐标基于服务端处理帧尺寸(srcW/H), 映射到显示矩形 */
+  octx.clearRect(0, 0, W, H);
+  if (!lastResult) return;
+  const sx = rect.w / srcW, sy = rect.h / srcH;
+  const mx = (x) => rect.x + x * sx, my = (y) => rect.y + y * sy;
+  const px = Math.max(1.5, W / 900); // 线宽随分辨率缩放
+
+  for (const p of flattenPersons(lastResult)) {
+    const [x1, y1, x2, y2] = p.bbox;
+    const bx = mx(x1), by = my(y1), bw = (x2 - x1) * sx, bh = (y2 - y1) * sy;
+    const color = personColor(p);
+    octx.strokeStyle = color;
+    octx.fillStyle = color;
+    octx.lineWidth = p.isTarget ? px * 2 : px;
+
+    /* 角括号式检测框 */
+    const L = Math.min(bw, bh) * 0.18;
+    octx.beginPath();
+    octx.moveTo(bx, by + L); octx.lineTo(bx, by); octx.lineTo(bx + L, by);
+    octx.moveTo(bx + bw - L, by); octx.lineTo(bx + bw, by); octx.lineTo(bx + bw, by + L);
+    octx.moveTo(bx + bw, by + bh - L); octx.lineTo(bx + bw, by + bh); octx.lineTo(bx + bw - L, by + bh);
+    octx.moveTo(bx + L, by + bh); octx.lineTo(bx, by + bh); octx.lineTo(bx, by + bh - L);
+    octx.stroke();
+    if (p.isTarget) {
+      octx.save();
+      octx.globalAlpha = 0.10; octx.fillRect(bx, by, bw, bh);
+      octx.restore();
+    }
+
+    /* 轨迹 */
+    if (p.trail && p.trail.length > 1) {
+      octx.save();
+      octx.globalAlpha = 0.55; octx.lineWidth = px;
+      octx.beginPath();
+      p.trail.forEach(([tx, ty], i) => i ? octx.lineTo(mx(tx), my(ty)) : octx.moveTo(mx(tx), my(ty)));
+      octx.stroke();
+      octx.restore();
+    }
+
+    /* 骨架关键点 */
+    if (p.keypoints && p.keypoints.length >= 17) {
+      octx.save();
+      octx.globalAlpha = 0.5; octx.lineWidth = px * 0.8;
+      octx.beginPath();
+      for (const [a, b] of SKELETON) {
+        const ka = p.keypoints[a], kb = p.keypoints[b];
+        if (ka && kb && ka[2] > 0.35 && kb[2] > 0.35) {
+          octx.moveTo(mx(ka[0]), my(ka[1]));
+          octx.lineTo(mx(kb[0]), my(kb[1]));
+        }
+      }
+      octx.stroke();
+      octx.restore();
+    }
+
+    /* 标签: 名称/状态 + 置信度 */
+    const fs = Math.max(11, W / 110);
+    octx.font = `700 ${fs}px ${getComputedStyle(document.body).fontFamily}`;
+    const label = (p.isTarget ? "◎ " : "") + (p.name || `TRACK_${p.trackId}`) +
+      (p.status && !p.name ? ` · ${p.status}` : "");
+    const tw = octx.measureText(label).width;
+    const ly = by - fs * 0.6 < fs ? by + bh + fs * 1.4 : by - fs * 0.6;
+    octx.save();
+    octx.globalAlpha = 0.82;
+    octx.fillStyle = "#04090f";
+    octx.fillRect(bx - px, ly - fs, tw + fs * 0.8, fs * 1.5);
+    octx.restore();
+    octx.fillStyle = color;
+    octx.fillText(label, bx + fs * 0.3, ly + fs * 0.15);
+    if (typeof p.confidence === "number") {
+      octx.save();
+      octx.globalAlpha = 0.9;
+      octx.fillRect(bx, ly + fs * 0.4, Math.max(2, tw * Math.min(1, p.confidence)), px);
+      octx.restore();
+    }
+  }
+}
+requestAnimationFrame(drawFrame);
+
+/* 待机判定: 4 秒无帧显示雷达 */
+let streamHint = null; // 拉流状态提示(由 stream/status 轮询提供, 比通用文案更具体)
+setInterval(() => {
+  const live = Date.now() - lastFrameAt < 4000;
+  $("standby").classList.toggle("hidden", live);
+  viewport.classList.toggle("live", live);
+  setPill("pillVision", live ? "on" : (visionWsUp ? "warn" : ""));
+  if (!live) {
+    $("feedMeta").textContent = "CAMERA STANDBY";
+    $("standbyText").textContent = streamHint ||
+      (visionWsUp ? "视觉链路已连接 · 等待视频流开启 …" : "正在连接视觉服务 …");
+  }
+}, 800);
+
+/* 拉流状态轮询: 待机时每 5s 查一次, 未拉流则给出一键开启入口
+   (与控制台「拉流」按钮同一个幂等端点, 由销售手动点击触发) */
+let streamBusy = false;
+async function pollStream() {
+  if (Date.now() - lastFrameAt < 4000) { $("streamBtn").style.display = "none"; return; }
+  try {
+    const d = await fetchJson(`/api/agent/stream/status?device_sn=${encodeURIComponent(deviceSn)}`);
+    if (!d.enabled || !d.reachable) { $("streamBtn").style.display = "none"; return; }
+    const st = d.status;
+    if (st?.running) {
+      $("streamBtn").style.display = "none";
+      // last_error 可能含带 token 的流地址, 大屏展示前去 URL 并截断
+      const err = (st.last_error || "").replace(/https?:\/\/\S+/g, "").replace(/\s+/g, " ").trim();
+      streamHint = st.connected ? "拉流已连接 · 等待画面帧 …" :
+        st.recovering ? "断流恢复中 …" :
+        err ? err.slice(0, 42) : "正在连接视频流 …";
+    } else {
+      streamHint = "视频流未开启";
+      if (!streamBusy) $("streamBtn").style.display = "";
+    }
+  } catch { /* agent 服务不可达时不提供开流入口 */ }
+}
+pollStream();
+setInterval(pollStream, 5000);
+
+$("streamBtn").addEventListener("click", async () => {
+  if (streamBusy) return;
+  streamBusy = true;
+  const btn = $("streamBtn");
+  btn.disabled = true;
+  btn.textContent = "拉流启动中 …";
+  // env 优先级: URL ?env= > 控制台上次选择(同域 localStorage) > test
+  const env = params.get("env") || localStorage.getItem("streamIssEnv") || "test";
+  try {
+    const res = await fetch("/api/agent/stream/start", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ device_sn: deviceSn, env }),
+    });
+    if (!res.ok) throw new Error(String(res.status));
+    streamHint = "拉流已开启 · 等待画面帧 …";
+    btn.style.display = "none";
+  } catch {
+    streamHint = "拉流开启失败，可换环境重试或在后台控制台开启";
+    btn.textContent = "▶ 重试开启";
+  } finally {
+    btn.disabled = false;
+    streamBusy = false;
+  }
+});
+
+function setPill(id, cls) {
+  const el = $(id);
+  el.classList.remove("on", "warn");
+  if (cls) el.classList.add(cls);
+}
+
+/* WS 连接(断线 2.5s 重连) */
+let visionWsUp = false;
+(function connectVision() {
+  const proto = location.protocol === "https:" ? "wss" : "ws";
+  const ws = new WebSocket(`${proto}://${location.host}${PID_BASE}/ws/vision?camera_id=${encodeURIComponent(deviceSn)}`);
+  ws.binaryType = "arraybuffer";
+  ws.onopen = () => { visionWsUp = true; };
+  ws.onclose = () => { visionWsUp = false; setTimeout(connectVision, 2500); };
+  ws.onmessage = (e) => {
+    if (typeof e.data === "string") { handleVisionJson(e.data); return; }
+    if (decoding) return; // 解码背压: 丢弃过密帧
+    decoding = true;
+    createImageBitmap(new Blob([e.data], { type: "image/jpeg" }))
+      .then((bmp) => {
+        if (lastBitmap) lastBitmap.close();
+        lastBitmap = bmp;
+        lastFrameAt = Date.now();
+      })
+      .catch(() => {})
+      .finally(() => { decoding = false; });
+  };
+})();
+
+function handleVisionJson(data) {
+  let msg;
+  try { msg = JSON.parse(data); } catch { return; }
+  if (msg.type === "frame_result") {
+    lastResult = msg;
+    updatePipeline(msg);
+    const persons = flattenPersons(msg);
+    $("hudTracks").textContent = String(persons.length);
+    if (msg.frame_w && msg.frame_h) $("hudRes").textContent = `${msg.frame_w}×${msg.frame_h}`;
+    if (typeof msg.process_fps === "number") $("hudFps").textContent = msg.process_fps.toFixed(1);
+    if (typeof msg.processing_ms === "number") {
+      $("hudMs").textContent = msg.processing_ms.toFixed(0) + "ms";
+      latHistory.push(msg.processing_ms);
+      if (latHistory.length > 90) latHistory.shift();
+      drawSpark();
+    }
+    const tgt = msg.current_target;
+    $("hudTarget").textContent = tgt?.display_name || (tgt?.track_id != null ? `TRACK_${tgt.track_id}` : "--");
+    $("feedMeta").textContent = `LIVE · ${new Date().toLocaleTimeString("zh-CN", { hour12: false })}`;
+    if (tgt?.display_name) { $("lockWho").textContent = tgt.display_name; }
+  } else if (msg.type === "event") {
+    /* 身份事件: 刷新 IDENTITY LOCK */
+    if (msg.display_name) $("lockWho").textContent = msg.display_name;
+    if (typeof msg.fused_score === "number") $("lockScore").textContent = "FUSED " + msg.fused_score.toFixed(2);
+  }
+}
+
+/* ════════ Pipeline 面板 ════════ */
+const STAGE_MAX_MS = 60; // 进度条满刻度
+function updatePipeline(result) {
+  const dbg = result.pipeline_debug || {};
+  let anyRun = false;
+  document.querySelectorAll(".stage-row").forEach((row) => {
+    const st = dbg[row.dataset.stage] || {};
+    row.className = "stage-row " + (st.status || "");
+    if (st.status === "running") anyRun = true;
+    const ms = typeof st.time_ms === "number" ? st.time_ms : null;
+    row.querySelector(".ms").textContent =
+      st.status === "skipped" ? "SKIP" : ms != null ? ms.toFixed(1) + "ms" : "--";
+    row.querySelector(".bar i").style.width =
+      ms != null ? Math.min(100, (ms / STAGE_MAX_MS) * 100) + "%" : "0";
+  });
+  $("pipeMeta").textContent = anyRun ? "PROCESSING" :
+    (typeof result.processing_ms === "number" ? `TOTAL ${result.processing_ms.toFixed(1)}ms` : "IDLE");
+}
+
+/* 延迟 sparkline */
+const spark = $("spark"), sctx = spark.getContext("2d");
+function drawSpark() {
+  const r = spark.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  if (spark.width !== Math.round(r.width * dpr)) {
+    spark.width = Math.round(r.width * dpr);
+    spark.height = Math.round(r.height * dpr);
+  }
+  const W = spark.width, H = spark.height;
+  sctx.clearRect(0, 0, W, H);
+  if (latHistory.length < 2) return;
+  const max = Math.max(...latHistory, 50) * 1.15;
+  sctx.beginPath();
+  latHistory.forEach((v, i) => {
+    const x = (i / (latHistory.length - 1)) * W;
+    const y = H - (v / max) * (H - 4) - 2;
+    i ? sctx.lineTo(x, y) : sctx.moveTo(x, y);
+  });
+  sctx.strokeStyle = "#22d3ee";
+  sctx.lineWidth = Math.max(1, dpr);
+  sctx.stroke();
+  sctx.lineTo(W, H); sctx.lineTo(0, H); sctx.closePath();
+  const grad = sctx.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, "rgba(34,211,238,0.25)");
+  grad.addColorStop(1, "rgba(34,211,238,0)");
+  sctx.fillStyle = grad;
+  sctx.fill();
+}
+
+/* ════════ 视觉阈值参数(60s 刷新) ════════ */
+const GAUGE_KEYS = [
+  "A_THRESHOLD", "B_THRESHOLD", "C_THRESHOLD",
+  "FACE_QUALITY_ENROLL_THRESHOLD", "BODY_QUALITY_ENROLL_THRESHOLD",
+];
+async function loadParams() {
+  try {
+    const res = await fetch(`${PID_BASE}/api/params`);
+    if (!res.ok) return;
+    const data = await res.json();
+    const ps = data.params || {};
+    $("gauges").innerHTML = GAUGE_KEYS.filter((k) => ps[k]).map((k) => {
+      const p = ps[k];
+      const pct = ((p.value - p.min) / (p.max - p.min || 1)) * 100;
+      return `<div class="gauge-row">
+        <div class="name">${esc(p.label || k)}</div>
+        <div class="track"><i style="width:${pct}%"></i><em style="left:${pct}%"></em></div>
+        <div class="val">${Number(p.value).toFixed(2)}</div>
+      </div>`;
+    }).join("");
+  } catch { /* 视觉服务不可达时保持上次值 */ }
+}
+loadParams();
+setInterval(loadParams, 60000);
+
+/* ════════ 会话流: 历史 + SSE ════════ */
+const chat = $("chat");
+let currentSession = null;   // {id, device_sn, is_online}
+let evtSource = null;
+let pinned = true;           // 是否吸附底部
+const liveCards = new Map(); // trace_id → {el, textEl, moderated}
+
+chat.addEventListener("scroll", () => {
+  pinned = chat.scrollHeight - chat.scrollTop - chat.clientHeight < 48;
+  $("toBottom").classList.toggle("show", !pinned);
+});
+$("toBottom").addEventListener("click", () => {
+  chat.scrollTop = chat.scrollHeight;
+});
+function scrollIfPinned() { if (pinned) chat.scrollTop = chat.scrollHeight; }
+
+function msgCard(cls, who, text, time, badges = "") {
+  const div = document.createElement("div");
+  div.className = "msg " + cls;
+  div.innerHTML =
+    `<div class="meta"><span class="who">${who}</span>${badges}<span class="time">${esc(time)}</span></div>` +
+    `<div class="text"></div>`;
+  div.querySelector(".text").textContent = text;
+  return div;
+}
+
+function renderHistory(turns) {
+  chat.innerHTML = "";
+  liveCards.clear();
+  if (turns.length === 0) {
+    chat.innerHTML = `<div class="chat-empty">SESSION READY<br>暂无对话记录，等待第一句话 …</div>`;
+    return;
+  }
+  for (const t of turns) {
+    if (t.kind === "noise") continue;
+    if (t.kind === "wake") {
+      const d = document.createElement("div");
+      d.className = "msg system";
+      d.innerHTML = `<div class="text">— WAKE · 设备被唤醒 · ${esc(fmtTime(t.created_at))} —</div>`;
+      chat.appendChild(d);
+      continue;
+    }
+    const spk = t.speaker_name ? ` · ${esc(t.speaker_name)}` : "";
+    chat.appendChild(msgCard("user", "USER" + spk, t.query, fmtTime(t.created_at)));
+    if (t.reply_text || t.error_message) {
+      const badges = t.moderated ? `<span class="badge mod">SAFE-REPLACED</span>` :
+        t.intent_name ? `<span class="badge">${esc(t.intent_name)}</span>` : "";
+      const card = msgCard(t.error_message && !t.reply_text ? "agent error" : "agent",
+        "M1 AGENT", t.reply_text || `[异常] ${t.error_message}`, fmtTime(t.created_at), badges);
+      chat.appendChild(card);
+    }
+  }
+  chat.scrollTop = chat.scrollHeight;
+}
+
+/* SSE 事件按 trace_id 归卡片(打断场景下两轮事件会交错到达) */
+function handleSse(data) {
+  if (data.event === "query") {
+    const now = new Date().toLocaleTimeString("zh-CN", { hour12: false });
+    $("chatEmpty")?.remove();
+    chat.appendChild(msgCard("user", "USER", data.text, now));
+    const card = msgCard("agent", "M1 AGENT", "", now);
+    card.querySelector(".text").insertAdjacentHTML("beforeend", `<span class="caret"></span>`);
+    chat.appendChild(card);
+    liveCards.set(data.trace_id, {
+      el: card, textEl: card.querySelector(".text"), moderated: false,
+    });
+    scrollIfPinned();
+    return;
+  }
+  const lc = liveCards.get(data.trace_id);
+  if (!lc) return;
+  if (data.event === "reply_chunk" && !lc.moderated) {
+    lc.textEl.querySelector(".caret")?.remove();
+    lc.textEl.append(data.text);
+    lc.textEl.insertAdjacentHTML("beforeend", `<span class="caret"></span>`);
+    scrollIfPinned();
+  } else if (data.event === "moderation") {
+    lc.moderated = true;
+    lc.textEl.textContent = data.replacement_text ?? "";
+    lc.textEl.insertAdjacentHTML("beforeend", `<span class="caret"></span>`);
+    lc.el.querySelector(".meta .who").insertAdjacentHTML("afterend", `<span class="badge mod">SAFE-REPLACED</span>`);
+    scrollIfPinned();
+  } else if (data.event === "moderation_chunk" && lc.moderated) {
+    lc.textEl.querySelector(".caret")?.remove();
+    lc.textEl.append(data.text);
+    lc.textEl.insertAdjacentHTML("beforeend", `<span class="caret"></span>`);
+    scrollIfPinned();
+  } else if (data.event === "intent" && !lc.moderated) {
+    if (data.name && !lc.el.querySelector(".badge")) {
+      lc.el.querySelector(".meta .who").insertAdjacentHTML("afterend", `<span class="badge">${esc(data.name)}</span>`);
+    }
+  } else if (data.event === "done" || data.event === "error") {
+    lc.textEl.querySelector(".caret")?.remove();
+    if (data.event === "error" && !lc.textEl.textContent) {
+      lc.el.classList.add("error");
+      lc.textEl.textContent = `[异常] ${data.message || "本轮处理失败"}`;
+    }
+    liveCards.delete(data.trace_id);
+    scrollIfPinned();
+  }
+}
+
+function openSse(session) {
+  closeSse();
+  evtSource = new EventSource(
+    `${LIVE_API}/sessions/${session.id}/stream?device_sn=${encodeURIComponent(session.device_sn)}`);
+  evtSource.onopen = () => setPill("pillDialog", "on");
+  evtSource.onmessage = (e) => {
+    try { handleSse(JSON.parse(e.data)); } catch { /* 忽略非 JSON 行 */ }
+  };
+  evtSource.onerror = () => setPill("pillDialog", "warn"); // EventSource 自动重连
+}
+function closeSse() {
+  if (evtSource) { evtSource.close(); evtSource = null; }
+  setPill("pillDialog", "");
+}
+
+async function fetchJson(url) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`${res.status}`);
+  return res.json();
+}
+
+/* 定位设备当前会话: 精确 SN 匹配优先、在线优先、其次最新 */
+async function locateSession() {
+  const data = await fetchJson(
+    `${VOICE_API}/sessions?device_sn=${encodeURIComponent(deviceSn)}&page_size=50`);
+  const items = (data.items || []);
+  const exact = items.filter((s) => s.device_sn.toLowerCase() === deviceSn.toLowerCase());
+  const pool = exact.length ? exact : items;
+  return pool.find((s) => s.is_online) || pool[0] || null;
+}
+
+async function syncSession() {
+  let session = null;
+  try { session = await locateSession(); }
+  catch { $("sessMeta").textContent = "API UNREACHABLE"; return; }
+
+  if (!session) {
+    $("sessMeta").textContent = "NO SESSION";
+    $("chatEmpty") && ($("chatEmpty").innerHTML = "DEVICE NOT FOUND<br>该设备暂无会话记录 …");
+    return;
+  }
+  if (session.device_name) $("chipName").textContent = session.device_name;
+  $("sessMeta").textContent = (session.is_online ? "● ONLINE" : "○ OFFLINE") + ` · #${session.id}`;
+
+  const changed = !currentSession || currentSession.id !== session.id;
+  const onlineFlip = currentSession && currentSession.is_online !== session.is_online;
+  currentSession = session;
+
+  if (changed) {
+    try {
+      const data = await fetchJson(`${VOICE_API}/sessions/${session.id}/turns?page_size=30`);
+      renderHistory((data.items || []).slice().reverse());
+    } catch { /* 历史拉取失败不阻塞实时流 */ }
+  }
+  if (changed || onlineFlip) {
+    if (session.is_online) openSse(session);
+    else closeSse();
+  }
+}
+syncSession();
+setInterval(syncSession, 20000);
+</script>
+</body>
+</html>
