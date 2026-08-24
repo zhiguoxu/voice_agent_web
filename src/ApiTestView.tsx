@@ -11,6 +11,8 @@ import {
   fetchVadTestConfig,
   testVad,
   tuneVad,
+  fetchDeviceStatus,
+  type DeviceStatusResult,
   type ModerationTestResult,
   type AsrTestConfig,
   type AsrTestResult,
@@ -21,6 +23,100 @@ import {
   type VadSummary,
 } from "./api";
 import "./ApiTestView.css";
+
+/** 设备状态查询：从 Redis 读设备上报的实时状态（电量/充电/WiFi 等），
+ *  与「电量查询」意图同一个 get_device_status，只读不落库。 */
+function DeviceStatusPanel() {
+  const [deviceSn, setDeviceSn] = useState("");
+  const [querying, setQuerying] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [results, setResults] = useState<DeviceStatusResult[]>([]);
+
+  const runQuery = async () => {
+    const sn = deviceSn.trim();
+    if (!sn || querying) return;
+    setQuerying(true);
+    setError(null);
+    try {
+      const r = await fetchDeviceStatus(sn);
+      setResults((prev) => [r, ...prev].slice(0, 20));
+    } catch (e: any) {
+      setError(e.message || String(e));
+    } finally {
+      setQuerying(false);
+    }
+  };
+
+  return (
+    <div className="card cfg-card cfg-intent-card">
+      <h3>
+        🔋 设备状态查询
+        <span className="subtitle">
+          从 Redis 读设备上报的实时状态，与「电量查询」意图同一条读取链路，只读不落库
+        </span>
+      </h3>
+
+      <div className="cfg-intent-test">
+        <input
+          type="text"
+          placeholder="device_sn，如 PreD018"
+          value={deviceSn}
+          onChange={(e) => setDeviceSn(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && runQuery()}
+          disabled={querying}
+        />
+        <button onClick={runQuery} disabled={querying || !deviceSn.trim()}>
+          {querying ? <span className="spinner inline" /> : "查询"}
+        </button>
+      </div>
+      {error && <div className="cfg-error">❌ 查询失败: {error}</div>}
+
+      {results.length > 0 && (
+        <div className="cfg-intent-results">
+          {results.map((r, i) => (
+            <div className="cfg-intent-result cfg-mod-result" key={results.length - i}>
+              <div className="cfg-mod-head">
+                <span className="cfg-intent-query">{r.device_sn}</span>
+                <span className={`cfg-badge hit ${r.found ? "ok" : "down"}`}>
+                  {r.found ? "✔ 有状态数据" : "✘ 无数据/查询失败"}
+                </span>
+                {r.status && (
+                  <>
+                    <span className="cfg-badge">
+                      🔋 {r.status.battery}%{r.status.is_charging ? " 充电中" : ""}
+                    </span>
+                    <span className={`cfg-badge hit ${r.status.is_wifi_connected ? "ok" : "down"}`}>
+                      {r.status.is_wifi_connected ? "WiFi 已连接" : "WiFi 未连接"}
+                    </span>
+                  </>
+                )}
+              </div>
+              {r.status && (
+                <div className="cfg-mod-layers">
+                  <span className="cfg-mod-layer">
+                    信号强度 <span className="cfg-number">{r.status.signal_strength}</span>
+                  </span>
+                  <span className="cfg-mod-layer">
+                    SSID <code>{r.status.wifi_ssid || "（空）"}</code>
+                  </span>
+                  <span className="cfg-mod-layer">
+                    IP <code>{r.status.ip || "（空）"}</code>
+                  </span>
+                  <span className="cfg-mod-layer">
+                    work_mode <code>{r.status.work_mode || "（空）"}</code>
+                  </span>
+                  <span className="cfg-mod-layer">
+                    work_type <code>{r.status.work_type || "（空）"}</code>
+                  </span>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 /** 风控在线测试：规则层正则 + 风控模型，两层结果分别展示。
  *  走 voice_server /api/moderation/test，风控总开关关着也能测。 */
@@ -717,6 +813,7 @@ export function ApiTestView() {
       <div className="api-test-hint">
         在线 API 探测：与生产链路同一套客户端与规则，结果不落库、不影响线上播报。
       </div>
+      <DeviceStatusPanel />
       <ModerationPanel />
       <AsrPanel />
       <VadPanel />

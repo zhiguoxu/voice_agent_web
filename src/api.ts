@@ -1611,6 +1611,33 @@ export async function testModeration(
   return res.json();
 }
 
+/** 设备实时状态（GET /api/agent/device/status，与「电量查询」意图同一条 Redis 读取链路） */
+export interface DeviceStatusResult {
+  /** Redis 里是否有该设备的状态数据（查询失败也算 false，原因见 agent_server 日志） */
+  found: boolean;
+  device_sn: string;
+  status: {
+    signal_strength: number;
+    is_wifi_connected: boolean;
+    battery: number;
+    work_mode: string;
+    work_type: string;
+    is_charging: boolean;
+    ip: string;
+    wifi_ssid: string;
+  } | null;
+}
+
+export async function fetchDeviceStatus(deviceSn: string): Promise<DeviceStatusResult> {
+  const res = await fetch(
+    `/api/agent/device/status?device_sn=${encodeURIComponent(deviceSn)}`);
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || "查询设备状态失败");
+  }
+  return res.json();
+}
+
 /** ASR 测试面板用的配置摘要（GET /api/voice/asr/test/config） */
 export interface AsrTestConfig {
   /** 生产当前使用的 ASR 提供商（asr.name）；测试的 provider 按次可选，不必等于它 */
