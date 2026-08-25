@@ -223,6 +223,9 @@ export interface Turn {
   moderation_original_text: string | null;
   /** 实际送审被判风险的文本。模型层=跨阈值前缀（与 original 可能不同）；规则层=命中时全文 */
   moderation_checked_text: string | null;
+  /** 打断标记：true=回复未完整产出就被新输入打断（半截回复照常展示，
+   *  但不进后续 LLM 历史——半截回复进历史会教模型模仿"答一半就停"） */
+  interrupted: boolean | null;
   /** 本轮异常/失败信息，正常轮为 null。chat 轮：处理异常（轮次照常落库，
    *  query/部分回复尽力保存）；wake 轮：应答音由客户端本地播放，新行恒为
    *  null，有值的是云端播应答时期的存量失败行 */

@@ -1557,6 +1557,12 @@ export default function App() {
                           🛡️ 风控替换
                         </span>
                       )}
+                      {t.interrupted && (
+                        <span className="badge interrupted"
+                              data-tip="回复未完整产出就被新输入打断（半截回复照常落库展示，但不进后续 LLM 历史）">
+                          ⏹️ 被打断
+                        </span>
+                      )}
                       {t.tool_names && (
                         <span className="badge tool">🔧 {t.tool_names}</span>
                       )}
