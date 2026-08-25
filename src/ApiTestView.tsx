@@ -108,6 +108,26 @@ function DeviceStatusPanel() {
                   <span className="cfg-mod-layer">
                     work_type <code>{r.status.work_type || "（空）"}</code>
                   </span>
+                  <span className="cfg-mod-layer">
+                    音量{" "}
+                    {r.status.volume != null ? (
+                      <span className="cfg-number">{r.status.volume}</span>
+                    ) : (
+                      "（未上报）"
+                    )}
+                  </span>
+                  <span className="cfg-mod-layer">
+                    位置 <span className="cfg-number">
+                      ({r.status.robot_position_x.toFixed(2)}, {r.status.robot_position_y.toFixed(2)})
+                    </span>{" "}
+                    朝向 <span className="cfg-number">{r.status.robot_towards}°</span>
+                  </span>
+                  <span className="cfg-mod-layer">
+                    4G ICCID <code>{r.status["4g_iccid"] || "（空）"}</code>
+                  </span>
+                  <span className="cfg-mod-layer">
+                    蓝牙手柄 <code>{r.status.is_bluetooth_controller_connected ? "已连接" : "未连接"}</code>
+                  </span>
                 </div>
               )}
               {r.raw && (

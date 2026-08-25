@@ -1625,6 +1625,18 @@ export interface DeviceStatusResult {
     is_charging: boolean;
     ip: string;
     wifi_ssid: string;
+    /** 后端字段名 iccid_4g，序列化按 alias 还原为 Redis 原键名 */
+    "4g_iccid": string;
+    is_bluetooth_controller_connected: boolean;
+    is_joint_enable_mini: boolean;
+    is_on_car: boolean;
+    /** 设备音量 0-100；老固件不上报该字段时为 null */
+    volume: number | null;
+    robot_position_x: number;
+    robot_position_y: number;
+    robot_towards: number;
+    app_update_timestamp: number;
+    status_report_order_ts: number;
   } | null;
   /** Redis hash 原始键值（含 status 未收录的字段）；不存在或读取失败为 null。
    *  found=false 而 raw 非空说明是模型解析失败而非数据缺失 */
