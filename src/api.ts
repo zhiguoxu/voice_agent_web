@@ -268,7 +268,8 @@ export interface Turn {
   tool_arguments: string | null;
   tool_results: string | null;
   /** attach_image: 本轮 LLM 消息是否实际携带画面（消息构造的唯一开关；存量快照后端已归一成 true） */
-  chat_request: { query: string; history: { role: string; content: string }[]; system_prompt: string | null; prompt_memory?: string | null; prompt_time?: string | null; image_url: string | null; attach_image?: boolean; llm: { model: string; base_url: string } | null } | null;
+  /** device_status: 构造提示词时的设备状态快照（按后端字段名序列化，如 iccid_4g）；提示词目前只消费 is_on_car */
+  chat_request: { query: string; history: { role: string; content: string }[]; system_prompt: string | null; prompt_memory?: string | null; prompt_time?: string | null; device_status?: ({ is_on_car?: boolean | null } & Record<string, unknown>) | null; image_url: string | null; attach_image?: boolean; llm: { model: string; base_url: string } | null } | null;
   /** 本轮记忆召回过程记录；记忆未启用/老数据无此字段时为空 */
   memory_recall: MemoryRecall | null;
   t_llm_start: number | null;
@@ -1632,7 +1633,8 @@ export interface DeviceStatusResult {
     "4g_iccid": string;
     is_bluetooth_controller_connected: boolean;
     is_joint_enable_mini: boolean;
-    is_on_car: boolean;
+    /** 机器人是否在车上；老固件不上报该字段时为 null */
+    is_on_car: boolean | null;
     /** 设备音量 0-100；老固件不上报该字段时为 null */
     volume: number | null;
     robot_position_x: number;
