@@ -1427,11 +1427,15 @@ export default function App() {
                   >
                     <span className="wake-icon">🔔</span>
                     <span className="wake-text">
+                      {/* 应答音由客户端本地播放, 新的唤醒行没有 reply_text/error_message,
+                          只展示"设备唤醒"; 带应答/失败信息的是云端播应答时期的存量行 */}
                       {t.query
                         ? <>识别到唤醒语「{t.query}」（未进入对话）</>
                         : <>设备唤醒{t.reply_text
-                            ? <>，应答「{t.reply_text}」{t.error_message && <span className="wake-fail">（播报失败）</span>}</>
-                            : <span className="wake-fail">（应答播报失败）</span>}</>}
+                            ? <>，应答「{t.reply_text}」</>
+                            : null}{t.error_message
+                            ? <span className="wake-fail">（应答播报失败）</span>
+                            : null}</>}
                     </span>
                     <span className="turn-time">{formatTime(t.created_at)}</span>
                     <button
