@@ -477,6 +477,8 @@ export default function App() {
   /* ── Replay modal ── */
   const [replayOpen, setReplayOpen] = useState(false);
   const [replayInput, setReplayInput] = useState('');
+  // 被复现的原轮次快照: 复现结果甘特图以它为骨架逐行对齐（复现未执行的阶段画灰色占位）
+  const [replayOriginTurn, setReplayOriginTurn] = useState<Turn | null>(null);
   /* 风控复现送审文本模式：false=当时落库的送审文本，true=本次复现最新出文；跨会话记住 */
   const [replayModUseLatest, setReplayModUseLatest] = useState(() => {
     return localStorage.getItem("replayModUseLatest") === "true";
@@ -1912,6 +1914,7 @@ export default function App() {
                         turn_id: selectedTurn.id,
                       };
                       setReplayInput(JSON.stringify(replayData, null, 2));
+                      setReplayOriginTurn(selectedTurn);
                       setReplayResult(null);
                       setReplayError(null);
                       setReplayOpen(true);
@@ -2105,11 +2108,14 @@ export default function App() {
                     )}
                     <section className="detail-section">
                       <h4>📊 链路耗时可视化</h4>
-                      <LatencyChart turn={{
-                        ...({} as Turn),
-                        ...replayResult.timing,
-                        t_tts_first_audio: null,
-                      }} />
+                      <LatencyChart
+                        turn={{
+                          ...({} as Turn),
+                          ...replayResult.timing,
+                          t_tts_first_audio: null,
+                        }}
+                        baseline={replayOriginTurn ?? undefined}
+                      />
                     </section>
                   </>
                 )}
