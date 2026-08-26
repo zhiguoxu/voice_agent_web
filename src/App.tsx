@@ -491,6 +491,9 @@ export default function App() {
   const [replayUseLatestTime, setReplayUseLatestTime] = useState(() => {
     return localStorage.getItem("replayUseLatestTime") === "true";
   });
+  const [replayRecomputeGate, setReplayRecomputeGate] = useState(() => {
+    return localStorage.getItem("replayRecomputeGate") === "true";
+  });
   const [replayLoading, setReplayLoading] = useState(false);
   const [replayResult, setReplayResult] = useState<ReplayResult | null>(null);
   const [replayError, setReplayError] = useState<string | null>(null);
@@ -2036,6 +2039,22 @@ export default function App() {
                 </label>
                 <label
                   className="replay-mod-mode"
+                  data-tip="开：视觉门控按当前模型/阈值重判本轮带不带图并覆盖快照决策（门控模型更新后回归测试用），上一轮上下文取请求携带的 history，无图轮不评估。关：原样应用快照 attach_image，复现结果与当时一致"
+                >
+                  <input
+                    type="checkbox"
+                    checked={replayRecomputeGate}
+                    disabled={replayLoading}
+                    onChange={(e) => {
+                      const val = e.target.checked;
+                      setReplayRecomputeGate(val);
+                      localStorage.setItem("replayRecomputeGate", String(val));
+                    }}
+                  />
+                  视觉门控用当前模型重算（关闭时原样用快照的带图决策）
+                </label>
+                <label
+                  className="replay-mod-mode"
                   data-tip="开：风控用本次 agent 复现的最新出文送审（审「这次的输出会怎么判」）。关：用当时落库的送审文本，复现当时那次判定。两种模式的【最近对话】都按该轮落库记录重建"
                 >
                   <input
@@ -2064,6 +2083,7 @@ export default function App() {
                         moderation_use_replay_output: replayModUseLatest,
                         use_latest_prompt: replayUseLatestPrompt,
                         use_latest_time: replayUseLatestPrompt && replayUseLatestTime,
+                        recompute_vision_gate: replayRecomputeGate,
                       });
                       setReplayResult(result);
                     } catch (e: any) {
@@ -2086,6 +2106,12 @@ export default function App() {
                       {replayResult.command_type && <span>指令: <b>{replayResult.command_type}</b></span>}
                       <span>提示词: <b>{replayResult.used_latest_prompt ? "当前生效" : "落库快照"}</b></span>
                       <span>时间: <b>{replayResult.used_latest_time ? "当前时刻" : "当时时刻"}</b></span>
+                      <span>视觉门控: <b>{
+                        !replayResult.recomputed_vision_gate ? "快照决策"
+                          : replayResult.vision_gate
+                            ? `重算·${replayResult.vision_gate.decision === "skip" ? "省图" : "带图"}`
+                            : "重算·未评估(无图)"
+                      }</b></span>
                     </div>
                     <div className="replay-reply">
                       <label>回复文本（本次 agent 复现）</label>
@@ -2112,6 +2138,8 @@ export default function App() {
                         turn={{
                           ...({} as Turn),
                           ...replayResult.timing,
+                          // 门控重算轮有真实打点与决策快照, 甘特"视觉门控"行照常渲染
+                          vision_gate: replayResult.vision_gate ?? null,
                           t_tts_first_audio: null,
                         }}
                         baseline={replayOriginTurn ?? undefined}

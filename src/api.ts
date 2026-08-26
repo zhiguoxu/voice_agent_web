@@ -431,12 +431,18 @@ export interface ReplayResult {
   /** true=本次重装提示词时时间/日期块用了当前时刻（实际生效值:
    *  未开 used_latest_prompt 时恒为 false） */
   used_latest_time?: boolean;
+  /** true=本次按当前门控模型重判了 attach_image（关闭时原样用快照决策） */
+  recomputed_vision_gate?: boolean;
+  /** 门控重算的决策快照；未开重算或无图轮为 null */
+  vision_gate?: VisionGate | null;
   chat_request?: { system_prompt?: string | null } | null;
   moderation?: ReplayModeration | null;
   timing: {
     t_agent_start?: number | null;
     t_history_done?: number | null;
     t_identity_done?: number | null;
+    t_vision_gate_start?: number | null;
+    t_vision_gate_done?: number | null;
     t_names_done?: number | null;
     t_memory_done?: number | null;
     t_stateless_start?: number | null;
