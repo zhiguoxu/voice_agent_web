@@ -22,6 +22,7 @@ import {
   type VadFileResult,
   type VadSummary,
 } from "./api";
+import { TaskParsePanel } from "./TaskParsePanel";
 import "./ApiTestView.css";
 
 /** 设备状态查询：从 Redis 读设备上报的实时状态（电量/充电/WiFi 等），
@@ -845,6 +846,7 @@ export function ApiTestView() {
       <div className="api-test-hint">
         在线 API 探测：与生产链路同一套客户端与规则，结果不落库、不影响线上播报。
       </div>
+      <TaskParsePanel />
       <DeviceStatusPanel />
       <ModerationPanel />
       <AsrPanel />

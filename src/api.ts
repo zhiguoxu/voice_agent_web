@@ -1949,3 +1949,53 @@ export async function sendMqttCommand(
     throw new Error(data.detail || "Failed to send MQTT command");
   }
 }
+
+/** 一句话任务解析（POST /api/agent/task/parse，agent_server oneshot_task 包）。
+ *  LLM 抽取时间/地点/人物/播报文案；地点与人物是可选要素。 */
+export interface TaskParseExecutionTime {
+  /** 生效起始日 YYYY-MM-DD；单次任务 start==end，长期重复截止 2099-01-01 */
+  start_date: string;
+  end_date: string;
+  hour: number;
+  minute: number;
+  /** 重复星期：1=周一…7=周日；每天=[1..7]；空数组=单次 */
+  week_days: number[];
+}
+
+export interface TaskParseTemplate {
+  name: string;
+  execution_time: TaskParseExecutionTime;
+  /** 目标人物；说话人自己/多人/未提及为 null。id 空串=提到了人但花名册未命中（name 为句中原称呼） */
+  target_person: { id: string; name: string } | null;
+  /** 执行地点；未指定为 null */
+  location: { name: string } | null;
+  content: { tts_text: string };
+  enable_photo: boolean;
+}
+
+export interface TaskParseResponse {
+  /** 0=正常（含「没听懂」recognized=false）；500=解析服务异常（LLM 调用失败，msg 带原因） */
+  code: number;
+  msg: string;
+  data: { recognized: boolean; template: TaskParseTemplate | null };
+}
+
+export async function parseOneshotTask(
+  text: string,
+  isCheckinTask = false,
+  /** 可选；带上才会把目标人物经花名册消解出 person_id（一设备一家庭） */
+  deviceSn = "",
+): Promise<TaskParseResponse> {
+  const body: Record<string, unknown> = { text, isCheckinTask };
+  if (deviceSn) body.deviceSn = deviceSn;
+  const res = await fetch("/api/agent/task/parse", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || "一句话任务解析请求失败");
+  }
+  return res.json();
+}

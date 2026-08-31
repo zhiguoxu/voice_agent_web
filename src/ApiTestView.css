@@ -532,3 +532,85 @@
   border-color: var(--accent, #60a5fa);
   color: var(--accent, #60a5fa);
 }
+
+/* ── 一句话任务解析面板 ── */
+.api-test-container .task-parse-opts {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 12px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.api-test-container .task-parse-opts select,
+.api-test-container .task-parse-opts input[type="text"] {
+  padding: 7px 10px;
+  font-size: 13px;
+  color: var(--text-primary);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  outline: none;
+}
+
+.api-test-container .task-parse-opts select {
+  max-width: 320px;
+}
+
+.api-test-container .task-parse-opts input.task-parse-sn {
+  width: 220px;
+}
+
+.api-test-container .task-parse-opts label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.api-test-container .task-parse-opts button {
+  padding: 7px 16px;
+  font-size: 13px;
+  color: var(--text-primary);
+  background: var(--accent-soft);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.api-test-container .task-parse-opts button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.api-test-container .task-parse-progress {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+}
+
+.api-test-container .task-parse-raw summary {
+  font-size: 12px;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.api-test-container .task-parse-raw pre {
+  margin: 6px 0 0;
+  padding: 8px 12px;
+  font-size: 12px;
+  line-height: 1.5;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow-x: auto;
+}
+
+.api-test-container .task-parse-note {
+  max-width: 480px;
+  word-break: break-all;
+}
