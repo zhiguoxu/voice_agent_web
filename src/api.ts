@@ -43,6 +43,8 @@ export interface LogSearchParams {
   source?: string;
   /** 来源实例标识，完全匹配 */
   instance?: string;
+  /** 消息、Trace、设备、实例或代码位置，部分匹配 */
+  text?: string;
   start_ms?: number;
   end_ms?: number;
   /** 上一页最后一行的 id，向更旧翻页 */
@@ -64,6 +66,7 @@ export async function searchLogs(params: LogSearchParams = {}): Promise<LogSearc
   if (params.level) sp.set("level", params.level);
   if (params.source) sp.set("source", params.source);
   if (params.instance) sp.set("instance", params.instance);
+  if (params.text) sp.set("text", params.text);
   if (params.start_ms != null) sp.set("start_ms", String(params.start_ms));
   if (params.end_ms != null) sp.set("end_ms", String(params.end_ms));
   if (params.cursor != null) sp.set("cursor", String(params.cursor));

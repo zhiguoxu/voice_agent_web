@@ -65,7 +65,7 @@ export function LogMonitor({
   });
 
   /* ── 服务端检索条件（DB 查询 + 实时流过滤都用它们） ──
-     device_sn / trace_id / instance 完全匹配；日期范围只作用于历史检索 */
+     device_sn / trace_id / instance 完全匹配，text 部分匹配；日期范围只作用于历史检索 */
   const [deviceSn, setDeviceSn] = useState(initialFilter?.deviceSn ?? "");
   const [traceId, setTraceId] = useState(initialFilter?.traceId ?? "");
   const [instance, setInstance] = useState("");
@@ -75,6 +75,7 @@ export function LogMonitor({
   const dSn = useDebounce(deviceSn.trim(), 400);
   const dTrace = useDebounce(traceId.trim(), 400);
   const dInstance = useDebounce(instance.trim(), 400);
+  const dSearch = useDebounce(search.trim(), 400);
   const startMs = useMemo(() => (startDate ? new Date(startDate).getTime() : null), [startDate]);
   const endMs = useMemo(() => (endDate ? new Date(endDate).getTime() : null), [endDate]);
 
@@ -118,11 +119,18 @@ export function LogMonitor({
       level: level || undefined,
       source: source !== "all" ? source : undefined,
       instance: dInstance || undefined,
+      text: dSearch || undefined,
       start_ms: startMs ?? undefined,
       end_ms: endMs ?? undefined,
     }),
-    [dSn, dTrace, level, source, dInstance, startMs, endMs]
+    [dSn, dTrace, level, source, dInstance, dSearch, startMs, endMs]
   );
+  const queryKey = useMemo(() => JSON.stringify(serverParams), [serverParams]);
+  const [completedQueryKey, setCompletedQueryKey] = useState(queryKey);
+  const [failedQueryKey, setFailedQueryKey] = useState<string | null>(null);
+  const waitingForDebounce = search.trim() !== dSearch;
+  const searching = waitingForDebounce || completedQueryKey !== queryKey;
+  const searchFailed = !searching && failedQueryKey === queryKey;
 
   /* ── 首屏/条件变化：按条件查 DB 历史（新→旧返回，翻转成旧→新展示） ── */
   useEffect(() => {
@@ -136,13 +144,19 @@ export function LogMonitor({
         );
         setLogs(asc);
         setNextCursor(next_cursor);
+        setFailedQueryKey(null);
         scrollToBottom();
       })
-      .catch(() => {});
+      .catch(() => {
+        if (!cancelled) setFailedQueryKey(queryKey);
+      })
+      .finally(() => {
+        if (!cancelled) setCompletedQueryKey(queryKey);
+      });
     return () => {
       cancelled = true;
     };
-  }, [serverParams, scrollToBottom]);
+  }, [serverParams, queryKey, scrollToBottom]);
 
   /* ── 向更旧翻页 ── */
   const loadOlder = useCallback(async () => {
@@ -167,7 +181,7 @@ export function LogMonitor({
     }
   }, [nextCursor, loadingMore, serverParams]);
 
-  /* ── SSE 实时订阅（device_sn/trace_id/source/level 服务端过滤） ── */
+  /* ── SSE 实时订阅（全部条件均由服务端过滤） ── */
   useEffect(() => {
     if (!live) {
       setConnected(false);
@@ -188,6 +202,7 @@ export function LogMonitor({
     if (dTrace) sp.set("trace_id", dTrace);
     if (source !== "all") sp.set("source", source);
     if (dInstance) sp.set("instance", dInstance);
+    if (dSearch) sp.set("text", dSearch);
     const es = new EventSource(`${LOGS_API_BASE}/stream?${sp}`);
 
     es.onopen = () => setConnected(true);
@@ -219,9 +234,10 @@ export function LogMonitor({
     return () => {
       es.close();
       window.clearInterval(timer);
+      pendingRef.current = [];
       setConnected(false);
     };
-  }, [live, level, dSn, dTrace, source, dInstance, endMs, scrollToBottom]);
+  }, [live, level, dSn, dTrace, source, dInstance, dSearch, endMs, scrollToBottom]);
 
   /* ── 滚动监听：上滚则停止自动跟随 ── */
   const handleScroll = useCallback(() => {
@@ -230,28 +246,16 @@ export function LogMonitor({
     userScrolledUpRef.current = el.scrollTop + el.clientHeight < el.scrollHeight - 4;
   }, []);
 
-  /* ── 文本部分匹配（纯前端，作用于已加载内容），并按时间戳排序 ── */
-  const filtered = useMemo(() => {
-    const kw = search.trim().toLowerCase();
-    let out = logs;
-    if (kw) {
-      out = out.filter(
-        (l) =>
-          l.msg.toLowerCase().includes(kw) ||
-          l.trace_id.toLowerCase().includes(kw) ||
-          l.device_sn.toLowerCase().includes(kw) ||
-          (l.instance ?? "").toLowerCase().includes(kw) ||
-          `${l.name}:${l.function}:${l.line}`.toLowerCase().includes(kw)
-      );
-    }
+  /* ── 按时间戳排序；文字匹配已由历史查询和实时流在服务端完成 ── */
+  const sortedLogs = useMemo(() => {
     // 按时间戳混合排序（time 为定宽 "YYYY-MM-DD HH:mm:ss.SSS"，可直接字典序比较）；
     // 产生时刻相同（同毫秒）时按 uid 决胜——历史检索与 SSE 条目都带 uid，
     // 它是横跨两个来源的统一到达序坐标。
-    return [...out].sort((a, b) => {
+    return [...logs].sort((a, b) => {
       if (a.time !== b.time) return a.time < b.time ? -1 : 1;
       return compareUid(a.uid, b.uid);
     });
-  }, [logs, search]);
+  }, [logs]);
 
   const clearLogs = () => {
     // 只清当前显示，DB 历史不动（有 90 天保留策略兜底），改条件即可重新查回
@@ -337,8 +341,10 @@ export function LogMonitor({
         <div className="log-search">
           <input
             type="text"
-            placeholder="文本过滤（前端，部分匹配）"
+            maxLength={500}
+            placeholder="文本过滤（服务端，部分匹配）"
             value={search}
+            aria-busy={searching}
             onChange={(e) => setSearch(e.target.value)}
           />
           {search && (
@@ -424,9 +430,18 @@ export function LogMonitor({
           />
         )}
 
-        <span className="log-count">
-          {filtered.length}
-          {search && ` / ${logs.length}`} 条
+        <span
+          className={`log-count${searching ? " searching" : searchFailed ? " error" : ""}`}
+          role="status"
+          aria-live="polite"
+        >
+          {searching ? (
+            <><span className="spinner inline" /> 搜索中…</>
+          ) : searchFailed ? (
+            "搜索失败"
+          ) : (
+            `${sortedLogs.length} 条`
+          )}
         </span>
 
         <div className="log-toolbar-spacer" />
@@ -541,32 +556,42 @@ export function LogMonitor({
           </button>
         )}
         <span className="log-filter-hint">
-          SN / Trace / 实例 完全匹配，与日期一起在服务端过滤；历史来自数据库（保留 90 天）
+          文本为部分匹配；SN / Trace / 实例为完全匹配，均在服务端过滤；历史来自数据库（保留 90 天）
         </span>
       </div>
 
-      <div
-        className={`log-list ${wrap ? "wrap" : ""}`}
-        ref={listRef}
-        onScroll={handleScroll}
-      >
-        {nextCursor != null && (
-          <div className="log-load-more-wrap">
-            <button className="log-btn" disabled={loadingMore} onClick={loadOlder}>
-              {loadingMore ? "加载中…" : "⇡ 加载更早"}
-            </button>
+      <div className="log-list-shell" aria-busy={searching}>
+        {searching && (
+          <div className="log-search-overlay" aria-hidden="true">
+            <div className="log-search-overlay-content">
+              <span className="log-search-overlay-spinner" />
+              <strong>正在搜索日志…</strong>
+              <span>请稍候</span>
+            </div>
           </div>
         )}
-        {filtered.length === 0 ? (
-          <div className="log-empty">暂无日志</div>
-        ) : (
-          filtered.map((l, i) => (
-            <div
-              key={l.uid ?? `${l.time}-${i}`}
-              className={`log-row level-${l.level}${
-                i > 0 && filtered[i - 1].trace_id !== l.trace_id ? " trace-break" : ""
-              }${isStartupLog(l) ? " startup-break" : ""}`}
-            >
+        <div
+          className={`log-list ${wrap ? "wrap" : ""}`}
+          ref={listRef}
+          onScroll={handleScroll}
+        >
+          {nextCursor != null && (
+            <div className="log-load-more-wrap">
+              <button className="log-btn" disabled={loadingMore} onClick={loadOlder}>
+                {loadingMore ? "加载中…" : "⇡ 加载更早"}
+              </button>
+            </div>
+          )}
+          {sortedLogs.length === 0 ? (
+            <div className="log-empty">暂无日志</div>
+          ) : (
+            sortedLogs.map((l, i) => (
+              <div
+                key={l.uid ?? `${l.time}-${i}`}
+                className={`log-row level-${l.level}${
+                  i > 0 && sortedLogs[i - 1].trace_id !== l.trace_id ? " trace-break" : ""
+                }${isStartupLog(l) ? " startup-break" : ""}`}
+              >
               {/* time 为定宽 "YYYY-MM-DD HH:mm:ss.SSS"；关闭「显示日期」时只取时间部分 */}
               <span className="log-time" data-tip={l.time}>
                 {showDate ? l.time : l.time.slice(11)}
@@ -649,9 +674,10 @@ export function LogMonitor({
                   堆栈
                 </button>
               )}
-            </div>
-          ))
-        )}
+              </div>
+            ))
+          )}
+        </div>
       </div>
 
       {stackEntry && (
