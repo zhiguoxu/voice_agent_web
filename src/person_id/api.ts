@@ -101,13 +101,18 @@ export async function deleteGalleryPerson(cameraId: string, personId: string): P
 
 /* ── 设备推流（ISS） ── */
 
+/** 推流/拉流启停请求自报发起来源。person_id 把它拼进 ISS 与 StreamConsumer
+ *  的启停日志, 与 voice_server 联动、agent_server 代理的控制台操作区分开
+ *  (同名头见 voice_agent_common.infra.person_id_client.REQUEST_SOURCE_HEADER)。 */
+const REQUEST_SOURCE_HEADERS = { "X-Request-Source": "web/vision_page" };
+
 export async function startDeviceStream(
   cameraId: string,
   env: string,
 ): Promise<{ flv_url?: string }> {
   const res = await fetch(
     `${PERSON_ID_API}/${encodeURIComponent(cameraId)}/device_stream/start?env=${env}`,
-    { method: "POST" },
+    { method: "POST", headers: REQUEST_SOURCE_HEADERS },
   );
   if (!res.ok) throw await toError(res);
   return res.json();
@@ -116,7 +121,7 @@ export async function startDeviceStream(
 export async function stopDeviceStream(cameraId: string, env: string): Promise<void> {
   const res = await fetch(
     `${PERSON_ID_API}/${encodeURIComponent(cameraId)}/device_stream/stop?env=${env}`,
-    { method: "POST" },
+    { method: "POST", headers: REQUEST_SOURCE_HEADERS },
   );
   if (!res.ok) throw await toError(res);
 }
@@ -142,7 +147,7 @@ export async function startConsume(
 ): Promise<void> {
   const res = await fetch(`${PERSON_ID_API}/${encodeURIComponent(cameraId)}/consume/start`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...REQUEST_SOURCE_HEADERS },
     body: JSON.stringify({ url, env, auto_restream: true }),
   });
   if (!res.ok) throw await toError(res);
@@ -151,6 +156,7 @@ export async function startConsume(
 export async function stopConsume(cameraId: string): Promise<void> {
   const res = await fetch(`${PERSON_ID_API}/${encodeURIComponent(cameraId)}/consume/stop`, {
     method: "POST",
+    headers: REQUEST_SOURCE_HEADERS,
   });
   if (!res.ok) throw await toError(res);
 }
