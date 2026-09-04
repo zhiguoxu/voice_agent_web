@@ -5,7 +5,7 @@
 import { createContext, useContext } from "react";
 import type { VisionBus } from "./bus";
 import type { VisionSocket } from "./core/VisionSocket";
-import type { QualityThresholds } from "./types";
+import type { EnrollThresholds, QualityThresholds } from "./types";
 
 export type ToastType = "success" | "error";
 
@@ -15,6 +15,8 @@ export interface VisionContextValue {
   socket: VisionSocket;
   /** 质量帧展示的高/低分界（来自服务端 flags，加载前用默认值） */
   qualityThresholds: QualityThresholds;
+  /** 人脸入库门槛（来自 /api/params 滑块值，加载前用服务端默认值） */
+  enrollThresholds: EnrollThresholds;
   showToast: (message: string, type?: ToastType, duration?: number) => void;
   /** 打开图片灯箱；bbox 非空时在预览图上叠加框线（原图像素坐标） */
   openLightbox: (src: string, bbox?: number[] | null, color?: string) => void;

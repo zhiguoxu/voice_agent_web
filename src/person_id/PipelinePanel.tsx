@@ -26,7 +26,7 @@ function statusIcon(status: string): string {
 }
 
 function StageDetails({ stage, data }: { stage: PipelineStageName; data: PipelineStageData }) {
-  const { openLightbox } = useVision();
+  const { openLightbox, enrollThresholds } = useVision();
   const details = data.details || {};
 
   switch (stage) {
@@ -59,14 +59,20 @@ function StageDetails({ stage, data }: { stage: PipelineStageName; data: Pipelin
     case "face_assess": {
       const results = details.results || [];
       if (results.length === 0) return null;
+      // 尺寸/入库分对照入库门槛着色; q 是 Tier1 综合分(仅参考, 与入库分不同量纲);
+      // enroll 分服务端只给注意力目标算, 其他 track 显示 "—"
+      const { minFaceSizePx, faceQuality } = enrollThresholds;
+      const mark = (ok: boolean) => (ok ? "✅" : "⚠️");
       return (
         <>
           {results.map((r, i) => {
-            const quality = r.quality != null ? r.quality.toFixed(2) : "N/A";
-            const icon = r.extracted ? ((r.quality ?? 0) > 0.7 ? "✅" : "⚠️") : "❌";
+            const px = r.face_size_px ?? 0;
+            const q = r.enroll_face_quality;
             return (
               <div key={i} className="detail-line">
-                Track #{r.track_id}: {icon} quality={quality}
+                Track #{r.track_id}: {mark(px >= minFaceSizePx)} {px.toFixed(0)}px
+                {" · "}q={(r.face_quality ?? 0).toFixed(2)}
+                {" · "}enroll={q != null ? `${mark(q >= faceQuality)} ${q.toFixed(2)}` : "—"}
               </div>
             );
           })}

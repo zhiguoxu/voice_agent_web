@@ -22,7 +22,12 @@ export interface TrackedPerson {
   /** 旧字段名兜底（部分载荷用 status） */
   status?: string;
   confidence?: number;
+  /** Tier1 人脸综合分（eDifFIQA-medium + 清晰度），0 = 本帧无脸 */
   face_quality?: number;
+  /** 人脸框短边像素，与入库门槛 MIN_FACE_SIZE 同口径；0 = 本帧无脸 */
+  face_size_px?: number;
+  /** 入库门槛用的 eDifFIQA-large 分，服务端只对注意力目标计算，其他人为 null */
+  enroll_face_quality?: number | null;
   is_current_target?: boolean;
 }
 
@@ -33,13 +38,15 @@ export interface RawTrackedPerson extends TrackedPerson {
     detection?: { bbox?: number[]; keypoints?: number[][]; pose_bucket?: string };
     attention_score?: number;
     trail?: number[][];
+    face_quality?: number;
+    face_size_px?: number;
+    enroll_face_quality?: number | null;
   };
   identity_result?: {
     person_id?: string | null;
     display_name?: string | null;
     status?: string;
     confidence?: number;
-    face_quality?: number;
   };
 }
 
@@ -53,7 +60,9 @@ export interface PipelineStageData {
     total?: number;
     results?: Array<{
       track_id?: number;
-      quality?: number | null;
+      face_size_px?: number;
+      face_quality?: number;
+      enroll_face_quality?: number | null;
       extracted?: boolean;
       feature_dim?: number;
     }>;
@@ -276,4 +285,12 @@ export interface VideoRect {
 export interface QualityThresholds {
   face: number;
   body: number;
+}
+
+/** 人脸入库门槛（来自 /api/params 的 MIN_FACE_SIZE / FACE_QUALITY_ENROLL_THRESHOLD） */
+export interface EnrollThresholds {
+  /** 人脸框短边最小像素 */
+  minFaceSizePx: number;
+  /** 入库质量分下限（eDifFIQA-large 量纲，对应 TrackedPerson.enroll_face_quality） */
+  faceQuality: number;
 }

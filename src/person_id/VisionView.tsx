@@ -37,6 +37,7 @@ import { useEditPassword } from "../editPassword";
 import { useToasts } from "./useToasts";
 import type {
   ConsumeStatus,
+  EnrollThresholds,
   QualityThresholds,
   RawTrackedPerson,
   TrackedPerson,
@@ -62,7 +63,9 @@ function flattenPersons(raw: RawTrackedPerson[]): TrackedPerson[] {
         display_name: p.identity_result.display_name,
         identity_status: p.identity_result.status,
         confidence: p.identity_result.confidence,
-        face_quality: p.identity_result.face_quality,
+        face_quality: p.person.face_quality,
+        face_size_px: p.person.face_size_px,
+        enroll_face_quality: p.person.enroll_face_quality,
         is_current_target: p.is_current_target,
       };
     }
@@ -153,6 +156,12 @@ function VisionDashboard({ cameraId, onCameraIdChange }: {
     face: 0.3,
     body: 0.2,
   });
+  /* 人脸入库门槛（叠加层标签 / Face Assess 面板着色用），随滑块参数同步 */
+  const enrollThresholds = useMemo<EnrollThresholds>(() => ({
+    minFaceSizePx: params?.MIN_FACE_SIZE?.value ?? 60,
+    faceQuality: params?.FACE_QUALITY_ENROLL_THRESHOLD?.value ?? 0.55,
+  }), [params]);
+  useEffect(() => { overlay.setThresholds(enrollThresholds); }, [overlay, enrollThresholds]);
   const [overlayOpts, setOverlayOpts] = useState<OverlayOptions>({
     showBbox: true,
     showSkeleton: true,
@@ -472,8 +481,18 @@ function VisionDashboard({ cameraId, onCameraIdChange }: {
      口令弹窗/sessionStorage 缓存与「系统配置」页共用(useEditPassword) ── */
   const { withPassword, passwordDialog } = useEditPassword();
   const updateConfig = useCallback(
-    (updates: Record<string, unknown>) =>
-      withPassword((pw) => updateVisionConfig(updates, pw)),
+    async (updates: Record<string, unknown>) => {
+      await withPassword((pw) => updateVisionConfig(updates, pw));
+      // 写成功后同步本地 params, 让依赖它的门槛着色即时生效(否则要等 WS 重连重拉)
+      setParams((prev) => {
+        if (!prev) return prev;
+        const next = { ...prev };
+        for (const [key, value] of Object.entries(updates)) {
+          if (key in next && typeof value === "number") next[key] = { ...next[key], value };
+        }
+        return next;
+      });
+    },
     [withPassword],
   );
 
@@ -520,10 +539,11 @@ function VisionDashboard({ cameraId, onCameraIdChange }: {
     bus,
     socket,
     qualityThresholds,
+    enrollThresholds,
     showToast: showToast as (message: string, type?: ToastType, duration?: number) => void,
     openLightbox,
     portalTarget: rootEl,
-  }), [cameraId, bus, socket, qualityThresholds, showToast, openLightbox, rootEl]);
+  }), [cameraId, bus, socket, qualityThresholds, enrollThresholds, showToast, openLightbox, rootEl]);
 
   /* 拉流状态徽章文案 */
   const consumeBadge = (() => {

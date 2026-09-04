@@ -5,13 +5,19 @@
  * 注意力目标高亮 / 姿态角标。帧结果 10~30fps 更新，
  * 为避免高频 React 重渲染，本类完全走命令式 Canvas 绘制。
  */
-import type { TrackedPerson, VideoRect } from "../types";
+import type { EnrollThresholds, TrackedPerson, VideoRect } from "../types";
 
 export interface OverlayOptions {
   showBbox: boolean;
   showSkeleton: boolean;
   showTrail: boolean;
   showLabels: boolean;
+}
+
+/** 标签文本分段（人脸尺寸/质量按是否过门槛单独着色） */
+interface LabelSegment {
+  text: string;
+  color: string;
 }
 
 // COCO 骨骼连线拓扑
@@ -36,6 +42,8 @@ const COLORS: Record<string, string> = {
   target_glow: "#00e5ff",
   skeleton_high: "rgba(0, 255, 136, 0.8)",
   skeleton_low: "rgba(100, 100, 100, 0.4)",
+  gate_pass: "#00ff88",
+  gate_fail: "#ff6b6b",
 };
 
 export class OverlayRenderer {
@@ -46,6 +54,8 @@ export class OverlayRenderer {
     showTrail: true,
     showLabels: true,
   };
+  /** 与服务端默认值一致，/api/params 加载后由 setThresholds 覆盖 */
+  thresholds: EnrollThresholds = { minFaceSizePx: 60, faceQuality: 0.55 };
 
   private getCanvas: () => HTMLCanvasElement | null;
   private getContainer: () => HTMLElement | null;
@@ -64,6 +74,11 @@ export class OverlayRenderer {
 
   setOption(key: keyof OverlayOptions, value: boolean): void {
     this.options[key] = value;
+    this.render();
+  }
+
+  setThresholds(thresholds: EnrollThresholds): void {
+    this.thresholds = thresholds;
     this.render();
   }
 
@@ -249,10 +264,12 @@ export class OverlayRenderer {
 
     const conf = person.confidence ? ` ${(person.confidence * 100).toFixed(0)}%` : "";
     const trackId = person.track_id !== undefined ? `[#${person.track_id}] ` : "";
-    const text = `${trackId}${name}${conf}`;
+    const segments: LabelSegment[] = [{ text: `${trackId}${name}${conf}`, color: "#ffffff" }];
+    segments.push(...this.faceGateSegments(person));
 
     ctx.font = "600 12px Inter, sans-serif";
-    const textW = ctx.measureText(text).width + 12;
+    const widths = segments.map((s) => ctx.measureText(s.text).width);
+    const textW = widths.reduce((a, b) => a + b, 0) + 12;
     const textH = 20;
     const gap = 4;
 
@@ -272,8 +289,34 @@ export class OverlayRenderer {
     ctx.fillStyle = color;
     ctx.fillRect(x, y, 3, textH);
 
-    ctx.fillStyle = "#ffffff";
-    ctx.fillText(text, x + 8, y + 14);
+    let tx = x + 8;
+    segments.forEach((seg, i) => {
+      ctx.fillStyle = seg.color;
+      ctx.fillText(seg.text, tx, y + 14);
+      tx += widths[i];
+    });
+  }
+
+  /**
+   * 人脸入库门槛实时读数: 尺寸(所有人) + 入库质量分(仅注意力目标, 服务端只给它算)。
+   * 过门槛绿、不过红, 帮用户调站位; 无脸的帧不显示。
+   */
+  private faceGateSegments(person: TrackedPerson): LabelSegment[] {
+    const px = person.face_size_px ?? 0;
+    if (px <= 0) return [];
+    const { minFaceSizePx, faceQuality } = this.thresholds;
+    const segs: LabelSegment[] = [{
+      text: ` · ${px.toFixed(0)}px`,
+      color: px >= minFaceSizePx ? COLORS.gate_pass : COLORS.gate_fail,
+    }];
+    const q = person.enroll_face_quality;
+    if (q != null) {
+      segs.push({
+        text: ` · Q${q.toFixed(2)}`,
+        color: q >= faceQuality ? COLORS.gate_pass : COLORS.gate_fail,
+      });
+    }
+    return segs;
   }
 
   private drawPoseBadge(
