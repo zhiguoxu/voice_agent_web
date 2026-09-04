@@ -54,11 +54,16 @@ export interface LogSearchParams {
 
 export interface LogSearchResult {
   items: LogEntry[];
-  /** 还有更旧数据时非空，作为下一页 cursor */
+  /** 非空表示后面还有：页已填满，或服务端扫描因时间预算中途停下；传回 cursor 继续 */
   next_cursor: number | null;
+  /** 服务端因时间预算提前停下时，本次已覆盖到的最旧日志时刻（epoch 毫秒）；
+   *  页已填满或已扫到底则为 null */
+  scanned_to_ts: number | null;
 }
 
-/** 检索 DB 历史日志（新→旧排序，游标分页） */
+/** 检索 DB 历史日志（新→旧排序，游标分页）。
+ *  无 SN/Trace 的检索在服务端按时间预算分段扫描：找不到匹配时不会扫完整表才回，
+ *  而是先返回已找到的行 + next_cursor（未扫区间上界），调用方凭 cursor 续扫。 */
 export async function searchLogs(params: LogSearchParams = {}): Promise<LogSearchResult> {
   const sp = new URLSearchParams();
   if (params.device_sn) sp.set("device_sn", params.device_sn);
@@ -74,7 +79,34 @@ export async function searchLogs(params: LogSearchParams = {}): Promise<LogSearc
   const res = await fetch(`${LOGS_API_BASE}/search?${sp}`);
   if (!res.ok) throw new Error("Failed to search logs");
   const data = await res.json();
-  return { items: data.items ?? [], next_cursor: data.next_cursor ?? null };
+  return {
+    items: data.items ?? [],
+    next_cursor: data.next_cursor ?? null,
+    scanned_to_ts: data.scanned_to_ts ?? null,
+  };
+}
+
+/** 服务端单次请求最多扫约 1s；找不到时自动续扫的轮数上限，超过后交给用户点「继续搜索更早」 */
+const LOG_SCAN_AUTO_ROUNDS = 20;
+
+/** 取一页（最多 pageSize 条）历史日志，服务端因时间预算中途停下时自动带 cursor 续扫，
+ *  每收到一段就 yield 一次让 UI 逐步展示；页满、扫到底或达到轮数上限即结束。
+ *  yield 的 partial 为 true 表示服务端还没扫完（next_cursor 指向未扫区间）。 */
+export async function* scanLogPages(
+  params: LogSearchParams,
+  cursor: number | undefined,
+  pageSize: number
+): AsyncGenerator<LogSearchResult & { partial: boolean }> {
+  let got = 0;
+  for (let round = 0; round < LOG_SCAN_AUTO_ROUNDS; round++) {
+    const page = await searchLogs({ ...params, cursor, limit: pageSize - got });
+    got += page.items.length;
+    // 页未满却还有 cursor，只可能是服务端到了时间预算提前停下
+    const partial = page.next_cursor != null && got < pageSize;
+    yield { ...page, partial };
+    if (!partial) return;
+    cursor = page.next_cursor!;
+  }
 }
 
 export interface Session {

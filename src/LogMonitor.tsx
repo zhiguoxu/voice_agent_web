@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { searchLogs, LOGS_API_BASE, type LogEntry } from "./api";
+import { scanLogPages, LOGS_API_BASE, type LogEntry } from "./api";
 import { StackTraceDialog } from "./StackTraceDialog";
 import { useDebounce } from "./useDebounce";
 import "./LogMonitor.css";
@@ -22,6 +22,13 @@ function compareUid(a?: string, b?: string): number {
   const [ams, aseq] = a.split("-");
   const [bms, bseq] = b.split("-");
   return Number(ams) - Number(bms) || Number(aseq) - Number(bseq);
+}
+
+/** 扫描进度显示用："MM-DD HH:mm"（服务端分段扫描已覆盖到的最旧时刻） */
+function fmtScanTs(ts: number): string {
+  const d = new Date(ts);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
 /** 服务进程启动日志（log_startup_banner 打出）：UI 在该行上方渲染醒目分隔线。
@@ -92,6 +99,10 @@ export function LogMonitor({
   const [streamClosed, setStreamClosed] = useState(false);
   const [nextCursor, setNextCursor] = useState<number | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
+  /** 服务端分段扫描尚未扫完时，已覆盖到的最旧日志时刻；扫完/页满为 null */
+  const [scannedToTs, setScannedToTs] = useState<number | null>(null);
+  /** 首屏查询正在自动续扫（找不到匹配时服务端按时间预算分段返回，前端接着扫） */
+  const [scanning, setScanning] = useState(false);
 
   /* ── 异常堆栈对话框（点击带堆栈日志行的「堆栈」按钮打开） ── */
   const [stackEntry, setStackEntry] = useState<LogEntry | null>(null);
@@ -132,54 +143,73 @@ export function LogMonitor({
   const searching = waitingForDebounce || completedQueryKey !== queryKey;
   const searchFailed = !searching && failedQueryKey === queryKey;
 
-  /* ── 首屏/条件变化：按条件查 DB 历史（新→旧返回，翻转成旧→新展示） ── */
+  /* 当前生效的查询条件 key：翻页循环用它判断条件是否已变、结果该不该再往列表里塞 */
+  const activeQueryRef = useRef(queryKey);
+
+  /* ── 首屏/条件变化：按条件查 DB 历史（新→旧返回，翻转成旧→新展示）。
+     服务端找不到匹配时会按时间预算分段返回，这里逐段接着扫并即时展示进度，
+     第一段一到就撤掉遮罩，用户不用干等整表扫完 ── */
   useEffect(() => {
     let cancelled = false;
-    searchLogs({ ...serverParams, limit: PAGE_SIZE })
-      .then(({ items, next_cursor }) => {
-        if (cancelled) return;
-        const asc = [...items].reverse();
-        seenRef.current = new Set(
-          asc.map((e) => e.uid).filter((u): u is string => Boolean(u))
-        );
-        setLogs(asc);
-        setNextCursor(next_cursor);
-        setFailedQueryKey(null);
-        scrollToBottom();
-      })
-      .catch(() => {
+    activeQueryRef.current = queryKey;
+    (async () => {
+      let acc: LogEntry[] = [];
+      let first = true;
+      try {
+        for await (const page of scanLogPages(serverParams, undefined, PAGE_SIZE)) {
+          if (cancelled) return;
+          acc = acc.concat(page.items);
+          const asc = [...acc].reverse();
+          seenRef.current = new Set(
+            asc.map((e) => e.uid).filter((u): u is string => Boolean(u))
+          );
+          setLogs(asc);
+          setNextCursor(page.next_cursor);
+          setScannedToTs(page.scanned_to_ts);
+          setScanning(page.partial);
+          if (first) {
+            first = false;
+            setFailedQueryKey(null);
+            setCompletedQueryKey(queryKey);
+            scrollToBottom();
+          }
+        }
+      } catch {
         if (!cancelled) setFailedQueryKey(queryKey);
-      })
-      .finally(() => {
-        if (!cancelled) setCompletedQueryKey(queryKey);
-      });
+      } finally {
+        if (!cancelled) {
+          setCompletedQueryKey(queryKey);
+          setScanning(false);
+        }
+      }
+    })();
     return () => {
       cancelled = true;
     };
   }, [serverParams, queryKey, scrollToBottom]);
 
-  /* ── 向更旧翻页 ── */
+  /* ── 向更旧翻页（服务端中途停下时同样自动续扫，直到凑满一页/扫到底/轮数上限） ── */
   const loadOlder = useCallback(async () => {
     if (nextCursor == null || loadingMore) return;
+    const key = queryKey;
     setLoadingMore(true);
     try {
-      const { items, next_cursor } = await searchLogs({
-        ...serverParams,
-        cursor: nextCursor,
-        limit: PAGE_SIZE,
-      });
-      const asc = [...items]
-        .reverse()
-        .filter((e) => !e.uid || !seenRef.current.has(e.uid));
-      asc.forEach((e) => e.uid && seenRef.current.add(e.uid));
-      setLogs((prev) => [...asc, ...prev]);
-      setNextCursor(next_cursor);
+      for await (const page of scanLogPages(serverParams, nextCursor, PAGE_SIZE)) {
+        if (activeQueryRef.current !== key) return;
+        const asc = [...page.items]
+          .reverse()
+          .filter((e) => !e.uid || !seenRef.current.has(e.uid));
+        asc.forEach((e) => e.uid && seenRef.current.add(e.uid));
+        if (asc.length) setLogs((prev) => [...asc, ...prev]);
+        setNextCursor(page.next_cursor);
+        setScannedToTs(page.scanned_to_ts);
+      }
     } catch {
       /* 失败保持原状，用户可重试 */
     } finally {
       setLoadingMore(false);
     }
-  }, [nextCursor, loadingMore, serverParams]);
+  }, [nextCursor, loadingMore, serverParams, queryKey]);
 
   /* ── SSE 实时订阅（全部条件均由服务端过滤） ── */
   useEffect(() => {
@@ -439,6 +469,11 @@ export function LogMonitor({
             <><span className="spinner inline" /> 搜索中…</>
           ) : searchFailed ? (
             "搜索失败"
+          ) : scanning ? (
+            <>
+              <span className="spinner inline" /> {sortedLogs.length} 条，已搜到{" "}
+              {scannedToTs != null ? fmtScanTs(scannedToTs) : "…"}
+            </>
           ) : (
             `${sortedLogs.length} 条`
           )}
@@ -577,13 +612,30 @@ export function LogMonitor({
         >
           {nextCursor != null && (
             <div className="log-load-more-wrap">
-              <button className="log-btn" disabled={loadingMore} onClick={loadOlder}>
-                {loadingMore ? "加载中…" : "⇡ 加载更早"}
+              <button
+                className="log-btn"
+                disabled={loadingMore || scanning}
+                onClick={loadOlder}
+                data-tip={
+                  scannedToTs != null
+                    ? "服务端按时间预算分段扫描，尚未扫完更早的日志"
+                    : undefined
+                }
+              >
+                {loadingMore || scanning
+                  ? `搜索中…${scannedToTs != null ? `（已搜到 ${fmtScanTs(scannedToTs)}）` : ""}`
+                  : scannedToTs != null
+                  ? `⇡ 继续搜索更早（已搜到 ${fmtScanTs(scannedToTs)}）`
+                  : "⇡ 加载更早"}
               </button>
             </div>
           )}
           {sortedLogs.length === 0 ? (
-            <div className="log-empty">暂无日志</div>
+            <div className="log-empty">
+              {scannedToTs != null
+                ? `${fmtScanTs(scannedToTs)} 之后无匹配日志${scanning ? "，继续搜索更早…" : ""}`
+                : "暂无日志"}
+            </div>
           ) : (
             sortedLogs.map((l, i) => (
               <div
