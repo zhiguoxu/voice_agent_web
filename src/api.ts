@@ -1412,11 +1412,12 @@ export async function fetchKeyExtractorConfig(): Promise<ServiceConfig> {
    编辑后的值存数据库，删除覆盖即恢复 yaml 原值。全部叶子配置可编辑
    （锁定项除外），编辑需口令（X-Config-Edit-Password 头，后端校验）。 */
 
-export type ConfigService = "voice" | "agent" | "person";
+export type ConfigService = "voice" | "agent" | "console" | "person";
 
 const CONFIG_EDIT_PREFIX: Record<ConfigService, string> = {
   voice: "/api/voice/config/editable",
   agent: "/api/agent/config/editable",
+  console: "/api/console/config/editable",
   person: "/person_id/api/config/editable",
 };
 
@@ -1493,8 +1494,9 @@ export async function deleteConfigOverride(
 const CONFIG_DEVICE_PREFIX: Record<ConfigService, string> = {
   voice: "/api/voice/config/devices",
   agent: "/api/agent/config/devices",
-  // person_id 没有按设备解析配置的消费链路，后端不开放任何设备级字段；
-  // 端点存在但恒为空，设备覆盖面板也不查询它
+  // console / person_id 没有按设备解析配置的消费链路，后端不开放任何设备级
+  // 字段；端点存在但恒为空，设备覆盖面板也不查询它们
+  console: "/api/console/config/devices",
   person: "/person_id/api/config/devices",
 };
 

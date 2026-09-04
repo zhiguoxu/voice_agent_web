@@ -50,10 +50,19 @@ type ServiceTabKey = ConfigService | "emb" | "keyext";
 const SERVICE_TABS: { key: ServiceTabKey; icon: string; label: string }[] = [
   { key: "voice", icon: "🎙️", label: "voice_server" },
   { key: "agent", icon: "🤖", label: "agent_server" },
+  { key: "console", icon: "🖥️", label: "console_server" },
   { key: "person", icon: "👁️", label: "person_id" },
   { key: "emb", icon: "🧮", label: "embedding" },
   { key: "keyext", icon: "🗝️", label: "key-extractor" },
 ];
+
+/* 保存/恢复提示条里「重启 xxx 后生效」用的服务进程名 */
+const SERVER_NAMES: Record<ConfigService, string> = {
+  voice: "voice_server",
+  agent: "agent_server",
+  console: "console_server",
+  person: "person_id",
+};
 
 const SECTION_LABELS: Record<string, string> = {
   audio: "音频参数",
@@ -76,6 +85,8 @@ const SECTION_LABELS: Record<string, string> = {
   moderation: "输出侧内容风控",
   auto_stream: "摄像头自动拉流",
   voice_embed: "声纹提取",
+  // console_server (日志聚合) 的顶层配置段
+  log_stream: "日志聚合 Stream",
   // person_id (视觉识别) 服务的顶层配置段
   hardware: "硬件与计算设备",
   detection: "检测 (YOLO)",
@@ -1058,6 +1069,7 @@ export function ConfigView() {
   /* 可编辑白名单（path → 字段状态）。接口不可用时为 null，页面退化为纯只读 */
   const [voiceEditable, setVoiceEditable] = useState<Map<string, EditableField> | null>(null);
   const [agentEditable, setAgentEditable] = useState<Map<string, EditableField> | null>(null);
+  const [consoleEditable, setConsoleEditable] = useState<Map<string, EditableField> | null>(null);
   const [personEditable, setPersonEditable] = useState<Map<string, EditableField> | null>(null);
   /* 保存/恢复后的提示条（非 hot 项提示需要重启） */
   const [notice, setNotice] = useState<string | null>(null);
@@ -1080,13 +1092,14 @@ export function ConfigView() {
     setPersonError(null);
     setEmbError(null);
     setKeyExtError(null);
-    const [v, a, c, p, ve, ae, pe, em, ke] = await Promise.allSettled([
+    const [v, a, c, p, ve, ae, ce, pe, em, ke] = await Promise.allSettled([
       fetchVoiceConfig(),
       fetchAgentConfig(),
       fetchConsoleConfig(),
       fetchPersonConfig(),
       fetchEditableConfig("voice"),
       fetchEditableConfig("agent"),
+      fetchEditableConfig("console"),
       fetchEditableConfig("person"),
       fetchEmbeddingConfig(),
       fetchKeyExtractorConfig(),
@@ -1101,6 +1114,7 @@ export function ConfigView() {
     else setPersonError(p.reason?.message || String(p.reason));
     setVoiceEditable(ve.status === "fulfilled" ? new Map(ve.value.items.map((f) => [f.path, f])) : null);
     setAgentEditable(ae.status === "fulfilled" ? new Map(ae.value.items.map((f) => [f.path, f])) : null);
+    setConsoleEditable(ce.status === "fulfilled" ? new Map(ce.value.items.map((f) => [f.path, f])) : null);
     setPersonEditable(pe.status === "fulfilled" ? new Map(pe.value.items.map((f) => [f.path, f])) : null);
     if (em.status === "fulfilled") setEmb(em.value);
     else setEmbError(em.reason?.message || String(em.reason));
@@ -1125,8 +1139,7 @@ export function ConfigView() {
   const makeEditCtx = useCallback(
     (service: ConfigService, fields: Map<string, EditableField> | null): EditCtx | undefined => {
       if (!fields) return undefined;
-      const serverName =
-        service === "voice" ? "voice_server" : service === "agent" ? "agent_server" : "person_id";
+      const serverName = SERVER_NAMES[service];
       return {
         fields,
         onSave: async (path, value) => {
@@ -1154,6 +1167,7 @@ export function ConfigView() {
 
   const voiceEdit = makeEditCtx("voice", voiceEditable);
   const agentEdit = makeEditCtx("agent", agentEditable);
+  const consoleEdit = makeEditCtx("console", consoleEditable);
   const personEdit = makeEditCtx("person", personEditable);
 
   return (
@@ -1229,6 +1243,17 @@ export function ConfigView() {
             loading={loading}
             hideSections={["prompt"]}
             edit={agentEdit}
+          />
+        )}
+        {svcTab === "console" && (
+          <ServiceCard
+            icon="🖥️"
+            title="console_server"
+            subtitle="web 控制台后端：日志聚合入库 / 对话实时 SSE / 控制请求转发"
+            data={consoleCfg}
+            error={consoleError}
+            loading={loading}
+            edit={consoleEdit}
           />
         )}
         {svcTab === "person" && (
