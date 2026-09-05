@@ -1594,8 +1594,10 @@ export interface PromptTemplateInfo {
   rendered: string | null;
 }
 
-export async function fetchPrompts(): Promise<PromptTemplateInfo[]> {
-  const res = await fetch("/api/agent/prompts");
+/** deviceSn 非空时返回该设备视角的生效模板（叠加其设备级覆盖），空串即全局生效值 */
+export async function fetchPrompts(deviceSn = ""): Promise<PromptTemplateInfo[]> {
+  const qs = deviceSn ? `?${new URLSearchParams({ device_sn: deviceSn })}` : "";
+  const res = await fetch(`/api/agent/prompts${qs}`);
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
     throw new Error(data.detail || "Failed to fetch prompts");

@@ -7,12 +7,9 @@ import {
   fetchEditableConfig,
   putConfigOverride,
   deleteConfigOverride,
-  fetchDeviceOverrideSummary,
   fetchDeviceEditableConfig,
   putDeviceConfigOverride,
   deleteDeviceConfigOverride,
-  fetchSessions,
-  searchDevices,
   fetchEmbeddingConfig,
   fetchKeyExtractorConfig,
   type ServiceConfig,
@@ -23,6 +20,8 @@ import {
   type OverrideMutationResult,
 } from "./api";
 import { PromptsPanel } from "./PromptsPanel";
+import { DevicePicker } from "./DevicePicker";
+import { deviceLabel, loadDeviceCandidates, type DeviceCandidate } from "./deviceCandidates";
 import { useEditPassword } from "./editPassword";
 import "./ConfigView.css";
 
@@ -532,6 +531,7 @@ function ConfigSections({
   const scalarEntries = Object.entries(config).filter(([, v]) => !isPlainObject(v) && !Array.isArray(v));
   const sectionEntries = Object.entries(config).filter(
     ([k, v]) => (isPlainObject(v) || Array.isArray(v)) && !hideSections?.includes(k));
+  const scalarKeys = new Set(scalarEntries.map(([k]) => k));
 
   const tabs: { key: string; label: string }[] = [
     ...(scalarEntries.length > 0 ? [{ key: BASIC_TAB_KEY, label: "基础参数" }] : []),
@@ -542,14 +542,16 @@ function ConfigSections({
   /* 刷新后段列表可能变化（如服务重启后配置结构变了）：选中项失效时回落到第一个 tab */
   const activeKey = tabs.some((t) => t.key === active) ? active : tabs[0]?.key;
 
-  /* 该分类下被覆盖条数（设备视图 fields 的 overridden 即「被此设备覆盖」，语义同样成立） */
+  /* 该分类下被覆盖条数（设备视图 fields 的 overridden 即「被此设备覆盖」，语义同样成立）。
+     「基础参数」按 scalarKeys 判定而不是「path 不含点」：顶层数组（如 wakeup_answer_devices）
+     的 path 也不含点，但它渲染在自己的段 tab 里，不能算进基础参数 */
   const overriddenCount = (tabKey: string): number => {
     if (!edit) return 0;
     let n = 0;
     for (const f of edit.fields.values()) {
       if (!f.overridden) continue;
       const inTab = tabKey === BASIC_TAB_KEY
-        ? !f.path.includes(".")
+        ? scalarKeys.has(f.path)
         : f.path === tabKey || f.path.startsWith(tabKey + ".");
       if (inTab) n++;
     }
@@ -677,60 +679,30 @@ function DeviceOverridePanel({
   withPassword,
   setNotice,
   onGlobalReload,
+  refreshSignal,
 }: {
   withPassword: WithPasswordFn;
   setNotice: (msg: string) => void;
   /** 保存/删除设备覆盖后刷新全局视图（「N 台设备覆盖」计数会变） */
   onGlobalReload: () => Promise<void>;
+  /** 页面上其他入口（提示词面板）改了设备覆盖后递增，本面板静默重载总览与当前设备 */
+  refreshSignal: number;
 }) {
   /* 有覆盖的设备总览（两服务合并计数） */
   const [summary, setSummary] = useState<Map<string, DeviceOverrideSummaryItem>>(new Map());
   /* 选择器候选：最近有会话的设备 + 总览里出现的设备 */
-  const [candidates, setCandidates] = useState<{ sn: string; name: string }[]>([]);
+  const [candidates, setCandidates] = useState<DeviceCandidate[]>([]);
   const [selected, setSelected] = useState("");
   const [fields, setFields] = useState<Partial<Record<ConfigService, DeviceEditableField[]>> | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  /* 可搜索组合框：不输入时列出候选，输入即按名称/SN 模糊搜索
-     （走后端全量设备档案与历史会话设备，不限于本地候选） */
-  const [query, setQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<{ sn: string; name: string }[] | null>(null);
-  const [searching, setSearching] = useState(false);
-  const [comboOpen, setComboOpen] = useState(false);
-  const comboRef = useRef<HTMLSpanElement>(null);
   /* 两个服务(voice/agent)的设备级配置用 tab 切换展示, 与上方全局配置卡一致 */
   const [svcTab, setSvcTab] = useState<ConfigService>("voice");
 
   const loadOverview = useCallback(async () => {
-    const [v, a, sessions] = await Promise.allSettled([
-      fetchDeviceOverrideSummary("voice"),
-      fetchDeviceOverrideSummary("agent"),
-      fetchSessions({ page_size: 50 }),
-    ]);
-    const merged = new Map<string, DeviceOverrideSummaryItem>();
-    for (const r of [v, a]) {
-      if (r.status !== "fulfilled") continue;
-      for (const d of r.value.devices) {
-        const prev = merged.get(d.device_sn);
-        merged.set(d.device_sn, {
-          device_sn: d.device_sn,
-          name: d.name || prev?.name || "",
-          override_count: (prev?.override_count ?? 0) + d.override_count,
-        });
-      }
-    }
-    setSummary(merged);
-
-    const seen = new Map<string, string>();
-    if (sessions.status === "fulfilled") {
-      for (const s of sessions.value.items) {
-        if (!seen.has(s.device_sn)) seen.set(s.device_sn, s.device_name || "");
-      }
-    }
-    for (const d of merged.values()) {
-      if (!seen.has(d.device_sn)) seen.set(d.device_sn, d.name);
-    }
-    setCandidates([...seen.entries()].map(([sn, name]) => ({ sn, name })));
+    const next = await loadDeviceCandidates(["voice", "agent"]);
+    setSummary(next.summary);
+    setCandidates(next.candidates);
   }, []);
 
   const loadDevice = useCallback(async (sn: string, opts?: { silent?: boolean }) => {
@@ -765,63 +737,19 @@ function DeviceOverridePanel({
     loadDevice(selected);
   }, [selected, loadDevice]);
 
-  /* 防抖搜索：后端按名称/SN 模糊匹配（覆盖全部设备档案与历史会话设备），
-     本地候选同步过滤兜底（后端不可达时至少能搜下拉里已有的） */
+  /* 外部改了设备覆盖：只在信号真的变化时静默重载，不跟着 selected 变化重复触发 */
+  const seenSignal = useRef(refreshSignal);
   useEffect(() => {
-    const q = query.trim();
-    if (!q) {
-      setSearchResults(null);
-      setSearching(false);
-      return;
-    }
-    setSearching(true);
-    const timer = setTimeout(async () => {
-      const lower = q.toLowerCase();
-      const merged = new Map<string, string>();
-      for (const d of candidates) {
-        if (d.sn.toLowerCase().includes(lower) || d.name.toLowerCase().includes(lower)) {
-          merged.set(d.sn, d.name);
-        }
-      }
-      try {
-        for (const d of await searchDevices(q)) {
-          merged.set(d.device_sn, d.name || merged.get(d.device_sn) || "");
-        }
-      } catch {
-        /* 后端搜索失败时静默降级为本地候选过滤 */
-      }
-      setSearchResults([...merged.entries()].map(([sn, name]) => ({ sn, name })));
-      setSearching(false);
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [query, candidates]);
-
-  /* 点组合框外部关闭下拉 */
-  useEffect(() => {
-    if (!comboOpen) return;
-    const onDown = (e: MouseEvent) => {
-      if (comboRef.current && !comboRef.current.contains(e.target as Node)) {
-        setComboOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", onDown);
-    return () => document.removeEventListener("mousedown", onDown);
-  }, [comboOpen]);
+    if (seenSignal.current === refreshSignal) return;
+    seenSignal.current = refreshSignal;
+    loadOverview();
+    loadDevice(selected, { silent: true });
+  }, [refreshSignal, loadOverview, loadDevice, selected]);
 
   const afterMutation = useCallback(async () => {
     await syncSettle();
     await Promise.all([loadDevice(selected, { silent: true }), loadOverview(), onGlobalReload()]);
   }, [loadDevice, loadOverview, onGlobalReload, selected]);
-
-  const deviceLabel = (sn: string, name: string) => (name ? `${name} (${sn})` : sn);
-
-  /* 组合框列表：不输入时列全部候选，输入后换成搜索结果 */
-  const comboOptions = query.trim() ? (searchResults ?? []) : candidates;
-  const selectedName =
-    candidates.find((d) => d.sn === selected)?.name ||
-    summary.get(selected)?.name ||
-    searchResults?.find((d) => d.sn === selected)?.name ||
-    "";
 
   return (
     <div className="card cfg-card">
@@ -833,49 +761,15 @@ function DeviceOverridePanel({
       <div className="cfg-device-toolbar">
         <label>
           选择设备：
-          <span className="cfg-device-combo" ref={comboRef}>
-            <input
-              type="text"
-              value={comboOpen ? query : selected ? deviceLabel(selected, selectedName) : ""}
-              onFocus={() => { setQuery(""); setComboOpen(true); }}
-              onChange={(e) => { setQuery(e.target.value); setComboOpen(true); }}
-              onKeyDown={(e) => e.key === "Escape" && setComboOpen(false)}
-              placeholder={comboOpen
-                ? "输入设备名称或 SN 模糊搜索，或从列表点选"
-                : "点击选择设备（可输入名称/SN 搜索）"}
-            />
-            {selected && !comboOpen && (
-              <button
-                className="cfg-device-combo-clear"
-                data-tip="清除选择"
-                onClick={() => { setSelected(""); setQuery(""); }}
-              >×</button>
-            )}
-            {comboOpen && (
-              <div className="cfg-device-combo-list">
-                {searching && <div className="cfg-device-combo-empty"><span className="spinner inline" /> 搜索中…</div>}
-                {!searching && comboOptions.length === 0 && (
-                  <div className="cfg-device-combo-empty">
-                    {query.trim() ? `没有匹配「${query.trim()}」的设备（名称与 SN 均未命中）` : "暂无候选设备，输入名称或 SN 搜索"}
-                  </div>
-                )}
-                {!searching && comboOptions.map((d) => (
-                  <button
-                    className={`cfg-device-combo-option ${d.sn === selected ? "active" : ""}`}
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => { setSelected(d.sn); setQuery(""); setComboOpen(false); }}
-                    key={d.sn}
-                  >
-                    <span className="cfg-device-combo-name">{d.name || d.sn}</span>
-                    {d.name && <span className="cfg-device-combo-sn">{d.sn}</span>}
-                    {(summary.get(d.sn)?.override_count ?? 0) > 0 && (
-                      <span className="cfg-device-combo-count">{summary.get(d.sn)!.override_count} 条覆盖</span>
-                    )}
-                  </button>
-                ))}
-              </div>
-            )}
-          </span>
+          <DevicePicker
+            value={selected}
+            onChange={setSelected}
+            candidates={candidates}
+            badgeFor={(sn) => {
+              const n = summary.get(sn)?.override_count ?? 0;
+              return n > 0 ? `${n} 条覆盖` : null;
+            }}
+          />
         </label>
         {summary.size > 0 && (
           <span className="cfg-device-summary">
@@ -1170,6 +1064,32 @@ export function ConfigView() {
   const consoleEdit = makeEditCtx("console", consoleEditable);
   const personEdit = makeEditCtx("person", personEditable);
 
+  /* 提示词面板的设备级保存/恢复：与设备覆盖面板同一口令门、同款提示语；
+     改完刷新全局视图（「N 台设备覆盖」计数会变）并递增信号让设备覆盖面板重载总览 */
+  const [deviceOverrideSignal, setDeviceOverrideSignal] = useState(0);
+  const saveAgentDeviceOverride = useCallback(
+    async (deviceSn: string, path: string, value: unknown) => {
+      const r = await withPassword((pw) => putDeviceConfigOverride("agent", deviceSn, path, value, pw));
+      setNotice(`✅ ${path} 已保存为设备 ${deviceSn} 的定向覆盖，仅该设备生效`);
+      await syncSettle();
+      await load();
+      setDeviceOverrideSignal((v) => v + 1);
+      return r;
+    },
+    [load, withPassword],
+  );
+  const revertAgentDeviceOverride = useCallback(
+    async (deviceSn: string, path: string) => {
+      const r = await withPassword((pw) => deleteDeviceConfigOverride("agent", deviceSn, path, pw));
+      setNotice(`↩️ ${path} 已删除设备 ${deviceSn} 的定向覆盖，回落到全局生效值`);
+      await syncSettle();
+      await load();
+      setDeviceOverrideSignal((v) => v + 1);
+      return r;
+    },
+    [load, withPassword],
+  );
+
   return (
     <div className="cfg-container">
       <div className="cfg-toolbar">
@@ -1203,11 +1123,14 @@ export function ConfigView() {
         withPassword={withPassword}
         setNotice={setNotice}
         onGlobalReload={load}
+        refreshSignal={deviceOverrideSignal}
       />
       <PromptsPanel
         editFields={agentEditable ?? undefined}
         onSaveOverride={agentEdit?.onSave}
         onRevertOverride={agentEdit?.onRevert}
+        onSaveDeviceOverride={saveAgentDeviceOverride}
+        onRevertDeviceOverride={revertAgentDeviceOverride}
       />
       <div className="cfg-service-tabs">
         {SERVICE_TABS.map((t) => (
