@@ -2075,8 +2075,8 @@ export async function sendMqttCommand(
   }
 }
 
-/** 一句话任务解析（POST /api/agent/task/parse，agent_server oneshot_task 包）。
- *  LLM 抽取时间/地点/人物/播报文案；地点与人物是可选要素。 */
+/** 一句话任务单轮解析（POST /api/agent/task/parse，agent_server oneshot_task/parse 子包，App 同款接口）。
+ *  专用 LLM 抽取时间/地点/人物/播报文案，不追问；地点与人物是可选要素。 */
 export interface TaskParseExecutionTime {
   /** 生效起始日 YYYY-MM-DD；单次任务 start==end，长期重复截止 2099-01-01 */
   start_date: string;
@@ -2090,7 +2090,8 @@ export interface TaskParseExecutionTime {
 export interface TaskParseTemplate {
   name: string;
   execution_time: TaskParseExecutionTime;
-  /** 目标人物；说话人自己/多人/未提及为 null。id 空串=提到了人但花名册未命中（name 为句中原称呼） */
+  /** 目标人物；未提及为 null。「提醒我」→ name「我」、「全家人/大家」→ name「大家」（id 均空串，
+   *  文本接口没有说话人身份）；id 空串且其他称呼=提到了人但花名册未命中（name 为句中原称呼） */
   target_person: { id: string; name: string } | null;
   /** 执行地点；未指定为 null */
   location: { name: string } | null;
@@ -2098,11 +2099,16 @@ export interface TaskParseTemplate {
   enable_photo: boolean;
 }
 
+/** data 二选一：抽出任务只有 template；没听懂只有 message（哪里没听清）+ suggestion（可照着说的示例） */
+export type TaskParseData =
+  | { recognized: true; template: TaskParseTemplate }
+  | { recognized: false; message: string; suggestion: string };
+
 export interface TaskParseResponse {
   /** 0=正常（含「没听懂」recognized=false）；500=解析服务异常（LLM 调用失败，msg 带原因） */
   code: number;
   msg: string;
-  data: { recognized: boolean; template: TaskParseTemplate | null };
+  data: TaskParseData;
 }
 
 export async function parseOneshotTask(
