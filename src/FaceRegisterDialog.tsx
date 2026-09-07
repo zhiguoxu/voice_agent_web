@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { registerFace, type FaceRegisterResult } from "./api";
+import { useEffect, useRef, useState } from "react";
+import { cancelFaceRegister, registerFace, type FaceRegisterResult } from "./api";
 import "./RosterDialog.css";
 import "./FaceRegisterDialog.css";
 
@@ -8,7 +8,8 @@ import "./FaceRegisterDialog.css";
  *
  * 触发接口是同步的：请求会阻塞到整个注册流程结束（最多 3 轮 × 每轮 4 次
  * 带质量门槛的注册探测，通常几十秒），期间设备语音引导用户注视 mini 头部；
- * 这里展示等待态与最终结果（成功时含 person_id）。
+ * 这里展示等待态与最终结果（成功时含 person_id）。注册进行中关闭对话框
+ * 要显式调 cancel——只丢掉这条请求后端不会停，设备会继续语音引导。
  */
 export function FaceRegisterDialog({ deviceSn, onClose }: {
   deviceSn: string;
@@ -18,15 +19,27 @@ export function FaceRegisterDialog({ deviceSn, onClose }: {
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<FaceRegisterResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const submittingRef = useRef(false);
+  useEffect(() => {
+    submittingRef.current = submitting;
+  }, [submitting]);
 
-  /* Esc 关闭（注册请求已发出的话后端会继续跑完，只是看不到结果） */
+  /* 注册进行中关闭对话框（含 Esc）要顺手取消后端流程，设备播报"已取消"收场 */
+  const close = () => {
+    if (submittingRef.current) {
+      cancelFaceRegister(deviceSn).catch(() => {});
+    }
+    onClose();
+  };
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") close();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const submit = async () => {
     const trimmed = name.trim();
@@ -46,12 +59,12 @@ export function FaceRegisterDialog({ deviceSn, onClose }: {
   };
 
   return (
-    <div className="roster-dialog-overlay" onClick={onClose}>
+    <div className="roster-dialog-overlay" onClick={close}>
       <div className="roster-dialog face-register-dialog" onClick={(e) => e.stopPropagation()}>
         <h3>
           📷 注册人脸
           <span className="subtitle">设备 {deviceSn}</span>
-          <button className="roster-close" onClick={onClose} data-tip="关闭 (Esc)">×</button>
+          <button className="roster-close" onClick={close} data-tip="关闭 (Esc)">×</button>
         </h3>
 
         <div className="roster-dialog-body">
@@ -59,7 +72,7 @@ export function FaceRegisterDialog({ deviceSn, onClose }: {
             输入要注册的人名后开始。摄像头未在拉流时会自动开启（多等约十几秒）；
             注册过程由设备语音引导（请让用户注视 mini 头部，每轮约 8 秒、最多
             3 轮，按更高的人脸质量标准采集底片），本页面会一直等到流程结束并
-            展示结果。
+            展示结果；中途关闭本页面会取消注册。
           </p>
           <div className="face-register-form">
             <input

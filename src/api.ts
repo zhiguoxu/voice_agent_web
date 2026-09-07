@@ -777,7 +777,8 @@ export interface FaceRegisterResult {
    *  探测失败(透传失败码): 3 轮均失败时透传最后一次 (camera_offline |
    *  no_target | no_face | low_face_quality 等，兜底 enroll_failed)，
    *  服务调用失败则立即中止 (error | disabled)；
-   *  其他: name_save_failed (人脸已入库但名字没写上，重试注册可自愈，
+   *  其他: cancelled (调用方经 cancelFaceRegister 取消，人脸未入库) |
+   *  name_save_failed (人脸已入库但名字没写上，重试注册可自愈，
    *  person_id 有值) | internal_error */
   status: string;
   message: string;
@@ -786,7 +787,8 @@ export interface FaceRegisterResult {
 
 /** 触发一次引导式人脸注册。同步接口：阻塞到流程结束（未拉流会先自动开启
  *  摄像头，再最多 3 轮 × 每轮 4 次带质量门槛的注册探测，通常几十秒），
- *  期间设备会语音引导用户；返回最终结果。
+ *  期间设备会语音引导用户；返回最终结果。中途退出要调 cancelFaceRegister，
+ *  只放弃这条请求后端不会停。
  *  env: 设备推流所在的 ISS 环境（自动开流用，与拉流控制的 env 同源）。 */
 export async function registerFace(
   deviceSn: string, name: string, env: string,
@@ -801,6 +803,21 @@ export async function registerFace(
     throw new Error(data.detail || "触发人脸注册失败");
   }
   return res.json();
+}
+
+/** 取消该设备进行中的人脸注册（幂等，没有进行中的也返回成功）。后端在最近的
+ *  检查点停止并播报「人脸注册已取消」，阻塞中的 registerFace 随即返回
+ *  status=cancelled；人脸刚好已入库时不可取消，那次 registerFace 会返回成功。 */
+export async function cancelFaceRegister(deviceSn: string): Promise<void> {
+  const res = await fetch("/api/agent/face/register/cancel", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ device_sn: deviceSn }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || "取消人脸注册失败");
+  }
 }
 
 /** person_id 服务端拉流消费状态（StreamStatusResponse 原样透传，只声明 web 读取的字段） */
