@@ -1330,6 +1330,75 @@ export async function fetchPersonConfig(): Promise<ServiceConfig> {
   return res.json();
 }
 
+/* ── 拉流并发监控（person_id 同时开着多少路人脸识别视频流，「流量监控」页）── */
+
+/** 一路服务端拉流的快照（person_id StreamListItem，只声明 web 读取的字段） */
+export interface StreamListItem {
+  camera_id: string;
+  running: boolean;
+  /** 是否真正连上视频流（running 但没 connected = 设备没推流 / 重连中） */
+  connected: boolean;
+  env: string;
+  /** 本次 start 的时刻（epoch 秒） */
+  started_at: number | null;
+  /** 发起入口，如 "consume/start 接口(lease_seconds=60) <- voice_server/wake_keeper:start(trigger=wake)"
+   *  或 "启动恢复(Redis 期望状态)"；"<- " 之后是上游自报的 X-Request-Source */
+  start_source: string | null;
+  /** 租约到期时刻（epoch 秒）；null = 永久（控制台手动开的） */
+  lease_deadline: number | null;
+  viewers: number;
+  process_fps: number;
+  stream_width: number;
+  stream_height: number;
+  /** 自动重推流恢复进行中 */
+  recovering: boolean;
+  restream_count: number;
+  last_error: string | null;
+}
+
+export interface StreamListData {
+  /** 正在消费的路数 */
+  running: number;
+  /** 其中已连上视频流的路数 */
+  connected: number;
+  items: StreamListItem[];
+}
+
+export async function fetchStreamList(): Promise<StreamListData> {
+  const res = await fetch("/person_id/api/streams");
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+/** 一分钟的拉流并发统计（person_id Redis 分钟桶） */
+export interface StreamConcurrencySample {
+  /** 分钟起点（naive 产品时区，如 "2026-09-07 10:03:00"） */
+  minute: string;
+  /** 该分钟内同时在消费的最大路数 */
+  peak_running: number;
+  /** 其中已连上视频流的最大路数 */
+  peak_connected: number;
+  /** 消费器登记 / 注销次数（唤醒联动反复开关、URL 变更停旧起新都算） */
+  starts: number;
+  stops: number;
+}
+
+/** 最近 N 分钟逐分钟并发统计（时间正序，缺桶补 0；末元素是当前未走完的分钟，
+ *  峰值最多落后一个采样周期 5s，启停计数还会涨）。 */
+export async function fetchStreamConcurrency(
+  minutes: number,
+): Promise<{ minutes: number; items: StreamConcurrencySample[] }> {
+  const res = await fetch(`/person_id/api/streams/concurrency?minutes=${minutes}`);
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
 /* ── 拉流录像（person_id 自动录制 → COS）── */
 
 export interface VideoRecordingItem {

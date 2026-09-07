@@ -1,0 +1,93 @@
+/* person_id 拉流并发面板（配色沿用 App.css 设计变量，与 SweepMonitor.css 同风格） */
+
+.stream-section-title {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 4px 0 12px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.stream-section-title small {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-secondary, #9aa3b8);
+}
+
+/* ── 当前拉流列表 ── */
+
+.stream-table-wrap {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow-x: auto;
+  margin-bottom: 20px;
+}
+
+.stream-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+
+.stream-table th,
+.stream-table td {
+  padding: 8px 12px;
+  text-align: left;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--border);
+}
+
+.stream-table th {
+  background: var(--bg-secondary);
+  color: var(--text-secondary, #9aa3b8);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.stream-table tr:last-child td { border-bottom: none; }
+
+.stream-table code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+}
+
+.stream-table td.stream-source {
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.stream-table td.err {
+  color: #f87171;
+  white-space: normal;
+  max-width: 360px;
+}
+
+.stream-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.stream-state::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.stream-state.on { color: var(--green); }
+.stream-state.warn { color: var(--orange); }
+.stream-state.off { color: var(--red); }
+
+.stream-empty {
+  padding: 18px;
+  text-align: center;
+  color: var(--text-secondary, #9aa3b8);
+  font-size: 13px;
+}

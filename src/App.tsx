@@ -1107,7 +1107,7 @@ export default function App() {
           <button
             className={`main-tab ${activeTab === 'traffic' ? 'active' : ''}`}
             onClick={() => setActiveTab('traffic')}
-            data-tip="TTS / agent 等外部调用的每分钟访问次数与失败趋势"
+            data-tip="person_id 拉流并发（同时开着几路人脸识别视频流），TTS / agent 等外部调用的每分钟访问次数与失败趋势"
           >
             流量监控
           </button>

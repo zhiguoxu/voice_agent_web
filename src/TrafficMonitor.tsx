@@ -8,10 +8,14 @@
  * - 小度 / Azure ASR：每轮语音一次建连+识别会话，失败线暴露建连超时、
  *   服务端错误与收尾超时；
  * - agent_server 对话：每聊天轮一次，是全链路吞吐的直接读数。
+ *
+ * 页首另有 person_id 拉流并发区块（StreamConcurrency.tsx，数据直连 person_id），
+ * 共用本页的时间窗口选择。
  */
 import { useCallback, useEffect, useState } from "react";
 import { fetchTrafficMetrics, type TrafficMinuteSample } from "./api";
 import { TrendChart, KPI } from "./SweepMonitor";
+import { StreamConcurrencySection } from "./StreamConcurrency";
 import "./SweepMonitor.css";
 
 const RANGES = [
@@ -141,6 +145,9 @@ export function TrafficMonitor() {
           <button className="sweep-refresh" onClick={load} data-tip="立即刷新">↻</button>
         </div>
       </div>
+
+      {/* person_id 拉流并发：自己拉数据、自己报错，不受下方 voice 流量加载状态影响 */}
+      <StreamConcurrencySection minutes={minutes} />
 
       {error && <div className="sweep-error">加载失败：{error}</div>}
 
