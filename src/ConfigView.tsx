@@ -146,7 +146,6 @@ const ENUM_OPTIONS: Record<string, string[]> = {
   "moderation.llm.provider": LLM_PROVIDERS,
   // 摄像头自动拉流：与 AutoStreamConfig 的 Literal 取值保持一致
   "auto_stream.mode": ["connection", "wake"],
-  "auto_stream.env": ["test", "prod"],
   // person_id (视觉识别) 的模型选择字段
   "face.recognition_backend": ["arcface", "adaface"],
   "gallery.ediffiqa_enroll_variant": ["tiny", "small", "medium", "large"],

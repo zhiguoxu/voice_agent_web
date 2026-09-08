@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { cancelFaceRegister, registerFace, type FaceRegisterResult } from "./api";
+import { loadIssApiUrl } from "./issApiUrl";
 import "./RosterDialog.css";
 import "./FaceRegisterDialog.css";
 
@@ -48,9 +49,9 @@ export function FaceRegisterDialog({ deviceSn, onClose }: {
     setResult(null);
     setError(null);
     try {
-      // ISS 环境与拉流控制对话框同一份选择（未拉流时后端自动开流用）
-      const env = localStorage.getItem("streamIssEnv") || "test";
-      setResult(await registerFace(deviceSn, trimmed, env));
+      // ISS 地址覆盖与拉流控制对话框/视觉页同一份输入（未拉流时后端自动开流用），
+      // 空 = person_id 配置的地址
+      setResult(await registerFace(deviceSn, trimmed, loadIssApiUrl()));
     } catch (e: any) {
       setError(e.message || String(e));
     } finally {

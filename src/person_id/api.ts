@@ -106,21 +106,27 @@ export async function deleteGalleryPerson(cameraId: string, personId: string): P
  *  (同名头见 voice_agent_common.infra.person_id_client.REQUEST_SOURCE_HEADER)。 */
 const REQUEST_SOURCE_HEADERS = { "X-Request-Source": "web/vision_page" };
 
+/** device_stream/start|stop 的查询串: 只在带 ISS 地址覆盖时传 iss_api_url,
+ *  空值不传, 由 person_id 用自己配置的地址。 */
+function issQuery(issApiUrl: string): string {
+  return issApiUrl ? `?iss_api_url=${encodeURIComponent(issApiUrl)}` : "";
+}
+
 export async function startDeviceStream(
   cameraId: string,
-  env: string,
+  issApiUrl: string,
 ): Promise<{ flv_url?: string }> {
   const res = await fetch(
-    `${PERSON_ID_API}/${encodeURIComponent(cameraId)}/device_stream/start?env=${env}`,
+    `${PERSON_ID_API}/${encodeURIComponent(cameraId)}/device_stream/start${issQuery(issApiUrl)}`,
     { method: "POST", headers: REQUEST_SOURCE_HEADERS },
   );
   if (!res.ok) throw await toError(res);
   return res.json();
 }
 
-export async function stopDeviceStream(cameraId: string, env: string): Promise<void> {
+export async function stopDeviceStream(cameraId: string, issApiUrl: string): Promise<void> {
   const res = await fetch(
-    `${PERSON_ID_API}/${encodeURIComponent(cameraId)}/device_stream/stop?env=${env}`,
+    `${PERSON_ID_API}/${encodeURIComponent(cameraId)}/device_stream/stop${issQuery(issApiUrl)}`,
     { method: "POST", headers: REQUEST_SOURCE_HEADERS },
   );
   if (!res.ok) throw await toError(res);
@@ -143,12 +149,12 @@ export async function fetchRestreamLog(
 export async function startConsume(
   cameraId: string,
   url: string,
-  env: string,
+  issApiUrl: string,
 ): Promise<void> {
   const res = await fetch(`${PERSON_ID_API}/${encodeURIComponent(cameraId)}/consume/start`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...REQUEST_SOURCE_HEADERS },
-    body: JSON.stringify({ url, env, auto_restream: true }),
+    body: JSON.stringify({ url, iss_api_url: issApiUrl, auto_restream: true }),
   });
   if (!res.ok) throw await toError(res);
 }

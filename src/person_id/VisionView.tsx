@@ -44,8 +44,8 @@ import type {
   TunableParams,
 } from "./types";
 import "./vision.css";
+import { ISS_API_URL_PLACEHOLDER, loadIssApiUrl, saveIssApiUrl } from "../issApiUrl";
 
-type IssEnv = "test" | "prod";
 type TestModalKind = "quality" | "face" | "body";
 
 /** frame_result 中嵌套的 TrackedPersonResponse 展平（与原 app.js 一致） */
@@ -145,10 +145,8 @@ function VisionDashboard({ cameraId, onCameraIdChange }: {
   const [streamUrl, setStreamUrl] = useState(
     () => localStorage.getItem("vision_stream_url") || "",
   );
-  const [issEnv, setIssEnv] = useState<IssEnv>(() => {
-    const saved = localStorage.getItem("vision_iss_env");
-    return saved === "prod" ? "prod" : "test";
-  });
+  // ISS 地址覆盖(空 = person_id 配置), 与会话页拉流/注册人脸对话框共用同一份存储
+  const [issApiUrl, setIssApiUrl] = useState<string>(loadIssApiUrl);
   const [snDraft, setSnDraft] = useState(cameraId);
   const [params, setParams] = useState<TunableParams | null>(null);
   const [correctionEnabled, setCorrectionEnabled] = useState(false);
@@ -397,17 +395,20 @@ function VisionDashboard({ cameraId, onCameraIdChange }: {
   };
 
   /* ── 设备推流（ISS） ── */
+  /** toast 里标出这次打的是哪套 ISS; 未覆盖时不赘述(用的是服务端配置) */
+  const issLabel = () => (issApiUrl.trim() ? ` (ISS ${issApiUrl.trim()})` : "");
+
   const handleDeviceStreamStart = async () => {
     if (!requireDeviceSn()) return;
     setDeviceStreamBusy(true);
     const prevUrl = streamUrl;
     setStreamUrl("");
     try {
-      const data = await startDeviceStream(cameraId, issEnv);
+      const data = await startDeviceStream(cameraId, issApiUrl.trim());
       if (data.flv_url) {
         setStreamUrl(data.flv_url);
         localStorage.setItem("vision_stream_url", data.flv_url);
-        showToast(`✅ 设备推流已开启 (${issEnv} 环境), 地址已填入。可点击「服务端拉流」开始识别`);
+        showToast(`✅ 设备推流已开启${issLabel()}, 地址已填入。可点击「服务端拉流」开始识别`);
       } else {
         setStreamUrl(prevUrl);
         showToast("❌ 开启设备推流失败: 未返回直播地址", "error", 6000);
@@ -433,10 +434,10 @@ function VisionDashboard({ cameraId, onCameraIdChange }: {
         await stopConsume(cameraId).catch(() => {});
         setConsumeUI(false);
       }
-      await stopDeviceStream(cameraId, issEnv);
+      await stopDeviceStream(cameraId, issApiUrl.trim());
       setStreamUrl("");
       localStorage.removeItem("vision_stream_url");
-      showToast(`✅ 设备推流已停止 (${issEnv} 环境)`);
+      showToast(`✅ 设备推流已停止${issLabel()}`);
     } catch (e: unknown) {
       showToast(
         `❌ 停止推流失败: ${e instanceof Error ? e.message : String(e)}`,
@@ -461,7 +462,7 @@ function VisionDashboard({ cameraId, onCameraIdChange }: {
         // 与本地采集互斥: 先停掉浏览器端采集
         if (capture.capturing) capture.stop();
         localStorage.setItem("vision_stream_url", url);
-        await startConsume(cameraId, url, issEnv);
+        await startConsume(cameraId, url, issApiUrl.trim());
         setConsumeUI(true);
         void pollConsumeStatus();
       } else {
@@ -663,19 +664,19 @@ function VisionDashboard({ cameraId, onCameraIdChange }: {
                       }
                     }}
                   />
-                  <select
-                    className="select-input iss-env-select"
-                    title="推流服务 (ISS) 环境: test=测试环境, prod=生产环境"
-                    value={issEnv}
-                    onChange={(e) => {
-                      const env = e.target.value as IssEnv;
-                      setIssEnv(env);
-                      localStorage.setItem("vision_iss_env", env);
+                  <input
+                    type="text"
+                    className="text-input stream-url-input iss-url-input"
+                    placeholder={ISS_API_URL_PLACEHOLDER}
+                    title="推流服务 (ISS) 地址覆盖, 如 https://iss-test.joyin-ai.com; 留空 = 用 person_id 配置的地址"
+                    value={issApiUrl}
+                    onChange={(e) => setIssApiUrl(e.target.value)}
+                    onBlur={() => {
+                      const v = issApiUrl.trim();
+                      setIssApiUrl(v);
+                      saveIssApiUrl(v);
                     }}
-                  >
-                    <option value="test">test</option>
-                    <option value="prod">prod</option>
-                  </select>
+                  />
                   <div className="split-btn">
                     <button
                       className="btn split-btn-main"

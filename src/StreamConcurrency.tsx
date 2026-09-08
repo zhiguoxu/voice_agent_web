@@ -45,6 +45,16 @@ function callerOf(source: string | null): string {
   return i >= 0 ? source.slice(i + 3) : source;
 }
 
+/** ISS 地址表格里只显示主机名（同一部署下各路流通常一样），完整地址放 tooltip */
+function issHost(url: string | undefined): string {
+  if (!url) return "—";
+  try {
+    return new URL(url).host || url;
+  } catch {
+    return url;
+  }
+}
+
 function stateOf(s: StreamListItem): { cls: string; text: string } {
   if (s.connected) return { cls: "on", text: "已连上" };
   if (s.recovering) return { cls: "warn", text: "自动重推流中" };
@@ -132,7 +142,7 @@ export function StreamConcurrencySection({ minutes }: { minutes: number }) {
               <tr>
                 <th>设备 (camera_id)</th>
                 <th>状态</th>
-                <th>环境</th>
+                <th>ISS 地址</th>
                 <th>已开启</th>
                 <th>发起方</th>
                 <th>租约</th>
@@ -150,7 +160,9 @@ export function StreamConcurrencySection({ minutes }: { minutes: number }) {
                   <tr key={s.camera_id}>
                     <td><code>{s.camera_id}</code></td>
                     <td><span className={`stream-state ${st.cls}`}>{st.text}</span></td>
-                    <td>{s.env}</td>
+                    <td className="stream-source" title={s.iss_api_url || undefined}>
+                      <code>{issHost(s.iss_api_url)}</code>
+                    </td>
                     <td>{s.started_at != null ? fmtDuration(now - s.started_at) : "—"}</td>
                     <td className="stream-source" title={s.start_source ?? undefined}>
                       <code>{callerOf(s.start_source)}</code>

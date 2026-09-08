@@ -90,7 +90,8 @@ export function RestreamLogModal({ onClose }: { onClose: () => void }) {
                       <span className="restream-attempt-time">{fmtTime(a.started_at)}</span>
                       <span className={`restream-badge ${badge.cls}`}>{badge.text}</span>
                       <span className="restream-attempt-meta">
-                        连续失败 {a.trigger_fail_count} 次 · 设备{onlineText} · {a.env} 环境
+                        连续失败 {a.trigger_fail_count} 次 · 设备{onlineText}
+                        {a.iss_api_url ? ` · ISS ${a.iss_api_url}` : ""}
                       </span>
                     </summary>
                     <div className="restream-attempt-detail">

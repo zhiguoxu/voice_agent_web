@@ -401,9 +401,10 @@
 }
 
 
-/* ISS 环境切换下拉框 (test/prod) */
-.vision-view .iss-env-select {
-    flex: 0 0 auto;
+/* ISS 地址覆盖输入框: 留空 = 服务端配置, 只在联调另一套 ISS 时填, 不抢主地址栏的宽度 */
+.vision-view .iss-url-input {
+    flex: 0 1 170px;
+    min-width: 110px;
 }
 
 

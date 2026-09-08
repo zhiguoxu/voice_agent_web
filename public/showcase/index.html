@@ -732,19 +732,20 @@ $("streamBtn").addEventListener("click", async () => {
   const btn = $("streamBtn");
   btn.disabled = true;
   btn.textContent = "拉流启动中 …";
-  // env 优先级: URL ?env= > 控制台上次选择(同域 localStorage) > test
-  const env = params.get("env") || localStorage.getItem("streamIssEnv") || "test";
+  // ISS 地址覆盖优先级: URL ?iss_api_url= > 控制台上次输入(同域 localStorage,
+  // 键名与 web/src/issApiUrl.ts 一致) > 空(用 person_id 配置的地址)
+  const issApiUrl = params.get("iss_api_url") || localStorage.getItem("issApiUrl") || "";
   try {
     const res = await fetch("/api/agent/stream/start", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ device_sn: deviceSn, env }),
+      body: JSON.stringify({ device_sn: deviceSn, iss_api_url: issApiUrl }),
     });
     if (!res.ok) throw new Error(String(res.status));
     streamHint = "拉流已开启 · 等待画面帧 …";
     btn.style.display = "none";
   } catch {
-    streamHint = "拉流开启失败，可换环境重试或在后台控制台开启";
+    streamHint = "拉流开启失败，可在后台控制台开启";
     btn.textContent = "▶ 重试开启";
   } finally {
     btn.disabled = false;

@@ -5,6 +5,7 @@ import {
   stopStreamConsume,
   type StreamStatusData,
 } from "./api";
+import { ISS_API_URL_PLACEHOLDER, loadIssApiUrl, saveIssApiUrl } from "./issApiUrl";
 import "./RosterDialog.css";
 import "./StreamControlDialog.css";
 
@@ -43,7 +44,8 @@ export function StreamControlDialog({ deviceSn, onClose, onStatusChange }: {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [env, setEnv] = useState(() => localStorage.getItem("streamIssEnv") || "test");
+  // ISS 地址覆盖(空 = person_id 配置), 与视觉页 / 注册人脸对话框共用同一份存储
+  const [issApiUrl, setIssApiUrl] = useState<string>(loadIssApiUrl);
   // 启停请求进行中时轮询结果直接丢弃，避免旧快照盖掉操作结果
   const actionLoadingRef = useRef(false);
 
@@ -84,8 +86,8 @@ export function StreamControlDialog({ deviceSn, onClose, onStatusChange }: {
     setActionError(null);
     try {
       const s = action === "start"
-        ? await startStreamConsume(deviceSn, env)
-        : await stopStreamConsume(deviceSn, env);
+        ? await startStreamConsume(deviceSn, issApiUrl.trim())
+        : await stopStreamConsume(deviceSn);
       const d: StreamStatusData = { enabled: true, reachable: true, status: s };
       setData(d);
       onStatusChange?.(d);
@@ -130,8 +132,9 @@ export function StreamControlDialog({ deviceSn, onClose, onStatusChange }: {
                   </span>
                   <label>帧统计</label>
                   <span>已读 {status.frames_read} / 已处理 {status.frames_processed}（{status.process_fps.toFixed(1)} fps）</span>
-                  <label>ISS 环境</label>
-                  <span>{status.env}{status.auto_restream ? "，断流自动重推" : ""}
+                  <label>ISS 地址</label>
+                  <span className="stream-url" title={status.iss_api_url}>
+                    {status.iss_api_url || "-"}{status.auto_restream ? "，断流自动重推" : ""}
                     {status.restream_count > 0 ? `（已重推 ${status.restream_count} 次）` : ""}
                   </span>
                   {status.recovering && (
@@ -151,19 +154,20 @@ export function StreamControlDialog({ deviceSn, onClose, onStatusChange }: {
 
               <div className="stream-actions">
                 {!running && (
-                  <label className="stream-env-select">
-                    ISS 环境
-                    <select
-                      value={env}
+                  <label className="stream-iss-url" title="ISS 推流服务地址覆盖；留空 = 用 person_id 配置的地址">
+                    ISS 地址
+                    <input
+                      type="text"
+                      value={issApiUrl}
+                      placeholder={ISS_API_URL_PLACEHOLDER}
                       disabled={actionLoading}
-                      onChange={(e) => {
-                        setEnv(e.target.value);
-                        localStorage.setItem("streamIssEnv", e.target.value);
+                      onChange={(e) => setIssApiUrl(e.target.value)}
+                      onBlur={() => {
+                        const v = issApiUrl.trim();
+                        setIssApiUrl(v);
+                        saveIssApiUrl(v);
                       }}
-                    >
-                      <option value="test">test</option>
-                      <option value="prod">prod</option>
-                    </select>
+                    />
                   </label>
                 )}
                 <button

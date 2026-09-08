@@ -113,15 +113,19 @@
   margin-top: 16px;
 }
 
-.stream-env-select {
+.stream-iss-url {
   display: flex;
   align-items: center;
   gap: 6px;
   font-size: 13px;
   color: var(--text-muted);
+  flex: 1;
+  min-width: 0;
 }
 
-.stream-env-select select {
+.stream-iss-url input {
+  flex: 1;
+  min-width: 0;
   padding: 5px 8px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border);

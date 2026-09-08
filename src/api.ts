@@ -789,14 +789,15 @@ export interface FaceRegisterResult {
  *  摄像头，再最多 3 轮 × 每轮 4 次带质量门槛的注册探测，通常几十秒），
  *  期间设备会语音引导用户；返回最终结果。中途退出要调 cancelFaceRegister，
  *  只放弃这条请求后端不会停。
- *  env: 设备推流所在的 ISS 环境（自动开流用，与拉流控制的 env 同源）。 */
+ *  issApiUrl: ISS 推流服务地址覆盖（自动开流用，与拉流控制同一份输入）；
+ *  空 = 用 person_id 配置的地址。 */
 export async function registerFace(
-  deviceSn: string, name: string, env: string,
+  deviceSn: string, name: string, issApiUrl: string,
 ): Promise<FaceRegisterResult> {
   const res = await fetch("/api/agent/face/register", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ device_sn: deviceSn, name, env }),
+    body: JSON.stringify({ device_sn: deviceSn, name, iss_api_url: issApiUrl }),
   });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
@@ -832,7 +833,8 @@ export interface StreamConsumeStatus {
   frames_read: number;
   frames_processed: number;
   process_fps: number;
-  env: string;
+  /** 这路流实际使用的 ISS 地址（请求覆盖或 person_id 配置） */
+  iss_api_url: string;
   auto_restream: boolean;
   /** 断流自动恢复流程（在线检查/ISS 重推）进行中 */
   recovering: boolean;
@@ -858,14 +860,15 @@ export async function fetchStreamStatus(deviceSn: string): Promise<StreamStatusD
   return res.json();
 }
 
-/** 开启拉流：经 ISS 开启设备推流拿 FLV 地址，再让 person_id 服务端消费。幂等。 */
+/** 开启拉流：经 ISS 开启设备推流拿 FLV 地址，再让 person_id 服务端消费。幂等。
+ *  issApiUrl: ISS 地址覆盖，空 = 用 person_id 配置的地址。 */
 export async function startStreamConsume(
-  deviceSn: string, env: string,
+  deviceSn: string, issApiUrl: string,
 ): Promise<StreamConsumeStatus> {
   const res = await fetch("/api/agent/stream/start", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ device_sn: deviceSn, env }),
+    body: JSON.stringify({ device_sn: deviceSn, iss_api_url: issApiUrl }),
   });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
@@ -874,14 +877,13 @@ export async function startStreamConsume(
   return res.json();
 }
 
-/** 关闭拉流：先停服务端消费，再停设备推流。对未在拉流的设备幂等。 */
-export async function stopStreamConsume(
-  deviceSn: string, env: string,
-): Promise<StreamConsumeStatus> {
+/** 关闭拉流：先停服务端消费，再停设备推流。对未在拉流的设备幂等。
+ *  停推流打哪套 ISS 由后端按这路流开流时的地址决定，前端不用再传。 */
+export async function stopStreamConsume(deviceSn: string): Promise<StreamConsumeStatus> {
   const res = await fetch("/api/agent/stream/stop", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ device_sn: deviceSn, env }),
+    body: JSON.stringify({ device_sn: deviceSn }),
   });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
@@ -1355,7 +1357,8 @@ export interface StreamListItem {
   running: boolean;
   /** 是否真正连上视频流（running 但没 connected = 设备没推流 / 重连中） */
   connected: boolean;
-  env: string;
+  /** 这路流实际使用的 ISS 地址 */
+  iss_api_url: string;
   /** 本次 start 的时刻（epoch 秒） */
   started_at: number | null;
   /** 发起入口，如 "consume/start 接口(lease_seconds=60) <- voice_server/wake_keeper:start(trigger=wake)"

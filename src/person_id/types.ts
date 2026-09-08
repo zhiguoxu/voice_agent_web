@@ -215,7 +215,8 @@ export interface RestreamAttempt {
   trigger_fail_count?: number;
   trigger_error?: string | null;
   device_online?: boolean | null;
-  env?: string;
+  /** 本次重推实际调用的 ISS 地址 */
+  iss_api_url?: string;
   old_url?: string | null;
   new_url?: string | null;
   logs?: RestreamLogLine[];
