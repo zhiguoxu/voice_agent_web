@@ -2090,8 +2090,13 @@ export interface TaskParseExecutionTime {
   week_days: number[];
 }
 
+/** 任务类型：请求 type 与模板 task_type 同一套取值；checkin=打卡（模板 enable_photo=true） */
+export type TaskType = "ordinary" | "checkin";
+
 export interface TaskParseTemplate {
   name: string;
+  /** 与请求 type 一致 */
+  task_type: string;
   execution_time: TaskParseExecutionTime;
   /** 目标人物；未提及为 null。「提醒我」→ name「我」、「全家人/大家」→ name「大家」（id 均空串，
    *  文本接口没有说话人身份）；id 空串且其他称呼=提到了人但花名册未命中（name 为句中原称呼） */
@@ -2116,11 +2121,11 @@ export interface TaskParseResponse {
 
 export async function parseOneshotTask(
   text: string,
-  isCheckinTask = false,
+  taskType: TaskType = "ordinary",
   /** 可选；带上才会把目标人物经花名册消解出 person_id（一设备一家庭） */
   deviceSn = "",
 ): Promise<TaskParseResponse> {
-  const body: Record<string, unknown> = { text, isCheckinTask };
+  const body: Record<string, unknown> = { text, type: taskType };
   if (deviceSn) body.deviceSn = deviceSn;
   const res = await fetch("/api/agent/task/parse", {
     method: "POST",

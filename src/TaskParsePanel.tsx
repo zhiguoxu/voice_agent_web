@@ -2,7 +2,7 @@
  * 一句话任务单轮解析测试面板（POST /api/agent/task/parse，App 同款接口，挂在「API 测试」页）。
  *
  * 单条解析：输入一句话看抽取出的时间/地点/人物/播报文案，或没听懂时回给用户的
- * 说明与示例；可选 device_sn（走花名册消解）与打卡标记（验 enable_photo 透传）。
+ * 说明与示例；可选 device_sn（走花名册消解）与任务类型 type（验模板 task_type 一致、打卡置 enable_photo）。
  * 批量回归：40 条验收 case + 6 条立刻执行 case + 负例（非任务、只说时段没说几点）逐条
  * 打真实接口并断言，口径与 agent_server/oneshot_task/parse/scripts/run_parse_cases.py 一致——
  * once 验相对今天的日期与钟点、recurring 验星期集合、relative 验触发时刻窗口(±2/3min)、
@@ -14,6 +14,7 @@ import {
   type TaskParseExecutionTime,
   type TaskParseResponse,
   type TaskParseTemplate,
+  type TaskType,
 } from "./api";
 
 const FAR_END_DATE = "2099-01-01";
@@ -138,7 +139,7 @@ function checkCase(
   body: TaskParseResponse,
   sentAt: Date,
   deviceSn: string,
-  checkin: boolean,
+  taskType: TaskType,
 ): string[] {
   if (body.code !== 0) return [`code=${body.code} msg=${body.msg}`];
   if (!body.data.recognized) return [`recognized=false：${body.data.message}｜${body.data.suggestion}`];
@@ -197,7 +198,8 @@ function checkCase(
 
   if (!tpl.content.tts_text) errs.push("tts_text 为空");
   if (!tpl.name) errs.push("任务名为空");
-  if (checkin && !tpl.enable_photo) errs.push("isCheckinTask=true 未透传为 enable_photo");
+  if (tpl.task_type !== taskType) errs.push(`type=${taskType} 未落进模板 task_type（实际 ${tpl.task_type}）`);
+  if (taskType === "checkin" && !tpl.enable_photo) errs.push("type=checkin 未置 enable_photo");
   return errs;
 }
 
@@ -220,6 +222,7 @@ export function TaskParsePanel() {
   const [text, setText] = useState("");
   const [deviceSn, setDeviceSn] = useState("");
   const [checkin, setCheckin] = useState(false);
+  const taskType: TaskType = checkin ? "checkin" : "ordinary";
   const [parsing, setParsing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [results, setResults] = useState<SingleResult[]>([]);
@@ -237,7 +240,7 @@ export function TaskParsePanel() {
     setParsing(true);
     setError(null);
     try {
-      const resp = await parseOneshotTask(q, checkin, deviceSn.trim());
+      const resp = await parseOneshotTask(q, taskType, deviceSn.trim());
       setResults((prev) => [{ text: q, resp }, ...prev].slice(0, 10));
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -260,8 +263,8 @@ export function TaskParsePanel() {
       setProgress(`${++done}/${total}`);
       const sentAt = nowCst();
       try {
-        const resp = await parseOneshotTask(c.text, checkin, deviceSn.trim());
-        const errs = checkCase(c, resp, sentAt, deviceSn.trim(), checkin);
+        const resp = await parseOneshotTask(c.text, taskType, deviceSn.trim());
+        const errs = checkCase(c, resp, sentAt, deviceSn.trim(), taskType);
         const tpl = resp.data.recognized ? resp.data.template : null;
         push({
           label: String(c.no),
@@ -280,7 +283,7 @@ export function TaskParsePanel() {
       if (stopRef.current) break;
       setProgress(`${++done}/${total}`);
       try {
-        const resp = await parseOneshotTask(t, checkin, deviceSn.trim());
+        const resp = await parseOneshotTask(t, taskType, deviceSn.trim());
         const d = resp.data;
         let note: string;
         if (resp.code !== 0) note = `code=${resp.code} msg=${resp.msg}`;
@@ -360,7 +363,7 @@ export function TaskParsePanel() {
             onChange={(e) => setCheckin(e.target.checked)}
             disabled={busy}
           />
-          打卡任务（enable_photo）
+          打卡任务（type=checkin → task_type + enable_photo）
         </label>
         <button onClick={batchRunning ? () => (stopRef.current = true) : runBatch} disabled={parsing}>
           {batchRunning ? "停止" : `批量回归（${CASES.length + NEGATIVES.length} 条）`}
