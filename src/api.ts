@@ -896,7 +896,8 @@ export async function stopStreamConsume(deviceSn: string): Promise<StreamConsume
 export interface VoiceEnrollStartResult {
   success: boolean;
   /** ok | voice_identity_disabled | memory_disabled | person_not_found(不在本家
-   *  花名册，请先完成人脸注册) | busy | device_offline | voice_server_unreachable */
+   *  花名册，请先完成人脸注册) | busy | device_offline | voice_server_unreachable |
+   *  internal_error(录入状态存取失败等) */
   status: string;
   message: string;
 }
