@@ -775,7 +775,8 @@ export interface FaceRegisterResult {
    *  memory_disabled | busy | person_id_unreachable(服务查询失败，非摄像头
    *  问题) | camera_open_failed(未拉流且自动开流失败) | duplicate_name；
    *  探测失败(透传失败码): 3 轮均失败时透传最后一次 (camera_offline |
-   *  no_target | no_face | low_face_quality 等，兜底 enroll_failed)，
+   *  no_target | no_face | low_face_quality | face_cut_top | face_cut_bottom |
+   *  face_cut_side 等，兜底 enroll_failed)，
    *  服务调用失败则立即中止 (error | disabled)；
    *  其他: cancelled (调用方经 cancelFaceRegister 取消，人脸未入库) |
    *  name_save_failed (人脸已入库但名字没写上，重试注册可自愈，

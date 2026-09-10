@@ -46,6 +46,14 @@ const COLORS: Record<string, string> = {
   gate_fail: "#ff6b6b",
 };
 
+/** 人脸贴边截断方向 → 箭头（服务端 face_cut_edges 的取值） */
+const CUT_EDGE_ARROWS: Record<string, string> = {
+  top: "↑",
+  bottom: "↓",
+  left: "←",
+  right: "→",
+};
+
 export class OverlayRenderer {
   persons: TrackedPerson[] = [];
   options: OverlayOptions = {
@@ -136,6 +144,7 @@ export class OverlayRenderer {
       }
       if (this.options.showBbox) {
         this.drawBbox(ctx, bbox, color, !!person.is_current_target);
+        this.drawFaceBbox(ctx, person, rect);
       }
       if (this.options.showSkeleton && person.keypoints) {
         this.drawSkeleton(ctx, person.keypoints, rect);
@@ -186,6 +195,26 @@ export class OverlayRenderer {
 
     ctx.strokeStyle = color;
     ctx.lineWidth = 2;
+    ctx.setLineDash([]);
+    ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+  }
+
+  /**
+   * 人脸框: 与标签里的尺寸/截断读数同一套门槛着色, 过门槛绿、不过红,
+   * 让用户一眼看到是脸太小还是贴边。无脸的帧不画。
+   */
+  private drawFaceBbox(
+    ctx: CanvasRenderingContext2D,
+    person: TrackedPerson,
+    rect: VideoRect,
+  ): void {
+    const fb = person.face_bbox_frame;
+    if (!fb || fb.length < 4) return;
+    const [x1, y1, x2, y2] = this.normToPixel(fb, rect);
+    const sizeOk = (person.face_size_px ?? 0) >= this.thresholds.minFaceSizePx;
+    const cutOk = (person.face_cut_edges ?? []).length === 0;
+    ctx.strokeStyle = sizeOk && cutOk ? COLORS.gate_pass : COLORS.gate_fail;
+    ctx.lineWidth = 1.5;
     ctx.setLineDash([]);
     ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
   }
@@ -298,17 +327,23 @@ export class OverlayRenderer {
   }
 
   /**
-   * 人脸入库门槛实时读数: 尺寸(所有人) + 入库质量分(仅注意力目标, 服务端只给它算)。
-   * 过门槛绿、不过红, 帮用户调站位; 无脸的帧不显示。
+   * 人脸入库门槛实时读数: 贴边截断方向(有则红标) + 尺寸(所有人) + 入库质量分
+   * (仅注意力目标, 服务端只给它算)。过门槛绿、不过红, 帮用户调站位; 无脸的帧不显示。
    */
   private faceGateSegments(person: TrackedPerson): LabelSegment[] {
     const px = person.face_size_px ?? 0;
     if (px <= 0) return [];
     const { minFaceSizePx, faceQuality } = this.thresholds;
-    const segs: LabelSegment[] = [{
+    const segs: LabelSegment[] = [];
+    const cut = person.face_cut_edges ?? [];
+    if (cut.length > 0) {
+      const arrows = cut.map((e) => CUT_EDGE_ARROWS[e] ?? e).join("");
+      segs.push({ text: ` · 截断${arrows}`, color: COLORS.gate_fail });
+    }
+    segs.push({
       text: ` · ${px.toFixed(0)}px`,
       color: px >= minFaceSizePx ? COLORS.gate_pass : COLORS.gate_fail,
-    }];
+    });
     const q = person.enroll_face_quality;
     if (q != null) {
       segs.push({

@@ -28,6 +28,10 @@ export interface TrackedPerson {
   face_size_px?: number;
   /** 入库门槛用的 eDifFIQA-large 分，服务端只对注意力目标计算，其他人为 null */
   enroll_face_quality?: number | null;
+  /** 人脸框被画面边缘截断的方向（top/bottom/left/right 子集），非空的帧不入库；空 = 完整 */
+  face_cut_edges?: string[];
+  /** 人脸框 [x1, y1, x2, y2]，与 bbox 同坐标系（服务端处理帧）；null = 本帧无脸 */
+  face_bbox_frame?: number[] | null;
   is_current_target?: boolean;
 }
 
@@ -41,6 +45,8 @@ export interface RawTrackedPerson extends TrackedPerson {
     face_quality?: number;
     face_size_px?: number;
     enroll_face_quality?: number | null;
+    face_cut_edges?: string[];
+    face_bbox_frame?: number[] | null;
   };
   identity_result?: {
     person_id?: string | null;

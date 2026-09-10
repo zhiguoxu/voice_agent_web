@@ -66,6 +66,8 @@ function flattenPersons(raw: RawTrackedPerson[]): TrackedPerson[] {
         face_quality: p.person.face_quality,
         face_size_px: p.person.face_size_px,
         enroll_face_quality: p.person.enroll_face_quality,
+        face_cut_edges: p.person.face_cut_edges,
+        face_bbox_frame: p.person.face_bbox_frame,
         is_current_target: p.is_current_target,
       };
     }
