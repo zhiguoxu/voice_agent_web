@@ -3,7 +3,7 @@ import "./IdentityDebugDialog.css";
 
 /* ── 身份融合调试弹窗 ──
  * 点击轮次卡片右上角的说话人标签打开，展示该轮落库的 identity_debug：
- * 视觉/声纹各自的最像者与分数、镜头者声纹分、融合结论。
+ * 视觉/声纹各自的最像者与分数、声纹对全家每人的相似分、镜头者声纹分、融合结论。
  * 数据在 agent_server 融合时采集（resolve.build_identity_debug），
  * 这里只做展示，不再推导。
  */
@@ -49,6 +49,9 @@ export default function IdentityDebugDialog({ debug, conflict, suspected, names,
    * 这种仲裁场景计算它，其余为 null——null 显示为"未计算"，与 0 分区分） */
   const visionVoiceDiffer =
     vision.person_id && voice.top_person_id && vision.person_id !== voice.top_person_id;
+  /* 全家每个有声纹模板的成员的相似分，按分降序（后端已排序，这里再排一次不依赖
+   * JSON 键序）；该字段落库前的老轮次没有此键，列表不显示 */
+  const scoreRows = Object.entries(voice.scores ?? {}).sort((a, b) => b[1] - a[1]);
 
   return (
     <div className="identity-debug-overlay" onClick={onClose}>
@@ -83,6 +86,23 @@ export default function IdentityDebugDialog({ debug, conflict, suspected, names,
               </span>
             </div>
             <div className="kv"><label>净语音时长</label><span>{voice.net_speech_sec.toFixed(1)}s</span></div>
+            {scoreRows.length > 0 && (
+              <div className="kv voice-scores">
+                <label>全员相似分</label>
+                <ul>
+                  {scoreRows.map(([pid, s]) => (
+                    <li key={pid} className={pid === voice.top_person_id ? "top" : ""}>
+                      <span className="who">
+                        {personText(pid, names)}
+                        {pid === vision.person_id && <em>镜头里的人</em>}
+                      </span>
+                      <i className="bar"><b style={{ width: `${Math.max(0, Math.min(1, s)) * 100}%` }} /></i>
+                      <span className="score">{s.toFixed(3)}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
             {visionVoiceDiffer && (
               <div className="kv">
                 <label>镜头者声纹分</label>

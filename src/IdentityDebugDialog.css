@@ -109,3 +109,66 @@
 .identity-debug-body .kv span {
   word-break: break-all;
 }
+
+/* 全员相似分列表：每行 = 成员 + 分数条 + 分值，top-1 加粗 */
+.identity-debug-body .voice-scores ul {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.identity-debug-body .voice-scores li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0;
+}
+
+.identity-debug-body .voice-scores li.top {
+  font-weight: 600;
+}
+
+.identity-debug-body .voice-scores .who {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  word-break: normal;
+}
+
+.identity-debug-body .voice-scores .who em {
+  margin-left: 6px;
+  padding: 0 6px;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 400;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+
+.identity-debug-body .voice-scores .bar {
+  flex-shrink: 0;
+  width: 90px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--border);
+  overflow: hidden;
+}
+
+.identity-debug-body .voice-scores .bar b {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+
+.identity-debug-body .voice-scores .score {
+  flex-shrink: 0;
+  width: 44px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}

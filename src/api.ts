@@ -203,6 +203,9 @@ export interface IdentityDebug {
     net_speech_sec: number;
     top_person_id: string | null;
     top_score: number | null;
+    /** 本家每个有声纹模板的成员对本轮语音的相似分（person_id → 分，降序）；
+     *  声纹库为空/声音太短时为空对象，该字段落库前的老轮次没有此键 */
+    scores?: Record<string, number>;
   };
   /** 镜头里的人自己的声纹分（仅"视觉认出A+声纹top-1指向他人"的仲裁场景才有） */
   vision_person_voice_score: number | null;
