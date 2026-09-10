@@ -81,7 +81,9 @@ export default function IdentityDebugDialog({ debug, conflict, suspected, names,
               <label>判定</label>
               <span>
                 {voice.confidence
-                  ? `${voice.confidence === "high" ? "high（可信，可作兜底身份）" : "low（分数过线但不足采信）"}`
+                  ? `${voice.confidence === "high"
+                      ? "high（可信：视觉判陌生人时直接采纳，其余情形作疑似级兜底）"
+                      : "low（弱证据：仅视觉判陌生人时以疑似级采纳）"}`
                   : "无结论（未过阈值/声音太短/声纹库为空）"}
               </span>
             </div>
