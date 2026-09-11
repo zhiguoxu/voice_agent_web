@@ -2211,14 +2211,15 @@ export interface TaskParseResponse {
 export async function parseOneshotTask(
   text: string,
   taskType: TaskType = "ordinary",
-  /** 可选；带上才会把目标人物经花名册消解出 person_id（一设备一家庭） */
+  /** 可选；经 Device-Sn 头带上才会把目标人物经花名册消解出 person_id（一设备一家庭） */
   deviceSn = "",
 ): Promise<TaskParseResponse> {
   const body: Record<string, unknown> = { text, type: taskType };
-  if (deviceSn) body.deviceSn = deviceSn;
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (deviceSn) headers["Device-Sn"] = deviceSn;
   const res = await fetch("/api/agent/task/parse", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers,
     body: JSON.stringify(body),
   });
   if (!res.ok) {
