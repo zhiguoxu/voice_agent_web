@@ -978,6 +978,90 @@ export async function deleteVoiceprint(
   return res.json();
 }
 
+/** 一条声纹模板（正在参与比对），可回放产生它的录音 */
+export interface VoiceTemplateItem {
+  id: number;
+  /** reading=朗读录入 | auto=对话自动增量 | null=补列前的存量行（来源未知） */
+  source: "reading" | "auto" | null;
+  net_speech_sec: number;
+  /** 录音的 COS key（朗读: 那次采集的整段音频；自动: 那轮的输入语音），经
+   *  cosMediaUrl 换临时链接播放；留档是 best-effort，可能指向不存在的对象；null=未留档 */
+  audio_key: string | null;
+  /** 朗读录入那次采集的元数据；自动增量模板与存量行为 null */
+  capture_meta: VoiceCaptureMeta | null;
+  created_at: string | null;
+}
+
+/** 朗读录入采集的质量指标与送提取区间（与 audio_key 指向的 WAV 配套） */
+export interface VoiceCaptureMeta {
+  frames: number;
+  /** 整段采集音频时长（含等待期与停顿静音） */
+  duration_ms: number;
+  /** 语音响度（dBFS） */
+  speech_level_db: number;
+  /** 底噪（dBFS） */
+  noise_level_db: number;
+  snr_db: number;
+  /** WAV 里实际送去提取向量的区间 [start, end)（毫秒）；全程静音为 null */
+  embed_span_ms: [number, number] | null;
+}
+
+export interface VoiceTemplateListResult {
+  success: boolean;
+  /** ok | memory_disabled | person_not_found */
+  status: string;
+  person_id: string;
+  name: string;
+  /** 入库先后（旧→新） */
+  items: VoiceTemplateItem[];
+  message: string;
+}
+
+/** 列出成员的全部声纹模板（含来源与录音 key） */
+export async function fetchVoiceTemplates(
+  personId: string, deviceSn: string,
+): Promise<VoiceTemplateListResult> {
+  const res = await fetch(
+    `/api/agent/voice/templates/${encodeURIComponent(personId)}?device_sn=${encodeURIComponent(deviceSn)}`,
+  );
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || "获取声纹模板列表失败");
+  }
+  return res.json();
+}
+
+export interface VoiceTemplateDeleteResult {
+  success: boolean;
+  /** ok | memory_disabled | person_not_found | template_not_found */
+  status: string;
+  templates_left: number;
+  message: string;
+}
+
+/** 删除成员的一条声纹模板（只删模板不删录音，剩余模板照常参与比对） */
+export async function deleteVoiceTemplate(
+  personId: string, templateId: number, deviceSn: string,
+): Promise<VoiceTemplateDeleteResult> {
+  const res = await fetch(
+    `/api/agent/voice/templates/${encodeURIComponent(personId)}/${templateId}`
+    + `?device_sn=${encodeURIComponent(deviceSn)}`,
+    { method: "DELETE" },
+  );
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || "删除声纹模板失败");
+  }
+  return res.json();
+}
+
+/** COS 对象的播放/下载地址：经 voice_server 307 跳转到临时链接 */
+export function cosMediaUrl(key: string, download = false): string {
+  const sp = new URLSearchParams({ key });
+  if (download) sp.set("download", "true");
+  return `${CONVERSATIONS_API_BASE}/media?${sp}`;
+}
+
 /** 取消进行中的声纹录入（幂等，关闭录入对话框时调用） */
 export async function cancelVoiceEnroll(deviceSn: string): Promise<void> {
   const res = await fetch("/api/agent/voice/enroll/cancel", {
