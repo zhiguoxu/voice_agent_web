@@ -1438,6 +1438,17 @@ export async function fetchPersonConfig(): Promise<ServiceConfig> {
   return res.json();
 }
 
+/** family_memory2 记忆服务经 /api/memory 前缀代理（去掉 /memory，同 voice/console 规则）。
+    /api/config 与 voice/agent 同款全量脱敏 dump；在线编辑走 /api/memory/config/editable。 */
+export async function fetchMemoryConfig(): Promise<ServiceConfig> {
+  const res = await fetch("/api/memory/config");
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || "Failed to fetch family_memory config");
+  }
+  return res.json();
+}
+
 /* ── 拉流并发监控（person_id 同时开着多少路人脸识别视频流，「流量监控」页）── */
 
 /** 一路服务端拉流的快照（person_id StreamListItem，只声明 web 读取的字段） */
@@ -1590,13 +1601,14 @@ export async function fetchKeyExtractorConfig(): Promise<ServiceConfig> {
    编辑后的值存数据库，删除覆盖即恢复 yaml 原值。全部叶子配置可编辑
    （锁定项除外），编辑需口令（X-Config-Edit-Password 头，后端校验）。 */
 
-export type ConfigService = "voice" | "agent" | "console" | "person";
+export type ConfigService = "voice" | "agent" | "console" | "person" | "memory";
 
 const CONFIG_EDIT_PREFIX: Record<ConfigService, string> = {
   voice: "/api/voice/config/editable",
   agent: "/api/agent/config/editable",
   console: "/api/console/config/editable",
   person: "/person_id/api/config/editable",
+  memory: "/api/memory/config/editable",
 };
 
 /** 带 HTTP 状态码的错误（口令错误 401 需要单独识别以重新弹口令框） */
@@ -1672,10 +1684,11 @@ export async function deleteConfigOverride(
 const CONFIG_DEVICE_PREFIX: Record<ConfigService, string> = {
   voice: "/api/voice/config/devices",
   agent: "/api/agent/config/devices",
-  // console / person_id 没有按设备解析配置的消费链路，后端不开放任何设备级
+  // console / person_id / memory 没有按设备解析配置的消费链路，后端不开放任何设备级
   // 字段；端点存在但恒为空，设备覆盖面板也不查询它们
   console: "/api/console/config/devices",
   person: "/person_id/api/config/devices",
+  memory: "/api/memory/config/devices",
 };
 
 /** 设备视角的一个可编辑配置项。值来源三层：设备覆盖 → 全局生效值 → yaml 原值 */

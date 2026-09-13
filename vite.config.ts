@@ -14,6 +14,7 @@ export default defineConfig({
       //   /api/agent/*   → agent_server，原样透传（记忆/花名册等调试接口都在这个前缀下）
       //   /api/voice/*   → voice_server，去掉 /voice 前缀（后端路由仍是 /api/conversations 等）
       //   /api/console/* → console_server，去掉 /console 前缀（日志检索/实时流、对话实时 SSE、测试输入转发）
+      //   /api/memory/*  → family_memory2 记忆服务，去掉 /memory 前缀（配置查看/在线编辑 /api/config[/editable]）
       '/api/agent': {
         target: 'http://124.220.147.121:8018',
         changeOrigin: true,
@@ -27,6 +28,11 @@ export default defineConfig({
         target: 'http://124.220.147.121:8017',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api\/voice/, '/api'),
+      },
+      '/api/memory': {
+        target: 'http://124.220.147.121:8023',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/memory/, '/api'),
       },
       //   /person_id/*  → person_id 服务，去掉 /person_id 前缀
       //                    （REST /person_id/api/* 与实时视频 WebSocket /person_id/ws/vision 都走这一条）

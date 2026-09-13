@@ -4,6 +4,7 @@ import {
   fetchAgentConfig,
   fetchConsoleConfig,
   fetchPersonConfig,
+  fetchMemoryConfig,
   fetchEditableConfig,
   putConfigOverride,
   deleteConfigOverride,
@@ -50,6 +51,7 @@ const SERVICE_TABS: { key: ServiceTabKey; icon: string; label: string }[] = [
   { key: "voice", icon: "🎙️", label: "voice_server" },
   { key: "agent", icon: "🤖", label: "agent_server" },
   { key: "console", icon: "🖥️", label: "console_server" },
+  { key: "memory", icon: "🧠", label: "family_memory" },
   { key: "person", icon: "👁️", label: "person_id" },
   { key: "emb", icon: "🧮", label: "embedding" },
   { key: "keyext", icon: "🗝️", label: "key-extractor" },
@@ -61,6 +63,7 @@ const SERVER_NAMES: Record<ConfigService, string> = {
   agent: "agent_server",
   console: "console_server",
   person: "person_id",
+  memory: "family_memory2",
 };
 
 const SECTION_LABELS: Record<string, string> = {
@@ -84,8 +87,12 @@ const SECTION_LABELS: Record<string, string> = {
   moderation: "输出侧内容风控",
   auto_stream: "摄像头自动拉流",
   voice_embed: "声纹提取",
+  memory_server: "记忆服务摄取信号",
   // console_server (日志聚合) 的顶层配置段
   log_stream: "日志聚合 Stream",
+  // family_memory2 (记忆服务) 的顶层配置段(memory 段复用上面的「记忆系统」)
+  conversation_db_url: "会话库地址(只读事实源)",
+  live_namespace: "环境命名空间",
   // person_id (视觉识别) 服务的顶层配置段
   hardware: "硬件与计算设备",
   detection: "检测 (YOLO)",
@@ -865,17 +872,19 @@ function DeviceOverridePanel({
   );
 }
 
-/** 顶部服务启动时间状态条：一眼看到 voice / agent / console / person 与记忆 GPU 服务是否在线与上次启动 */
+/** 顶部服务启动时间状态条：一眼看到 voice / agent / console / memory / person 与记忆 GPU 服务是否在线与上次启动 */
 function ServiceStartStrip({
   voice,
   agent,
   consoleCfg,
+  memory,
   person,
   emb,
   keyExt,
   voiceError,
   agentError,
   consoleError,
+  memoryError,
   personError,
   embError,
   keyExtError,
@@ -883,12 +892,14 @@ function ServiceStartStrip({
   voice: ServiceConfig | null;
   agent: ServiceConfig | null;
   consoleCfg: ServiceConfig | null;
+  memory: ServiceConfig | null;
   person: ServiceConfig | null;
   emb: ServiceConfig | null;
   keyExt: ServiceConfig | null;
   voiceError: string | null;
   agentError: string | null;
   consoleError: string | null;
+  memoryError: string | null;
   personError: string | null;
   embError: string | null;
   keyExtError: string | null;
@@ -903,6 +914,7 @@ function ServiceStartStrip({
     { key: "voice", icon: "🎙️", title: "voice_server", data: voice, error: voiceError },
     { key: "agent", icon: "🤖", title: "agent_server", data: agent, error: agentError },
     { key: "console", icon: "🖥️", title: "console_server", data: consoleCfg, error: consoleError },
+    { key: "memory", icon: "🧠", title: "family_memory", data: memory, error: memoryError },
     { key: "person", icon: "👁️", title: "person_id", data: person, error: personError },
     { key: "emb", icon: "🧮", title: "embedding", data: emb, error: embError },
     { key: "keyext", icon: "🗝️", title: "key-extractor", data: keyExt, error: keyExtError },
@@ -948,10 +960,13 @@ export function ConfigView() {
   const [agent, setAgent] = useState<ServiceConfig | null>(null);
   const [consoleCfg, setConsoleCfg] = useState<ServiceConfig | null>(null);
   const [person, setPerson] = useState<ServiceConfig | null>(null);
+  /* family_memory2 记忆服务：经 /api/memory 前缀代理，与 voice/agent 同款可编辑体系 */
+  const [memory, setMemory] = useState<ServiceConfig | null>(null);
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const [agentError, setAgentError] = useState<string | null>(null);
   const [consoleError, setConsoleError] = useState<string | null>(null);
   const [personError, setPersonError] = useState<string | null>(null);
+  const [memoryError, setMemoryError] = useState<string | null>(null);
   /* 记忆 GPU 服务（嵌入/key 抽取）：经 nginx 前缀代理直连各自 /api/config，
      与 voice/agent 同款「拿到配置即在线」探活 */
   const [emb, setEmb] = useState<ServiceConfig | null>(null);
@@ -964,6 +979,7 @@ export function ConfigView() {
   const [agentEditable, setAgentEditable] = useState<Map<string, EditableField> | null>(null);
   const [consoleEditable, setConsoleEditable] = useState<Map<string, EditableField> | null>(null);
   const [personEditable, setPersonEditable] = useState<Map<string, EditableField> | null>(null);
+  const [memoryEditable, setMemoryEditable] = useState<Map<string, EditableField> | null>(null);
   /* 保存/恢复后的提示条（非 hot 项提示需要重启） */
   const [notice, setNotice] = useState<string | null>(null);
   /* 各服务的配置卡用 tab 切换展示（并列多卡信息过密）；选中项跨会话记住 */
@@ -983,9 +999,10 @@ export function ConfigView() {
     setAgentError(null);
     setConsoleError(null);
     setPersonError(null);
+    setMemoryError(null);
     setEmbError(null);
     setKeyExtError(null);
-    const [v, a, c, p, ve, ae, ce, pe, em, ke] = await Promise.allSettled([
+    const [v, a, c, p, ve, ae, ce, pe, em, ke, m, me] = await Promise.allSettled([
       fetchVoiceConfig(),
       fetchAgentConfig(),
       fetchConsoleConfig(),
@@ -996,6 +1013,8 @@ export function ConfigView() {
       fetchEditableConfig("person"),
       fetchEmbeddingConfig(),
       fetchKeyExtractorConfig(),
+      fetchMemoryConfig(),
+      fetchEditableConfig("memory"),
     ]);
     if (v.status === "fulfilled") setVoice(v.value);
     else setVoiceError(v.reason?.message || String(v.reason));
@@ -1013,6 +1032,9 @@ export function ConfigView() {
     else setEmbError(em.reason?.message || String(em.reason));
     if (ke.status === "fulfilled") setKeyExt(ke.value);
     else setKeyExtError(ke.reason?.message || String(ke.reason));
+    if (m.status === "fulfilled") setMemory(m.value);
+    else setMemoryError(m.reason?.message || String(m.reason));
+    setMemoryEditable(me.status === "fulfilled" ? new Map(me.value.items.map((f) => [f.path, f])) : null);
     setLoading(false);
   }, []);
 
@@ -1062,6 +1084,7 @@ export function ConfigView() {
   const agentEdit = makeEditCtx("agent", agentEditable);
   const consoleEdit = makeEditCtx("console", consoleEditable);
   const personEdit = makeEditCtx("person", personEditable);
+  const memoryEdit = makeEditCtx("memory", memoryEditable);
 
   /* 提示词面板的设备级保存/恢复：与设备覆盖面板同一口令门、同款提示语；
      改完刷新全局视图（「N 台设备覆盖」计数会变）并递增信号让设备覆盖面板重载总览 */
@@ -1104,12 +1127,14 @@ export function ConfigView() {
         voice={voice}
         agent={agent}
         consoleCfg={consoleCfg}
+        memory={memory}
         person={person}
         emb={emb}
         keyExt={keyExt}
         voiceError={voiceError}
         agentError={agentError}
         consoleError={consoleError}
+        memoryError={memoryError}
         personError={personError}
         embError={embError}
         keyExtError={keyExtError}
@@ -1176,6 +1201,17 @@ export function ConfigView() {
             error={consoleError}
             loading={loading}
             edit={consoleEdit}
+          />
+        )}
+        {svcTab === "memory" && (
+          <ServiceCard
+            icon="🧠"
+            title="family_memory"
+            subtitle="记忆抽取服务：按游标读会话库 → 抽取 LLM / 嵌入 → 独立记忆库；voice 经 notify/tick/flush 触发"
+            data={memory}
+            error={memoryError}
+            loading={loading}
+            edit={memoryEdit}
           />
         )}
         {svcTab === "person" && (
