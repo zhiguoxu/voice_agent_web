@@ -42,7 +42,6 @@ import { RawAudioDialog } from "./RawAudioDialog";
 import { MemoryRecallPanel } from "./MemoryRecallPanel";
 import { ConfigView } from "./ConfigView";
 import { ApiTestView } from "./ApiTestView";
-import { SweepMonitor } from "./SweepMonitor";
 import { TrafficMonitor } from "./TrafficMonitor";
 import { VideosView } from "./VideosView";
 import "./App.css";
@@ -292,7 +291,7 @@ function ReplayModerationPanel({ moderation }: { moderation: ReplayModeration })
 }
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<"conversations" | "deviceControl" | "logs" | "sweep" | "traffic" | "vision" | "videos" | "apiTest" | "config">("conversations");
+  const [activeTab, setActiveTab] = useState<"conversations" | "deviceControl" | "logs" | "traffic" | "vision" | "videos" | "apiTest" | "config">("conversations");
   /* 对话分析页跳转到日志页时预填的精确过滤条件（一次性，LogMonitor 挂载后消费） */
   const [logJumpFilter, setLogJumpFilter] = useState<LogJumpFilter | null>(null);
   const openLogsWith = (filter: LogJumpFilter) => {
@@ -1096,13 +1095,6 @@ export default function App() {
             onClick={() => setActiveTab('logs')}
           >
             后端日志
-          </button>
-          <button
-            className={`main-tab ${activeTab === 'sweep' ? 'active' : ''}`}
-            onClick={() => setActiveTab('sweep')}
-            data-tip="记忆摄取兜底扫描的吞吐水位趋势"
-          >
-            摄取水位
           </button>
           <button
             className={`main-tab ${activeTab === 'traffic' ? 'active' : ''}`}
@@ -2158,8 +2150,6 @@ export default function App() {
       </>
       ) : activeTab === 'deviceControl' ? (
         <DeviceControl sessions={sessions} />
-      ) : activeTab === 'sweep' ? (
-        <SweepMonitor />
       ) : activeTab === 'traffic' ? (
         <TrafficMonitor />
       ) : activeTab === 'vision' ? (

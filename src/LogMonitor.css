@@ -359,7 +359,7 @@
   background: rgba(251, 191, 36, 0.14);
 }
 
-/* family_memory2 记忆服务(source=memory) */
+/* family_memory 记忆服务(source=memory) */
 .src-memory {
   color: var(--cyan, #22d3ee);
   background: rgba(34, 211, 238, 0.14);

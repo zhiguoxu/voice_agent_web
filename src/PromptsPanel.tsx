@@ -268,14 +268,19 @@ function PromptItem({
   );
 }
 
-/** 提示词配置面板：汇总展示 agent_server 用到的全部 LLM 提示词模板。
-    yaml 来源且在可编辑白名单里的模板支持在线编辑（配置 DB 覆盖层）。
+/** 提示词配置面板：汇总展示 agent_server 用到的全部 LLM 提示词模板，以及记忆服务
+    (family_memory) 的抽取/日程模板（service="memory"，由 agent_server 一并返回）。
+    yaml 来源且在对应服务可编辑白名单里的模板支持在线编辑（配置 DB 覆盖层）：
+    agent 模板写 agent 的覆盖，memory 模板写记忆服务的覆盖（不支持按设备覆盖）。
     作用范围可在「全局」与单台设备间切换：选中设备后展示该设备视角的生效模板，
     保存即写该设备的定向覆盖（设备覆盖 > 全局覆盖 > yaml），其他设备不受影响。 */
 export function PromptsPanel({
   editFields,
   onSaveOverride,
   onRevertOverride,
+  memoryEditFields,
+  onSaveMemoryOverride,
+  onRevertMemoryOverride,
   onSaveDeviceOverride,
   onRevertDeviceOverride,
 }: {
@@ -283,6 +288,10 @@ export function PromptsPanel({
   editFields?: Map<string, EditableField>;
   onSaveOverride?: SaveOverrideFn;
   onRevertOverride?: RevertOverrideFn;
+  /** 记忆服务可编辑白名单与保存/恢复；未提供时记忆模板纯只读 */
+  memoryEditFields?: Map<string, EditableField>;
+  onSaveMemoryOverride?: SaveOverrideFn;
+  onRevertMemoryOverride?: RevertOverrideFn;
   /** 设备级保存/恢复；未提供时设备视角纯只读 */
   onSaveDeviceOverride?: SaveDeviceOverrideFn;
   onRevertDeviceOverride?: RevertDeviceOverrideFn;
@@ -387,11 +396,25 @@ export function PromptsPanel({
         <div className="cfg-prompt-list">
           {prompts.map((p) => {
             const path = p.config_path;
+            const isMemory = p.service === "memory";
             let editState: PromptEditState | undefined;
             let deviceLocked = false;
             let onSave: ((value: string) => Promise<void>) | undefined;
             let onRevert: (() => Promise<void>) | undefined;
-            if (deviceSn) {
+            if (isMemory) {
+              /* 记忆服务的模板: 全局编辑走记忆服务的覆盖层; 设备视角只读(不支持按设备覆盖) */
+              const f = path ? memoryEditFields?.get(path) : undefined;
+              deviceLocked = Boolean(deviceSn) && path != null;
+              if (path && f && !deviceSn) {
+                editState = { overridden: f.overridden, globalOverridden: false };
+                if (onSaveMemoryOverride) {
+                  onSave = async (v) => { await onSaveMemoryOverride(path, v); await load(); };
+                }
+                if (onRevertMemoryOverride) {
+                  onRevert = async () => { await onRevertMemoryOverride(path); await load(); };
+                }
+              }
+            } else if (deviceSn) {
               const f = path ? deviceFields?.get(path) : undefined;
               deviceLocked = path != null && deviceFields != null && f == null;
               if (path && f) {

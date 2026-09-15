@@ -126,7 +126,6 @@ export interface Session {
   is_online: boolean;
 }
 
-/** 记忆检索计划（family_memory.RecallPlan，查询理解的输出） */
 /** 双塔 top 候选（纯调试）：服务端原始 key + 余弦，key 为归一到注册表的结果（null = 被滤掉） */
 export interface KeyCandidate {
   raw: string;
@@ -134,9 +133,12 @@ export interface KeyCandidate {
   key: string | null;
 }
 
+/** 记忆检索计划（family_memory RecallPlan，查询理解的输出）。
+ *  记忆服务的召回面向全家、不按人过滤：subjects / reverse / confidence 只出现在
+ *  agent 内嵌召回时期落库的旧 trace 里，新 trace 没有这三个字段。 */
 export interface RecallPlan {
-  subjects: string[];
-  /** 相关 key 集合（可含 root，召回端按注册表展开；空 = 纯语义 A 类检索）。
+  subjects?: string[];
+  /** 相关 key 集合（可含 root，召回端按注册表展开；空 = 本轮无可检索维度）。
    *  升级前落库的旧 trace 无此字段（当时是单数 key + scope，均已裁撤）。 */
   keys?: string[];
   /** 本轮 query 自身解出的 key（未融合）。keys 中不被 own_keys 覆盖的项 =
@@ -146,13 +148,13 @@ export interface RecallPlan {
   /** 双塔原始 top5 候选（仅双塔被实际调用且有应答的轮次非空；旧 trace 无此字段） */
   key_candidates?: KeyCandidate[];
   extremum: boolean;
-  reverse: boolean;
+  reverse?: boolean;
   temporal: string;
-  confidence: string;
+  confidence?: string;
   topic: string;
 }
 
-/** 一条召回的记忆条目（family_memory.RecalledMemory；succ 为变更链后继） */
+/** 一条召回的记忆条目（family_memory RecalledMemory；succ 为变更链后继） */
 export interface RecalledMemory {
   memory_id: number;
   content: string;
@@ -166,14 +168,17 @@ export interface RecalledMemory {
   superseded_at: string | null;
   created_at: string | null;
   due_at: string | null;
-  /** 召回打分（与查询向量点积/字面兜底）；链后继补回的行无分 */
+  /** 召回打分（查询对“主体名字 + tag.value”的字面覆盖率）；链后继补回的行无分 */
   score: number | null;
 }
 
-/** 一轮对话的记忆召回过程记录（family_memory.RecallTrace，调试用） */
+/** 一轮对话的记忆召回过程记录（family_memory RecallTrace，调试用）。
+ *  agent 经记忆服务 HTTP 取回后随轮次落库；服务不可达时 agent 落同形的降级
+ *  trace（plan=null、records=[]、block=""、error 带传输层原因）。 */
 export interface MemoryRecall {
   query: string;
-  asker_id: string | null;
+  /** 仅旧 trace（agent 内嵌召回时期）有；记忆服务的召回不带提问者 */
+  asker_id?: string | null;
   plan: RecallPlan | null;
   records: RecalledMemory[];
   block: string;
@@ -1304,39 +1309,6 @@ export async function fetchMemoryIngestRuns(
   return res.json();
 }
 
-/** 一轮记忆摄取兜底扫描的水位采样（字段口径见后端 MemorySweepSampleORM）。
- *  容量模型：稳态要求 R·t < C，等价于「排空耗时 < 扫描周期」（水位 < 1）。 */
-export interface SweepSample {
-  id: number;
-  created_at: string | null;
-  instance_id: string;      // 当时持扫描租约的实例，换人说明发生过接管
-  devices: number;          // 已跟踪设备数
-  candidates: number;       // 批量预筛后剩下的候选数
-  planned: number;          // 规划出批的设备数
-  batches: number;          // 真派出的批数 = N
-  prefilter_ms: number;
-  plan_ms: number;          // 含预筛，派完即止（不含抽取）
-  drain_ms: number | null;  // = D；null 表示没排空就被下一轮换了代
-  inflight_left: number;    // 换代时仍在途的批数，> 0 即超载
-  t_mean_ms: number | null; // 本轮单批服务耗时 = t（排队时间不计，归 D）
-  t_max_ms: number | null;
-  t_count: number;
-  concurrency: number;      // = C（当时生效值）
-  interval_sec: number;     // = I（当时生效值）
-}
-
-/** 最近 N 小时的扫描水位采样，按时间正序（全局，不分设备）。 */
-export async function fetchSweepSamples(
-  hours: number,
-): Promise<{ enabled: boolean; hours?: number; items: SweepSample[] }> {
-  const res = await fetch(`/api/agent/memory/sweep_samples?hours=${hours}`);
-  if (!res.ok) {
-    const data = await res.json().catch(() => ({}));
-    throw new Error(data.detail || "Failed to fetch sweep samples");
-  }
-  return res.json();
-}
-
 /** 一个上游一分钟的访问计数（后端 Redis 分钟桶，所有 voice 实例全局累加）。
  *  各上游只有自己注册过的口径（见后端 traffic_metrics.PROVIDERS），
  *  没有的字段缺省。 */
@@ -1395,7 +1367,7 @@ export interface ServiceConfig {
   host?: string | null;
   /** 本进程监听端口 */
   port?: number | null;
-  /** 本进程依赖的内部 packages 版本（如 common / session_store / family_memory） */
+  /** 本进程依赖的内部 packages 版本（如 common / session_store） */
   packages?: Record<string, string>;
   config: Record<string, unknown>;
 }
@@ -1438,7 +1410,7 @@ export async function fetchPersonConfig(): Promise<ServiceConfig> {
   return res.json();
 }
 
-/** family_memory2 记忆服务经 /api/memory 前缀代理（去掉 /memory，同 voice/console 规则）。
+/** family_memory 记忆服务经 /api/memory 前缀代理（去掉 /memory，同 voice/console 规则）。
     /api/config 与 voice/agent 同款全量脱敏 dump；在线编辑走 /api/memory/config/editable。 */
 export async function fetchMemoryConfig(): Promise<ServiceConfig> {
   const res = await fetch("/api/memory/config");
@@ -1783,9 +1755,13 @@ export interface PromptTemplateInfo {
   template: string;            // 模板原文（占位符未填充）
   /** 启动时一次性渲染后的实际提示词（仅码表类静态占位符的模板有） */
   rendered: string | null;
+  /** 模板归属: agent=agent_server（编辑走 agent 可编辑配置）；
+      memory=记忆服务 family_memory（编辑走 /api/memory/config/editable，不支持按设备覆盖） */
+  service?: "agent" | "memory";
 }
 
-/** deviceSn 非空时返回该设备视角的生效模板（叠加其设备级覆盖），空串即全局生效值 */
+/** deviceSn 非空时返回该设备视角的生效模板（叠加其设备级覆盖），空串即全局生效值；
+    记忆服务的模板由 agent_server 从 family_memory 取来一并返回（service="memory"） */
 export async function fetchPrompts(deviceSn = ""): Promise<PromptTemplateInfo[]> {
   const qs = deviceSn ? `?${new URLSearchParams({ device_sn: deviceSn })}` : "";
   const res = await fetch(`/api/agent/prompts${qs}`);

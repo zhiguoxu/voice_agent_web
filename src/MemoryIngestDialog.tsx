@@ -5,7 +5,7 @@ import "./MemoryIngestDialog.css";
 
 const PAGE_SIZE = 20;
 
-/* 触发原因（取值见 family_memory.models.MemoryIngestRunORM 注释） */
+/* 触发原因（取值见 family_memory db/models.py MemoryIngestRunORM 注释） */
 const TRIGGER_LABELS: Record<string, string> = {
   batch_full: "攒满批",
   idle_timeout: "静默超时",

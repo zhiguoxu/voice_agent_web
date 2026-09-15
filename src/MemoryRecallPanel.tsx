@@ -4,7 +4,9 @@ import "./MemoryRecallPanel.css";
 
 /** 轮次详情面板中的「记忆召回」区块：展示本轮召回的检索计划、命中条目
  *  （含分数与 A/B 池归属）、最终注入提示词的记忆块与各阶段耗时，
- *  用于调试记忆系统是否按预期工作。数据源是随轮次持久化的 RecallTrace。 */
+ *  用于调试记忆系统是否按预期工作。数据源是随轮次持久化的 RecallTrace
+ *  （agent 经记忆服务 family_memory 的 /api/recall/block 取回）；同一面板也要能
+ *  展示 agent 内嵌召回时期落库的旧 trace（多 subjects/reverse/confidence 等字段）。 */
 
 /** 变更链摊平：召回结果只含链头，succ 指针串起旧→新的替代历史 */
 function flattenChain(head: RecalledMemory): RecalledMemory[] {
@@ -38,10 +40,13 @@ function PlanChips({ plan, extremumFallback, names }: {
 }) {
   return (
     <div className="recall-plan">
-      <span className="recall-chip subjects" data-tip={`检索主体（person_id: ${plan.subjects.join(", ") || "无"}）`}>
-        主体: {plan.subjects.length ? plan.subjects.map((p) => personLabel(p, names)).join("、") : "—"}
-      </span>
-      <span className="recall-chip key" data-tip="命中的 key 注册表节点（可多个；root 按子树展开，叶子取正负镜像对；空 = 纯语义 A 类检索）。虚线下划线 = 上下文融合从上文继承的 key">
+      {/* 主体只有 agent 内嵌召回时期的旧 trace 才有；记忆服务的召回面向全家、不按人过滤 */}
+      {plan.subjects && (
+        <span className="recall-chip subjects" data-tip={`检索主体（person_id: ${plan.subjects.join(", ") || "无"}）`}>
+          主体: {plan.subjects.length ? plan.subjects.map((p) => personLabel(p, names)).join("、") : "—"}
+        </span>
+      )}
+      <span className="recall-chip key" data-tip="命中的 key 注册表节点（可多个；root 按子树展开，叶子取正负镜像对；空 = 本轮无可检索维度，不召回）。虚线下划线 = 上下文融合从上文继承的 key">
         key: {plan.keys?.length ? plan.keys.map((k, i) => (
           <Fragment key={k}>
             {i > 0 && "、"}
@@ -88,7 +93,7 @@ function RecordRow({ record }: { record: RecalledMemory }) {
           {record.tag ? "B" : "A"}
         </span>
         {record.score != null && (
-          <span className="recall-score" data-tip="召回打分（与查询向量的点积；嵌入服务故障时为字面覆盖率兜底分）">
+          <span className="recall-score" data-tip="召回打分（查询对“主体名字 + tag.value”的字面覆盖率）">
             {record.score.toFixed(3)}
           </span>
         )}

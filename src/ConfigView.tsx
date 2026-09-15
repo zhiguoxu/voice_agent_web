@@ -63,7 +63,7 @@ const SERVER_NAMES: Record<ConfigService, string> = {
   agent: "agent_server",
   console: "console_server",
   person: "person_id",
-  memory: "family_memory2",
+  memory: "family_memory",
 };
 
 const SECTION_LABELS: Record<string, string> = {
@@ -90,7 +90,7 @@ const SECTION_LABELS: Record<string, string> = {
   memory_server: "记忆服务摄取信号",
   // console_server (日志聚合) 的顶层配置段
   log_stream: "日志聚合 Stream",
-  // family_memory2 (记忆服务) 的顶层配置段(memory 段复用上面的「记忆系统」)
+  // family_memory (记忆服务) 的顶层配置段(memory 段复用上面的「记忆系统」)
   conversation_db_url: "会话库地址(只读事实源)",
   live_namespace: "环境命名空间",
   // person_id (视觉识别) 服务的顶层配置段
@@ -960,7 +960,7 @@ export function ConfigView() {
   const [agent, setAgent] = useState<ServiceConfig | null>(null);
   const [consoleCfg, setConsoleCfg] = useState<ServiceConfig | null>(null);
   const [person, setPerson] = useState<ServiceConfig | null>(null);
-  /* family_memory2 记忆服务：经 /api/memory 前缀代理，与 voice/agent 同款可编辑体系 */
+  /* family_memory 记忆服务：经 /api/memory 前缀代理，与 voice/agent 同款可编辑体系 */
   const [memory, setMemory] = useState<ServiceConfig | null>(null);
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const [agentError, setAgentError] = useState<string | null>(null);
@@ -1153,6 +1153,9 @@ export function ConfigView() {
         editFields={agentEditable ?? undefined}
         onSaveOverride={agentEdit?.onSave}
         onRevertOverride={agentEdit?.onRevert}
+        memoryEditFields={memoryEditable ?? undefined}
+        onSaveMemoryOverride={memoryEdit?.onSave}
+        onRevertMemoryOverride={memoryEdit?.onRevert}
         onSaveDeviceOverride={saveAgentDeviceOverride}
         onRevertDeviceOverride={revertAgentDeviceOverride}
       />
