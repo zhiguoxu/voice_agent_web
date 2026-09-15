@@ -860,6 +860,28 @@ body {
     color: var(--amber, #f59e0b);
 }
 
+.badge.kind {
+    flex-shrink: 0;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    background: var(--bg-card-hover);
+    color: var(--text-secondary);
+}
+
+.badge.kind-chat {
+    background: rgba(108, 99, 255, 0.12);
+    color: var(--accent);
+}
+
+.badge.kind-wake {
+    background: rgba(251, 191, 36, 0.12);
+    color: var(--orange);
+}
+
+.badge.kind-noise {
+    background: rgba(148, 152, 174, 0.18);
+    color: var(--text-secondary);
+}
+
 /* 风控拦截的原始输出：划线置灰，与替代话术并排区分展示 */
 .moderation-original {
     text-decoration: line-through;

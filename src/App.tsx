@@ -57,6 +57,25 @@ function formatTime(iso: string | null) {
   return new Date(iso).toLocaleString("zh-CN");
 }
 
+/* conversation_turns.kind：卡片徽标与详情面板共用文案 */
+const TURN_KIND_TIPS: Record<string, string> = {
+  chat: "对话轮：进 LLM 上下文，也参与记忆抽取",
+  wake: "唤醒记录：只进控制台调试流，不进 LLM 上下文",
+  noise: "拾音未识别：VAD 判有人声但 ASR 为空，语音留档可回放",
+};
+
+function TurnKindBadge({ kind }: { kind: string | null | undefined }) {
+  if (!kind) return null;
+  return (
+    <span
+      className={`badge kind kind-${kind}`}
+      data-tip={TURN_KIND_TIPS[kind] ?? "轮次类别（conversation_turns.kind）"}
+    >
+      {kind}
+    </span>
+  );
+}
+
 type ConfirmState = {
   message: string;
   resolve: (ok: boolean) => void;
@@ -1423,6 +1442,7 @@ export default function App() {
                     onClick={() => setSelectedTurn(t)}
                   >
                     <span className="wake-icon">🔔</span>
+                    <TurnKindBadge kind={t.kind} />
                     <span className="wake-text">
                       {/* 应答音由客户端本地播放, 新的唤醒行没有 reply_text/error_message,
                           只展示"设备唤醒"; 带应答/失败信息的是云端播应答时期的存量行 */}
@@ -1460,6 +1480,7 @@ export default function App() {
                     onClick={() => setSelectedTurn(t)}
                   >
                     <span className="wake-icon">🔇</span>
+                    <TurnKindBadge kind={t.kind} />
                     <span className="wake-text"
                           data-tip="VAD 判定有人声但 ASR 识别结果为空（误触发/环境噪音/听不清）">
                       拾音未识别
@@ -1540,6 +1561,7 @@ export default function App() {
                       </div>
                     )}
                     <div className="turn-footer">
+                      <TurnKindBadge kind={t.kind} />
                       {t.intent_source && (
                         <span className={`badge ${t.intent_source}`}>
                           {t.intent_source}
@@ -1656,6 +1678,7 @@ export default function App() {
                       )}
                     </div>
                     <div className="turn-footer">
+                      <TurnKindBadge kind={lt.kind || "chat"} />
                       {lt.intent_source && (
                         <span className={`badge ${lt.intent_source}`}>
                           {lt.intent_source}
@@ -1783,6 +1806,14 @@ export default function App() {
               <section className="detail-section">
                 <h4>ℹ️ 元信息</h4>
                 <div className="meta-grid">
+                  <div className="meta-intent-row">
+                    <label>kind</label>
+                    <span>
+                      <code data-tip={TURN_KIND_TIPS[selectedTurn.kind] ?? "轮次类别（conversation_turns.kind）"}>
+                        {selectedTurn.kind || "-"}
+                      </code>
+                    </span>
+                  </div>
                   <div className="meta-intent-row">
                     <label>说话人</label>
                     <span>
