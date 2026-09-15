@@ -159,6 +159,23 @@
   user-select: none;
 }
 
+/* ── 按成员筛选工具条（与清除条同形，放在它上方；下拉复用 memory-erase-select） ── */
+.memory-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  margin-bottom: 10px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  flex-wrap: wrap;
+}
+
+.memory-filter-clear {
+  padding: 4px 10px;
+}
+
 /* ── 记忆清除工具条（三个粒度：单条 / 按成员 / 整设备） ── */
 .memory-erase-bar {
   display: flex;

@@ -176,6 +176,8 @@ function KeyNodeView({ node, keyMeta, ctl }: {
  * 从会话标题行的「🧠 记忆查询」按钮打开（花名册按钮之后）。
  * B 类（key 非空，走确定性状态机）按 key 层级树展示；
  * A 类（key 为空，纯语义、随对话量线性增长）分页表展示，最新在前。
+ * 「按成员筛选」下拉同时作用于 B/A 两段：只看该成员作为主体的条目（含与他人
+ * 共享的条目；「全家」= 家庭整体条目），筛选在服务端做，A 类 total 同步收窄。
  * 记忆清除（三个粒度，均为物理删除不可恢复）：
  * 单条（行尾 🗑，变更历史链上的条目被引用时后端拒绝并提示）、
  * 按成员（含与他人共享的条目整条删）、整设备（条目 + 抽取日志全清）。
@@ -188,6 +190,8 @@ export function MemoryDialog({ deviceSn, onClose }: { deviceSn: string; onClose:
   const [error, setError] = useState<string | null>(null);
   const [includeSuperseded, setIncludeSuperseded] = useState(false);
   const [aPage, setAPage] = useState(1);
+  /* 按成员筛选的 person_id（"" = 全部成员，"family" = 家庭整体条目） */
+  const [filterPid, setFilterPid] = useState("");
 
   /* ── 记忆清除状态（两步确认 + 结果提示） ── */
   const [erasePid, setErasePid] = useState("");
@@ -201,8 +205,8 @@ export function MemoryDialog({ deviceSn, onClose }: { deviceSn: string; onClose:
     setError(null);
     try {
       const [b, a, roster] = await Promise.all([
-        fetchMemoryBTree(deviceSn, includeSuperseded),
-        fetchMemoryAItems(deviceSn, aPage, A_PAGE_SIZE),
+        fetchMemoryBTree(deviceSn, includeSuperseded, filterPid),
+        fetchMemoryAItems(deviceSn, aPage, A_PAGE_SIZE, filterPid),
         fetchRoster(deviceSn),
       ]);
       setBData(b);
@@ -213,7 +217,13 @@ export function MemoryDialog({ deviceSn, onClose }: { deviceSn: string; onClose:
     } finally {
       setLoading(false);
     }
-  }, [deviceSn, includeSuperseded, aPage]);
+  }, [deviceSn, includeSuperseded, aPage, filterPid]);
+
+  /* 切换筛选成员时 A 类回到第 1 页：筛选后总页数收窄，停在原页码可能越界变空表 */
+  const changeFilter = (pid: string) => {
+    setFilterPid(pid);
+    setAPage(1);
+  };
 
   useEffect(() => {
     load();
@@ -272,6 +282,12 @@ export function MemoryDialog({ deviceSn, onClose }: { deviceSn: string; onClose:
   const erasePidLabel = erasePid === "family" ? "全家"
     : eraseTarget ? memberLabel(eraseTarget) : erasePid;
 
+  const filterTarget = members.find((m) => m.person_id === filterPid);
+  const filterLabel = filterPid === "family" ? "全家"
+    : filterTarget ? memberLabel(filterTarget) : filterPid;
+  /* 空态措辞跟随筛选范围：筛了成员就说"该成员"，否则说"该家庭" */
+  const scopeLabel = filterPid ? filterLabel : "该家庭";
+
   const enabled = bData?.enabled ?? aData?.enabled;
   const tree = bData ? buildKeyTree(bData.items) : [];
   const aTotalPages = aData ? Math.max(1, Math.ceil(aData.total / aData.page_size)) : 1;
@@ -294,6 +310,32 @@ export function MemoryDialog({ deviceSn, onClose }: { deviceSn: string; onClose:
           {bData && !bData.enabled && (
             <div className="roster-disabled">
               记忆系统未启用（memory.enabled=false），无记忆数据。
+            </div>
+          )}
+
+          {enabled && (
+            <div className="memory-filter-bar">
+              <span className="memory-erase-title"
+                    data-tip="只看该成员作为主体的记忆（含与他人共享的条目）；「全家」= 主体为家庭整体的条目。同时作用于下方 B 类树与 A 类表">
+                👤 按成员筛选
+              </span>
+              <select
+                className="memory-erase-select"
+                value={filterPid}
+                onChange={(e) => changeFilter(e.target.value)}
+              >
+                <option value="">全部成员</option>
+                {members.map((m) => (
+                  <option key={m.person_id} value={m.person_id}>{memberLabel(m)}</option>
+                ))}
+                <option value="family">全家（家庭整体条目）</option>
+              </select>
+              {filterPid && (
+                <button className="roster-cancel-btn memory-filter-clear"
+                        onClick={() => changeFilter("")} data-tip="清除筛选，显示全部成员">
+                  × 清除筛选
+                </button>
+              )}
             </div>
           )}
 
@@ -372,7 +414,7 @@ export function MemoryDialog({ deviceSn, onClose }: { deviceSn: string; onClose:
                   ))}
                 </div>
               ) : (
-                <div className="empty">该家庭暂无 B 类记忆</div>
+                <div className="empty">{scopeLabel}暂无 B 类记忆</div>
               )}
             </>
           )}
@@ -437,7 +479,7 @@ export function MemoryDialog({ deviceSn, onClose }: { deviceSn: string; onClose:
                   </div>
                 </>
               ) : (
-                <div className="empty">该家庭暂无 A 类记忆</div>
+                <div className="empty">{scopeLabel}暂无 A 类记忆</div>
               )}
             </>
           )}

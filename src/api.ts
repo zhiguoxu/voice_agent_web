@@ -1118,12 +1118,16 @@ export interface MemoryAPage {
   page_size: number;
 }
 
-/** B 类记忆全量（每家条数有界），树由前端按 key 点分路径构建 */
+/**
+ * B 类记忆全量（每家条数有界），树由前端按 key 点分路径构建。
+ * personId 非空时只看该成员作为主体的条目（"family" = 家庭整体条目）。
+ */
 export async function fetchMemoryBTree(
-  deviceSn: string, includeSuperseded: boolean,
+  deviceSn: string, includeSuperseded: boolean, personId = "",
 ): Promise<MemoryBTreeData> {
   const sp = new URLSearchParams({ device_sn: deviceSn });
   if (includeSuperseded) sp.set("include_superseded", "true");
+  if (personId) sp.set("person_id", personId);
   const res = await fetch(`/api/agent/memory/b_tree?${sp}`);
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
@@ -1132,13 +1136,17 @@ export async function fetchMemoryBTree(
   return res.json();
 }
 
-/** A 类记忆分页（最新在前；A 类随对话量线性增长，不全量拉取） */
+/**
+ * A 类记忆分页（最新在前；A 类随对话量线性增长，不全量拉取）。
+ * personId 非空时只看该成员作为主体的条目，total 同步收窄。
+ */
 export async function fetchMemoryAItems(
-  deviceSn: string, page: number, pageSize: number,
+  deviceSn: string, page: number, pageSize: number, personId = "",
 ): Promise<MemoryAPage> {
   const sp = new URLSearchParams({
     device_sn: deviceSn, page: String(page), page_size: String(pageSize),
   });
+  if (personId) sp.set("person_id", personId);
   const res = await fetch(`/api/agent/memory/a_items?${sp}`);
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
