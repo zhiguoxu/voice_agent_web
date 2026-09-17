@@ -901,12 +901,12 @@ export async function stopStreamConsume(deviceSn: string): Promise<StreamConsume
   return res.json();
 }
 
-/** 声纹录入 start 的结果 */
+/** 声纹录入 prepare / start 共用的结果 */
 export interface VoiceEnrollStartResult {
   success: boolean;
   /** ok | voice_identity_disabled | memory_disabled | person_not_found(不在本家
-   *  花名册，请先完成人脸注册) | busy | device_offline | voice_server_unreachable |
-   *  internal_error(录入状态存取失败等) */
+   *  花名册，请先完成人脸注册; 仅 start) | busy(仅 start) | device_offline |
+   *  voice_server_unreachable | internal_error(录入状态存取失败等) */
   status: string;
   message: string;
 }
@@ -925,6 +925,22 @@ export interface VoiceEnrollFinishResult {
   message: string;
   net_speech_sec: number | null;
   person_id: string | null;
+}
+
+/** 播报声纹录入准备提示（靠近、放低手机）。不开采集、不占录入槽，投递即返回。 */
+export async function prepareVoiceEnroll(
+  deviceSn: string,
+): Promise<VoiceEnrollStartResult> {
+  const res = await fetch("/api/agent/voice/enroll/prepare", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ device_sn: deviceSn }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || "播报声纹准备提示失败");
+  }
+  return res.json();
 }
 
 /** 开始声纹录入：打开设备侧采集并语音提示用户照屏幕文本朗读。

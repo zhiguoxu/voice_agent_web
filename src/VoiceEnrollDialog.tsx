@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  startVoiceEnroll, finishVoiceEnroll, cancelVoiceEnroll, deleteVoiceprint,
-  fetchVoiceTemplates, deleteVoiceTemplate, cosMediaUrl,
+  prepareVoiceEnroll, startVoiceEnroll, finishVoiceEnroll, cancelVoiceEnroll,
+  deleteVoiceprint, fetchVoiceTemplates, deleteVoiceTemplate, cosMediaUrl,
   type VoiceEnrollFinishResult, type VoiceTemplateItem,
 } from "./api";
 import "./RosterDialog.css";
@@ -29,7 +29,10 @@ function initialText(): string {
   return localStorage.getItem(TEXT_STORAGE_KEY) || pickRandomPassage();
 }
 
-type Phase = "idle" | "starting" | "reading" | "checking" | "done";
+type Phase = "idle" | "preparing" | "starting" | "reading" | "checking" | "done";
+
+/** 准备提示约 22 字、TTS ~5s, 再留 2s 给靠近/放低手机, 然后才开采集播「请开始朗读」 */
+const PREPARE_SETTLE_MS = 7000;
 
 /** 模板来源的展示标签（与后端 voice_templates.source 取值对应） */
 const SOURCE_LABELS: Record<string, string> = {
@@ -49,10 +52,10 @@ function formatSec(ms: number) {
  * 声纹录入对话框：从花名册成员行的「🎤」按钮打开，给该成员补录声纹
  * （须已完成人脸注册，person_id 直接取自花名册，不依赖实时视频流）。
  *
- * 两段交互：「开始录入」打开设备侧采集并语音提示用户照下面的文本朗读；
- * 用户读完点「完成朗读」由后端评估质量，无论成败本次流程即结束（设备
- * 播报结果，这里同步展示）。质量不合格时是否重试由用户决定——失败结果
- * 页点「重新录入」回到开始页再来一遍，次数不限。
+ * 三段交互：「开始录入」先让设备播靠近/放低手机的准备提示，留几秒挪位后再
+ * 打开采集并播「请开始朗读」；用户读完点「完成朗读」由后端评估质量，无论
+ * 成败本次流程即结束（设备播报结果，这里同步展示）。质量不合格时是否重试
+ * 由用户决定——失败结果页点「重新录入」回到开始页再来一遍，次数不限。
  *
  * 开始页与成功页下方列出该成员正在参与比对的每条声纹模板（来源、入库时间、
  * 净语音时长），每条可回放产生它的录音（朗读录入=那次采集的整段音频，
@@ -85,6 +88,8 @@ export function VoiceEnrollDialog({ deviceSn, personId, personName, voiceTemplat
   const armTimerRef = useRef<number | null>(null);
   const armTemplateTimerRef = useRef<number | null>(null);
   const phaseRef = useRef<Phase>("idle");
+  /* 关闭/重入时作废进行中的 prepare 等待, 避免卸载后还去调 start */
+  const startGenRef = useRef(0);
   useEffect(() => {
     phaseRef.current = phase;
   }, [phase]);
@@ -105,6 +110,7 @@ export function VoiceEnrollDialog({ deviceSn, personId, personName, voiceTemplat
 
   /* 录入进行中关闭对话框（含 Esc）要顺手取消采集，恢复设备对话链路 */
   const close = () => {
+    startGenRef.current += 1;
     if (phaseRef.current === "reading" || phaseRef.current === "checking"
         || phaseRef.current === "starting") {
       cancelVoiceEnroll(deviceSn).catch(() => {});
@@ -135,11 +141,28 @@ export function VoiceEnrollDialog({ deviceSn, personId, personName, voiceTemplat
   };
 
   const start = async () => {
-    setPhase("starting");
+    const gen = ++startGenRef.current;
+    setPhase("preparing");
     setError(null);
     setNotice(null);
     try {
+      const prepared = await prepareVoiceEnroll(deviceSn);
+      if (gen !== startGenRef.current) return;
+      if (!prepared.success) {
+        setError(prepared.message);
+        setPhase("idle");
+        return;
+      }
+      await new Promise<void>((resolve) => {
+        window.setTimeout(resolve, PREPARE_SETTLE_MS);
+      });
+      if (gen !== startGenRef.current) return;
+      setPhase("starting");
       const r = await startVoiceEnroll(deviceSn, personId);
+      if (gen !== startGenRef.current) {
+        if (r.success) cancelVoiceEnroll(deviceSn).catch(() => {});
+        return;
+      }
       if (!r.success) {
         setError(r.message);
         setPhase("idle");
@@ -147,6 +170,7 @@ export function VoiceEnrollDialog({ deviceSn, personId, personName, voiceTemplat
       }
       setPhase("reading");
     } catch (e: any) {
+      if (gen !== startGenRef.current) return;
       setError(e.message || String(e));
       setPhase("idle");
     }
@@ -227,7 +251,8 @@ export function VoiceEnrollDialog({ deviceSn, personId, personName, voiceTemplat
     }
   };
 
-  const reading = phase === "reading" || phase === "checking";
+  const listening = phase === "reading" || phase === "checking";
+  const passageLocked = phase !== "idle" && phase !== "done";
   /* 模板列表在开始页与成功页展示：录完当场就能听刚入库的这条 */
   const showTemplates = phase === "idle" || (phase === "done" && !!result?.success);
 
@@ -243,14 +268,15 @@ export function VoiceEnrollDialog({ deviceSn, personId, personName, voiceTemplat
         <div className="roster-dialog-body">
           {phase === "idle" && (
             <p className="face-register-hint">
-              让「{personName}」本人在设备旁准备好后点「开始录入」：设备会语音提示
-              TA 用平时说话的音量朗读下面的文字，读完后回到这里点「完成朗读」。
-              质量不合格时设备会播报原因，想重试就再点一次「开始录入」，次数
-              不限。文本可直接编辑（自动保存在本浏览器），也可以换一段随机默认文本。
+              让「{personName}」本人在设备旁准备好后点「开始录入」：设备会先提示
+              靠近、放低手机，再请 TA 用平时说话的音量朗读下面的文字，读完后
+              回到这里点「完成朗读」。质量不合格时设备会播报原因，想重试就再
+              点一次「开始录入」，次数不限。文本可直接编辑（自动保存在本浏览
+              器），也可以换一段随机默认文本。
             </p>
           )}
 
-          <div className={`voice-enroll-passage ${reading ? "reading" : ""}`}>
+          <div className={`voice-enroll-passage ${passageLocked ? "reading" : ""}`}>
             {phase === "idle" ? (
               <textarea
                 className="voice-enroll-textarea"
@@ -295,11 +321,22 @@ export function VoiceEnrollDialog({ deviceSn, personId, personName, voiceTemplat
             <div className="face-register-result ok">✅ {notice}</div>
           )}
 
+          {phase === "preparing" && (
+            <>
+              <div className="face-register-result running">
+                ⏳ 请靠近设备、把手机放低，听完提示后将开始朗读……
+              </div>
+              <div className="voice-enroll-actions">
+                <button className="roster-cancel-btn" onClick={close}>取消</button>
+              </div>
+            </>
+          )}
+
           {phase === "starting" && (
             <div className="face-register-result running">⏳ 正在开启设备采集……</div>
           )}
 
-          {reading && (
+          {listening && (
             <>
               <div className="face-register-result running">
                 🎙️ 正在聆听……请让「{personName}」用平时说话的音量朗读上面的
