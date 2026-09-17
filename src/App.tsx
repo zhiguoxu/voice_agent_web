@@ -44,6 +44,7 @@ import { ConfigView } from "./ConfigView";
 import { ApiTestView } from "./ApiTestView";
 import { TrafficMonitor } from "./TrafficMonitor";
 import { VideosView } from "./VideosView";
+import { IdentityCallsView } from "./IdentityCallsView";
 import "./App.css";
 
 // 视觉识别模块体量大（含 vision.css 与全套面板组件），按需加载单独分包，
@@ -310,7 +311,7 @@ function ReplayModerationPanel({ moderation }: { moderation: ReplayModeration })
 }
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<"conversations" | "deviceControl" | "logs" | "traffic" | "vision" | "videos" | "apiTest" | "config">("conversations");
+  const [activeTab, setActiveTab] = useState<"conversations" | "deviceControl" | "logs" | "traffic" | "vision" | "videos" | "identityCalls" | "apiTest" | "config">("conversations");
   /* 对话分析页跳转到日志页时预填的精确过滤条件（一次性，LogMonitor 挂载后消费） */
   const [logJumpFilter, setLogJumpFilter] = useState<LogJumpFilter | null>(null);
   const openLogsWith = (filter: LogJumpFilter) => {
@@ -1135,6 +1136,13 @@ export default function App() {
             data-tip="拉流录像查询、预览与下载（按开始时间范围）"
           >
             视频录像
+          </button>
+          <button
+            className={`main-tab ${activeTab === 'identityCalls' ? 'active' : ''}`}
+            onClick={() => setActiveTab('identityCalls')}
+            data-tip="person_id「当前镜头前是谁」每次查询的记录（调用来源、设备上下文、返回结果），按设备 / trace_id / 时间过滤"
+          >
+            识别调用
           </button>
           <button
             className={`main-tab ${activeTab === 'apiTest' ? 'active' : ''}`}
@@ -2189,6 +2197,8 @@ export default function App() {
         </Suspense>
       ) : activeTab === 'videos' ? (
         <VideosView />
+      ) : activeTab === 'identityCalls' ? (
+        <IdentityCallsView onJumpToConversation={openConversationWithTrace} />
       ) : activeTab === 'apiTest' ? (
         <ApiTestView />
       ) : activeTab === 'config' ? (

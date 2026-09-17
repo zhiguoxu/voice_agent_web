@@ -1557,6 +1557,64 @@ export async function deleteVideo(videoId: number): Promise<void> {
   }
 }
 
+/* ── current_identity 调用记录（person_id identity_calls 表, 每次"镜头前是谁"查询一行）── */
+
+export interface IdentityCallItem {
+  id: number;
+  created_at: string;
+  device_sn: string;
+  /** 调用方本轮 trace_id（与 conversation_turns.trace_id 同源），没带为空串 */
+  trace_id: string;
+  user_id: string;
+  device_type_id: string;
+  /** 发起来源 X-Request-Source（<service>/<entry>[:detail]），没带为 unknown */
+  source: string;
+  client_host: string | null;
+  /** person_id 服务端处理耗时（ms，不含网络） */
+  duration_ms: number;
+  recognition: string;
+  person_id: string | null;
+  /** CurrentIdentityResponse 的 JSON 文本（camera_online/has_target/display_name/status/fused_score/track_id…） */
+  response_json: string;
+  /** 当时画面抽帧的 COS 键；有值时用 identityCallFrameUrl 取图，摄像头离线/功能关闭/上传失败为 null */
+  frame_cos_key: string | null;
+}
+
+/** 该次调用当时画面的抽帧：经 person_id 307 跳转到 COS 临时链 */
+export function identityCallFrameUrl(callId: number): string {
+  return `/person_id/api/identity_calls/${callId}/frame`;
+}
+
+export interface IdentityCallListResponse {
+  items: IdentityCallItem[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export async function fetchIdentityCalls(params: {
+  device_sn?: string;
+  trace_id?: string;
+  start_from?: string;
+  start_to?: string;
+  limit?: number;
+  offset?: number;
+}): Promise<IdentityCallListResponse> {
+  const sp = new URLSearchParams();
+  if (params.device_sn) sp.set("device_sn", params.device_sn);
+  if (params.trace_id) sp.set("trace_id", params.trace_id);
+  if (params.start_from) sp.set("start_from", params.start_from);
+  if (params.start_to) sp.set("start_to", params.start_to);
+  if (params.limit != null) sp.set("limit", String(params.limit));
+  if (params.offset != null) sp.set("offset", String(params.offset));
+  const res = await fetch(`/person_id/api/identity_calls?${sp}`);
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || `获取识别调用记录失败: HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
 /** 记忆 GPU 服务（嵌入/key 抽取）经 nginx 前缀代理直达，/api/config 与
     voice/agent 同构（service/version/env/started_at/脱敏 config dump）。 */
 export async function fetchEmbeddingConfig(): Promise<ServiceConfig> {
