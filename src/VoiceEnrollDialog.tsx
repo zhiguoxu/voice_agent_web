@@ -29,10 +29,7 @@ function initialText(): string {
   return localStorage.getItem(TEXT_STORAGE_KEY) || pickRandomPassage();
 }
 
-type Phase = "idle" | "preparing" | "starting" | "reading" | "checking" | "done";
-
-/** 准备提示约 22 字、TTS ~5s, 再留 2s 给靠近/放低手机, 然后才开采集播「请开始朗读」 */
-const PREPARE_SETTLE_MS = 7000;
+type Phase = "idle" | "preparing" | "prepared" | "starting" | "reading" | "checking" | "done";
 
 /** 模板来源的展示标签（与后端 voice_templates.source 取值对应） */
 const SOURCE_LABELS: Record<string, string> = {
@@ -52,10 +49,11 @@ function formatSec(ms: number) {
  * 声纹录入对话框：从花名册成员行的「🎤」按钮打开，给该成员补录声纹
  * （须已完成人脸注册，person_id 直接取自花名册，不依赖实时视频流）。
  *
- * 三段交互：「开始录入」先让设备播靠近/放低手机的准备提示，留几秒挪位后再
- * 打开采集并播「请开始朗读」；用户读完点「完成朗读」由后端评估质量，无论
- * 成败本次流程即结束（设备播报结果，这里同步展示）。质量不合格时是否重试
- * 由用户决定——失败结果页点「重新录入」回到开始页再来一遍，次数不限。
+ * 三段交互：「开始录入」让设备播靠近/放低手机的准备提示（不开采集）；用户
+ * 就位后点「开始朗读」，设备打断准备提示、立即播「请开始朗读」并打开采集；
+ * 读完点「完成朗读」由后端评估质量，无论成败本次流程即结束（设备播报结果，
+ * 这里同步展示）。质量不合格时是否重试由用户决定——失败结果页点「重新录入」
+ * 回到开始页再来一遍，次数不限。
  *
  * 开始页与成功页下方列出该成员正在参与比对的每条声纹模板（来源、入库时间、
  * 净语音时长），每条可回放产生它的录音（朗读录入=那次采集的整段音频，
@@ -88,8 +86,6 @@ export function VoiceEnrollDialog({ deviceSn, personId, personName, voiceTemplat
   const armTimerRef = useRef<number | null>(null);
   const armTemplateTimerRef = useRef<number | null>(null);
   const phaseRef = useRef<Phase>("idle");
-  /* 关闭/重入时作废进行中的 prepare 等待, 避免卸载后还去调 start */
-  const startGenRef = useRef(0);
   useEffect(() => {
     phaseRef.current = phase;
   }, [phase]);
@@ -110,7 +106,6 @@ export function VoiceEnrollDialog({ deviceSn, personId, personName, voiceTemplat
 
   /* 录入进行中关闭对话框（含 Esc）要顺手取消采集，恢复设备对话链路 */
   const close = () => {
-    startGenRef.current += 1;
     if (phaseRef.current === "reading" || phaseRef.current === "checking"
         || phaseRef.current === "starting") {
       cancelVoiceEnroll(deviceSn).catch(() => {});
@@ -140,29 +135,31 @@ export function VoiceEnrollDialog({ deviceSn, personId, personName, voiceTemplat
     setText(next);
   };
 
-  const start = async () => {
-    const gen = ++startGenRef.current;
+  /* 「开始录入」：只让设备播准备提示，不开采集；成功后等用户就位点「开始朗读」 */
+  const prepare = async () => {
     setPhase("preparing");
     setError(null);
     setNotice(null);
     try {
-      const prepared = await prepareVoiceEnroll(deviceSn);
-      if (gen !== startGenRef.current) return;
-      if (!prepared.success) {
-        setError(prepared.message);
+      const r = await prepareVoiceEnroll(deviceSn);
+      if (!r.success) {
+        setError(r.message);
         setPhase("idle");
         return;
       }
-      await new Promise<void>((resolve) => {
-        window.setTimeout(resolve, PREPARE_SETTLE_MS);
-      });
-      if (gen !== startGenRef.current) return;
-      setPhase("starting");
+      setPhase("prepared");
+    } catch (e: any) {
+      setError(e.message || String(e));
+      setPhase("idle");
+    }
+  };
+
+  /* 「开始朗读」：设备打断还在播的准备提示，立即播「请开始朗读」并打开采集 */
+  const start = async () => {
+    setPhase("starting");
+    setError(null);
+    try {
       const r = await startVoiceEnroll(deviceSn, personId);
-      if (gen !== startGenRef.current) {
-        if (r.success) cancelVoiceEnroll(deviceSn).catch(() => {});
-        return;
-      }
       if (!r.success) {
         setError(r.message);
         setPhase("idle");
@@ -170,7 +167,6 @@ export function VoiceEnrollDialog({ deviceSn, personId, personName, voiceTemplat
       }
       setPhase("reading");
     } catch (e: any) {
-      if (gen !== startGenRef.current) return;
       setError(e.message || String(e));
       setPhase("idle");
     }
@@ -268,11 +264,11 @@ export function VoiceEnrollDialog({ deviceSn, personId, personName, voiceTemplat
         <div className="roster-dialog-body">
           {phase === "idle" && (
             <p className="face-register-hint">
-              让「{personName}」本人在设备旁准备好后点「开始录入」：设备会先提示
-              靠近、放低手机，再请 TA 用平时说话的音量朗读下面的文字，读完后
-              回到这里点「完成朗读」。质量不合格时设备会播报原因，想重试就再
-              点一次「开始录入」，次数不限。文本可直接编辑（自动保存在本浏览
-              器），也可以换一段随机默认文本。
+              让「{personName}」本人在设备旁准备好后点「开始录入」：设备会提示
+              靠近、放低手机；TA 就位后点「开始朗读」，设备随即请 TA 用平时说话
+              的音量朗读下面的文字，读完后回到这里点「完成朗读」。质量不合格时
+              设备会播报原因，想重试就再点一次「开始录入」，次数不限。文本可
+              直接编辑（自动保存在本浏览器），也可以换一段随机默认文本。
             </p>
           )}
 
@@ -311,7 +307,7 @@ export function VoiceEnrollDialog({ deviceSn, personId, personName, voiceTemplat
                       data-tip="随机换一段默认文本（放弃本地编辑稿）">
                 🎲 换一段
               </button>
-              <button className="roster-save-btn" onClick={start} disabled={!text.trim()}>
+              <button className="roster-save-btn" onClick={prepare} disabled={!text.trim()}>
                 开始录入
               </button>
             </div>
@@ -322,12 +318,18 @@ export function VoiceEnrollDialog({ deviceSn, personId, personName, voiceTemplat
           )}
 
           {phase === "preparing" && (
+            <div className="face-register-result running">⏳ 正在播报准备提示……</div>
+          )}
+
+          {phase === "prepared" && (
             <>
               <div className="face-register-result running">
-                ⏳ 请靠近设备、把手机放低，听完提示后将开始朗读……
+                🔊 设备正在提示「{personName}」靠近、把手机放低。TA 就位后点
+                「开始朗读」，设备会立即打断提示并开始采集
               </div>
               <div className="voice-enroll-actions">
                 <button className="roster-cancel-btn" onClick={close}>取消</button>
+                <button className="roster-save-btn" onClick={start}>开始朗读</button>
               </div>
             </>
           )}
