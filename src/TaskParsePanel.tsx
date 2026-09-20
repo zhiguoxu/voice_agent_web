@@ -3,7 +3,7 @@
  *
  * 单条解析：输入一句话看抽取出的时间/地点/人物/播报文案，或没听懂时回给用户的
  * 说明与示例；可选 device_sn（走花名册消解）与任务类型 type（验模板 task_type 一致、打卡置 enable_photo）。
- * 批量回归：40 条验收 case + 6 条立刻执行 case + 负例（非任务、只说时段没说几点）逐条
+ * 批量回归：37 条验收 case + 6 条立刻执行 case + 负例（非任务、只说时段没说几点、讲故事/拍照/跳舞等说话以外的事）逐条
  * 打真实接口并断言，口径与 agent_server/oneshot_task/parse/scripts/run_parse_cases.py 一致——
  * once 验相对今天的日期与钟点、recurring 验星期集合、relative 验触发时刻窗口(±2/3min)、
  * immediate 验触发时刻在现在前后 5 分钟内；负例必须 recognized=false 且 message/suggestion 非空。
@@ -60,17 +60,15 @@ const CASES: CaseDef[] = [
   { no: 14, text: "每周五晚上8点在玄关提醒我扔垃圾", time: rec([5], 20, 0), location: "玄关", person: "我" },
   { no: 15, text: "明天早上5点在卧室叫我起来看日出", time: once(1, 5, 0), location: "卧室", person: "我" },
   { no: 16, text: "每天晚上10点15在客厅播报明日天气", time: rec(DAILY, 22, 15), location: "客厅", person: "any" },
-  { no: 17, text: "明天下午3点在奶奶房间给她讲个故事", time: once(1, 15, 0), location: "奶奶房间", person: "奶奶" },
+  // 17/21/27 原是讲故事句, 任务到点只播 tts_text 一两句、定时讲故事建不了, 已挪到 NEGATIVES
   { no: 18, text: "每天中午12点半在厨房提醒我吃维生素", time: rec(DAILY, 12, 30), location: "厨房", person: "我" },
   { no: 19, text: "明天上午11点在书房提醒我开视频会", time: once(1, 11, 0), location: "书房", person: "我" },
   { no: 20, text: "每周二四早上7点在书房提醒孩子晨读", time: rec([2, 4], 7, 0), location: "书房", person: "孩子" },
-  { no: 21, text: "明晚8点去儿童房给孩子讲《三只小猪》", time: once(1, 20, 0), location: "儿童房", person: "孩子" },
   { no: 22, text: "每天早上8点在客厅播报早安问候", time: rec(DAILY, 8, 0), location: "客厅", person: "any" },
   { no: 23, text: "明天下午5点在客厅提醒我健身", time: once(1, 17, 0), location: "客厅", person: "我" },
   { no: 24, text: "每天晚上9点在主卧提醒我关灯睡觉", time: rec(DAILY, 21, 0), location: "主卧", person: "我" },
   { no: 25, text: "明天早上8点半在家提醒我去医院", time: once(1, 8, 30), location: null, person: "我" },
   { no: 26, text: "每周一三五早上9点提醒孩子上网课", time: rec([1, 3, 5], 9, 0), location: null, person: "孩子" },
-  { no: 27, text: "明天晚上7点在儿童房播报晚安故事", time: once(1, 19, 0), location: "儿童房", person: "any" },
   { no: 28, text: "每天早上9点在厨房提醒我吃降压药", time: rec(DAILY, 9, 0), location: "厨房", person: "我" },
   { no: 29, text: "明天下午4点在客厅提醒我接电话", time: once(1, 16, 0), location: "客厅", person: "我" },
   { no: 30, text: "后天早上6点在卧室提醒我起来抢票", time: once(2, 6, 0), location: "卧室", person: "我" },
@@ -93,10 +91,13 @@ const CASES: CaseDef[] = [
   { no: 46, text: "播报一下今天的天气", time: imm(), location: null, person: "any" },
 ];
 // 负例: 必须 recognized=false 且带 message/suggestion。非任务描述（误建任务比漏识别更糟）；
-// 只说了时段没说几点（单轮没法追问, 只能让用户把时间说完整）
+// 只说了时段没说几点（单轮没法追问, 只能让用户把时间说完整）；
+// 要机器人做说一句话以外的事（讲故事/拍照/录像/跳舞/放歌, 任务到点只播 tts_text 一两句）
 const NEGATIVES = [
   "今天天气怎么样", "把音量调大一点", "你叫什么名字",
   "明天早上叫爸爸起床", "每天晚上提醒我睡觉",
+  "明天下午3点在奶奶房间给她讲个故事", "明晚8点去儿童房给孩子讲《三只小猪》", "明天晚上7点在儿童房播报晚安故事",
+  "明天早上8点在客厅给我拍张照", "每天下午5点去阳台拍一段视频", "明天晚上8点在客厅给大家跳个舞",
 ];
 
 /** 产品时区（Asia/Shanghai）当前墙钟，与服务端 now_cst 同口径 */
@@ -333,7 +334,7 @@ export function TaskParsePanel() {
           disabled={busy}
         >
           <option value="">填入预置 case…</option>
-          <optgroup label="验收 case（1~40 定时，41~46 立刻执行）">
+          <optgroup label="验收 case（1~40 定时，缺 17/21/27 讲故事句；41~46 立刻执行）">
             {CASES.map((c) => (
               <option key={c.no} value={c.text}>
                 {c.no}. {c.text}
