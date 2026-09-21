@@ -1688,6 +1688,7 @@ export interface EditableField {
   description: string;   // 中文说明（未标注的字段为空串）
   sensitive: boolean;    // 敏感字段（密钥/密码类）：可编辑但值不回显
   device_override_count: number;  // 有多少台设备对此项做了设备级定向覆盖
+  group_override_count: number;   // 有多少个配置分组对此项做了分组级覆盖
 }
 
 export interface EditableConfig {
@@ -1815,6 +1816,111 @@ export async function deleteDeviceConfigOverride(
     },
   );
   if (!res.ok) await throwHttpError(res, "删除设备覆盖失败");
+  return res.json();
+}
+
+/* ── 配置分组（按设备握手头 Biz 归类） ──
+   分组名 = 设备 WebSocket 握手头 Biz 的取值（逐字匹配，如 KAIDISHI），命中的设备用该
+   分组的覆盖。优先级：设备覆盖 > 分组覆盖 > 全局覆盖 > yaml 原值；可编辑范围与设备级相同。
+   分组档案是 voice/agent 共用的（同一张表），各服务的覆盖项分开存：
+   建分组任选一个服务调即可，删分组要对每个服务各调一次（各服务清自己的覆盖并广播）。 */
+
+const CONFIG_GROUP_PREFIX: Record<ConfigService, string> = {
+  voice: "/api/voice/config/groups",
+  agent: "/api/agent/config/groups",
+  // console / person_id / memory 没有按设备解析配置的链路，也不支持分组；端点存在但列表恒空
+  console: "/api/console/config/groups",
+  person: "/person_id/api/config/groups",
+  memory: "/api/memory/config/groups",
+};
+
+/** 有分组能力的服务（分组面板只查询/写入这些） */
+export const GROUP_SERVICES: ConfigService[] = ["voice", "agent"];
+
+/** 一个配置分组：档案 + 该服务对它的覆盖条数 */
+export interface ConfigGroup {
+  name: string;
+  description: string;
+  created_at: string;
+  override_count: number;
+}
+
+export interface ConfigGroupList {
+  service: string;
+  groups: ConfigGroup[];
+}
+
+/** 分组视角的可编辑项：形态与 DeviceEditableField 相同（分组覆盖 → 全局生效值 → yaml 原值） */
+export interface GroupEditableConfig {
+  service: string;
+  group: string;
+  items: DeviceEditableField[];
+}
+
+export async function fetchConfigGroups(service: ConfigService): Promise<ConfigGroupList> {
+  const res = await fetch(CONFIG_GROUP_PREFIX[service]);
+  if (!res.ok) await throwHttpError(res, `Failed to fetch ${service} config groups`);
+  return res.json();
+}
+
+export async function createConfigGroup(
+  service: ConfigService, name: string, description: string, password: string,
+): Promise<ConfigGroup> {
+  const res = await fetch(CONFIG_GROUP_PREFIX[service], {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Config-Edit-Password": password },
+    body: JSON.stringify({ name, description }),
+  });
+  if (!res.ok) await throwHttpError(res, "创建分组失败");
+  return res.json();
+}
+
+/** 删该服务对分组的全部覆盖并删档案（幂等）。返回该服务删掉的覆盖条数 */
+export async function deleteConfigGroup(
+  service: ConfigService, name: string, password: string,
+): Promise<{ name: string; deleted_overrides: number }> {
+  const res = await fetch(`${CONFIG_GROUP_PREFIX[service]}/${encodeURIComponent(name)}`, {
+    method: "DELETE",
+    headers: { "X-Config-Edit-Password": password },
+  });
+  if (!res.ok) await throwHttpError(res, "删除分组失败");
+  return res.json();
+}
+
+export async function fetchGroupEditableConfig(
+  service: ConfigService, name: string,
+): Promise<GroupEditableConfig> {
+  const res = await fetch(`${CONFIG_GROUP_PREFIX[service]}/${encodeURIComponent(name)}/editable`);
+  if (!res.ok) await throwHttpError(res, `Failed to fetch ${service} group editable config`);
+  return res.json();
+}
+
+export async function putGroupConfigOverride(
+  service: ConfigService, name: string, path: string, value: unknown, password: string,
+): Promise<OverrideMutationResult> {
+  const res = await fetch(
+    `${CONFIG_GROUP_PREFIX[service]}/${encodeURIComponent(name)}/editable/${encodeURIComponent(path)}`,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", "X-Config-Edit-Password": password },
+      body: JSON.stringify({ value }),
+    },
+  );
+  if (!res.ok) await throwHttpError(res, "保存分组覆盖失败");
+  return res.json();
+}
+
+export async function deleteGroupConfigOverride(
+  service: ConfigService, name: string, path: string, password: string,
+): Promise<OverrideMutationResult> {
+  const res = await fetch(
+    `${CONFIG_GROUP_PREFIX[service]}/${encodeURIComponent(name)}/editable/${encodeURIComponent(path)}`,
+    {
+      method: "DELETE",
+      headers: { "X-Config-Edit-Password": password },
+    },
+  );
+  if (!res.ok) await throwHttpError(res, "删除分组覆盖失败");
   return res.json();
 }
 

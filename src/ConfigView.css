@@ -823,6 +823,56 @@
   gap: 4px;
 }
 
+/* ── 配置分组面板 ── */
+.cfg-group-create {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.cfg-group-create input {
+  flex: 1;
+  min-width: 240px;
+  padding: 6px 10px;
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--text-primary);
+  background: var(--bg-secondary);
+  border: 1px solid var(--purple);
+  border-radius: var(--radius-sm);
+  outline: none;
+}
+
+.cfg-group-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 2px 0 6px;
+  font-size: 13px;
+}
+
+.cfg-group-name {
+  font-weight: 600;
+  color: var(--green, #34d399);
+}
+
+.cfg-group-desc {
+  color: var(--text-secondary);
+}
+
+.cfg-group-meta {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.cfg-group-delete {
+  margin-left: auto;
+  opacity: 1;
+}
+
 /* 行内编辑器 */
 .cfg-edit-box {
   flex: 1;

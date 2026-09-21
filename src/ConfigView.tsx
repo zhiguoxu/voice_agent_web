@@ -11,6 +11,13 @@ import {
   fetchDeviceEditableConfig,
   putDeviceConfigOverride,
   deleteDeviceConfigOverride,
+  fetchConfigGroups,
+  createConfigGroup,
+  deleteConfigGroup,
+  fetchGroupEditableConfig,
+  putGroupConfigOverride,
+  deleteGroupConfigOverride,
+  GROUP_SERVICES,
   fetchEmbeddingConfig,
   fetchKeyExtractorConfig,
   type ServiceConfig,
@@ -177,9 +184,19 @@ interface EditCtx {
   fields: Map<string, EditableField>;
   onSave: SaveOverrideFn;
   onRevert: RevertOverrideFn;
-  /** 设备级面板传入：行徽标切到「设备覆盖 / 跟随全局修改」三层值来源 */
+  /** 设备级/分组级面板传入：行徽标切到「本作用域覆盖 / 跟随全局修改」三层值来源 */
   deviceFields?: Map<string, DeviceEditableField>;
+  /** deviceFields 的作用域（徽标与提示文案随之切换），缺省 device */
+  scope?: ScopeKind;
 }
+
+/* 定向覆盖的两种作用域：设备(device_sn) / 分组(握手头 Biz)。文案按作用域切换 */
+type ScopeKind = "device" | "group";
+
+const SCOPE_TEXT: Record<ScopeKind, { badge: string; self: string; target: string }> = {
+  device: { badge: "设备覆盖", self: "本设备", target: "该设备" },
+  group: { badge: "分组覆盖", self: "本分组的设备", target: "该分组的设备" },
+};
 
 /** 编辑框里的文本 ←→ 配置值 的互转，按原值(baseline)的类型决定形态 */
 function valueToDraft(v: unknown): string {
@@ -320,16 +337,19 @@ function FieldEditor({
 function EditControls({
   field,
   deviceField,
+  scope = "device",
   onEdit,
   onRevert,
 }: {
   field: EditableField;
   deviceField?: DeviceEditableField;
+  scope?: ScopeKind;
   onEdit: () => void;
   onRevert: () => Promise<void>;
 }) {
   const [reverting, setReverting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const t = SCOPE_TEXT[scope];
 
   const revert = async () => {
     if (reverting) return;
@@ -354,14 +374,14 @@ function EditControls({
           {deviceField.overridden ? (
             <span
               className="cfg-badge device-override"
-              data-tip={`此值仅对本设备生效。全局生效值: ${deviceField.sensitive ? "***" : previewValue(deviceField.global_value)}`}
+              data-tip={`此值仅对${t.self}生效。全局生效值: ${deviceField.sensitive ? "***" : previewValue(deviceField.global_value)}`}
             >
-              设备覆盖
+              {t.badge}
             </span>
           ) : globalModified ? (
             <span
               className="cfg-badge modified"
-              data-tip={`本设备无定向覆盖，跟随全局在线修改的值。yaml 原值: ${previewValue(deviceField.baseline)}`}
+              data-tip={`${t.self}无定向覆盖，跟随全局在线修改的值。yaml 原值: ${previewValue(deviceField.baseline)}`}
             >
               跟随全局修改
             </span>
@@ -385,14 +405,22 @@ function EditControls({
               {field.device_override_count} 台设备覆盖
             </span>
           )}
+          {(field.group_override_count ?? 0) > 0 && (
+            <span
+              className="cfg-badge device"
+              data-tip={`另有 ${field.group_override_count} 个配置分组对此项做了覆盖（分组内的设备不跟随此处的全局值），详见「配置分组」面板`}
+            >
+              {field.group_override_count} 个分组覆盖
+            </span>
+          )}
         </>
       )}
       <button
         className="cfg-edit-btn"
         data-tip={
           deviceField
-            ? ((deviceField.description || "为该设备设置定向覆盖值") +
-              "；只对该设备生效，改完该设备下一轮请求即用新值")
+            ? ((deviceField.description || `为${t.target}设置定向覆盖值`) +
+              `；只对${t.target}生效，改完下一轮请求即用新值`)
             : ((field.description || "在线编辑此配置项（存数据库，可随时恢复默认）") +
               (field.hot ? "" : "；保存后需重启对应服务生效"))
         }
@@ -401,7 +429,7 @@ function EditControls({
       {(deviceField ? deviceField.overridden : field.overridden) && (
         <button
           className="cfg-edit-btn revert"
-          data-tip={deviceField ? "删除该设备的定向覆盖，回落到全局生效值" : "删除数据库里的覆盖值，恢复 yaml 原值"}
+          data-tip={deviceField ? `删除${t.target}的定向覆盖，回落到全局生效值` : "删除数据库里的覆盖值，恢复 yaml 原值"}
           onClick={revert}
           disabled={reverting}
         >
@@ -448,6 +476,7 @@ function ConfigRow({
             <EditControls
               field={field}
               deviceField={deviceField}
+              scope={edit.scope}
               onEdit={() => setEditing(true)}
               onRevert={() => edit.onRevert(path).then(() => undefined)}
             />
@@ -834,7 +863,7 @@ function DeviceOverridePanel({
             const nested = buildNestedConfig(items);
             const deviceFields = new Map(items.map((f) => [f.path, f]));
             const editFields = new Map<string, EditableField>(
-              items.map((f) => [f.path, { ...f, hot: true, device_override_count: 0 }]),
+              items.map((f) => [f.path, { ...f, hot: true, device_override_count: 0, group_override_count: 0 }]),
             );
             const edit: EditCtx = {
               fields: editFields,
@@ -860,6 +889,333 @@ function DeviceOverridePanel({
                   {icon} {title}
                   <span className="cfg-section-key">
                     {items.filter((f) => f.overridden).length} / {items.length} 项被此设备覆盖
+                  </span>
+                </h4>
+                <ConfigSections config={nested} edit={edit} />
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── 配置分组面板 ──
+   按设备握手头 Biz 归类：先建分组（分组名 = Biz 取值，如 KAIDISHI），再给分组挂覆盖，
+   Biz 与分组名逐字相同的设备用分组的值。优先级：设备覆盖 > 分组覆盖 > 全局覆盖 > yaml。
+   分组档案 voice/agent 共用；建分组任选一个服务调，删分组对每个服务各调一次。 */
+
+/** 两服务的分组列表合并：档案同源，覆盖条数按服务分别记 */
+interface GroupRow {
+  name: string;
+  description: string;
+  created_at: string;
+  counts: Partial<Record<ConfigService, number>>;
+}
+
+async function loadGroupRows(): Promise<{ rows: GroupRow[]; error: string | null }> {
+  const results = await Promise.allSettled(GROUP_SERVICES.map((s) => fetchConfigGroups(s)));
+  const merged = new Map<string, GroupRow>();
+  let firstError: string | null = null;
+  results.forEach((r, i) => {
+    const service = GROUP_SERVICES[i];
+    if (r.status !== "fulfilled") {
+      firstError ??= errorText(r.reason);
+      return;
+    }
+    for (const g of r.value.groups) {
+      const row = merged.get(g.name) ?? { name: g.name, description: g.description, created_at: g.created_at, counts: {} };
+      row.counts[service] = g.override_count;
+      merged.set(g.name, row);
+    }
+  });
+  const allFailed = results.every((r) => r.status === "rejected");
+  return {
+    rows: [...merged.values()].sort((a, b) => a.name.localeCompare(b.name)),
+    error: allFailed ? firstError : null,
+  };
+}
+
+function groupTotal(row: GroupRow): number {
+  return Object.values(row.counts).reduce((a, b) => a + (b ?? 0), 0);
+}
+
+function errorText(e: unknown): string {
+  return e instanceof Error ? e.message : String(e);
+}
+
+function ConfigGroupPanel({
+  withPassword,
+  setNotice,
+  onGlobalReload,
+}: {
+  withPassword: WithPasswordFn;
+  setNotice: (msg: string) => void;
+  /** 保存/删除分组覆盖后刷新全局视图（「N 个分组覆盖」计数会变） */
+  onGlobalReload: () => Promise<void>;
+}) {
+  const [rows, setRows] = useState<GroupRow[]>([]);
+  const [selected, setSelected] = useState("");
+  const [fields, setFields] = useState<Partial<Record<ConfigService, DeviceEditableField[]>> | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [svcTab, setSvcTab] = useState<ConfigService>("voice");
+  /* 新建分组表单 */
+  const [creating, setCreating] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newDesc, setNewDesc] = useState("");
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const loadRows = useCallback(async () => {
+    const next = await loadGroupRows();
+    setRows(next.rows);
+    if (next.error) setError(next.error);
+  }, []);
+
+  const loadGroup = useCallback(async (name: string, opts?: { silent?: boolean }) => {
+    if (!name) {
+      setFields(null);
+      return;
+    }
+    if (!opts?.silent) setLoading(true);
+    setError(null);
+    const results = await Promise.allSettled(GROUP_SERVICES.map((s) => fetchGroupEditableConfig(s, name)));
+    const next: Partial<Record<ConfigService, DeviceEditableField[]>> = {};
+    results.forEach((r, i) => {
+      if (r.status === "fulfilled") next[GROUP_SERVICES[i]] = r.value.items;
+    });
+    if (results.every((r) => r.status === "rejected")) {
+      setError(errorText((results[0] as PromiseRejectedResult).reason));
+      setFields(null);
+    } else {
+      setFields(next);
+    }
+    if (!opts?.silent) setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    loadRows();
+  }, [loadRows]);
+
+  useEffect(() => {
+    loadGroup(selected);
+  }, [selected, loadGroup]);
+
+  const afterMutation = useCallback(async () => {
+    await syncSettle();
+    await Promise.all([loadGroup(selected, { silent: true }), loadRows(), onGlobalReload()]);
+  }, [loadGroup, loadRows, onGlobalReload, selected]);
+
+  const submitCreate = async () => {
+    const name = newName.trim();
+    if (!name) {
+      setCreateError("请输入分组名");
+      return;
+    }
+    setBusy(true);
+    setCreateError(null);
+    try {
+      /* 档案两服务共用：任选一个服务写入即可；首选不可用时换下一个 */
+      let lastErr: unknown = null;
+      let created = false;
+      for (const s of GROUP_SERVICES) {
+        try {
+          await withPassword((pw) => createConfigGroup(s, name, newDesc.trim(), pw));
+          created = true;
+          break;
+        } catch (e) {
+          lastErr = e;
+          /* 业务拒绝（重名/名字不合规/口令错）换服务也不会变，直接报出 */
+          if (/已存在|分组名|口令/.test(errorText(e))) break;
+        }
+      }
+      if (!created) throw lastErr;
+      setNotice(`✅ 已创建配置分组 ${name}，握手头 Biz=${name} 的设备将使用该分组的覆盖`);
+      setCreating(false);
+      setNewName("");
+      setNewDesc("");
+      await loadRows();
+      setSelected(name);
+    } catch (e) {
+      setCreateError(errorText(e));
+    }
+    setBusy(false);
+  };
+
+  const removeGroup = async (row: GroupRow) => {
+    const total = groupTotal(row);
+    const ok = window.confirm(
+      total > 0
+        ? `删除分组 ${row.name} 会同时删掉它的 ${total} 条覆盖，该分组的设备将回落到全局配置。确定？`
+        : `确定删除分组 ${row.name}？`,
+    );
+    if (!ok) return;
+    setBusy(true);
+    try {
+      /* 每个服务各删一次：各自清覆盖并广播到自己的实例；一个失败不影响另一个已完成的 */
+      const results = await withPassword((pw) =>
+        Promise.allSettled(GROUP_SERVICES.map((s) => deleteConfigGroup(s, row.name, pw))));
+      const failed = results.find((r): r is PromiseRejectedResult => r.status === "rejected");
+      if (failed) throw failed.reason;
+      setNotice(`🗑️ 已删除配置分组 ${row.name}`);
+      if (selected === row.name) setSelected("");
+      await afterMutation();
+    } catch (e) {
+      setError(errorText(e));
+    }
+    setBusy(false);
+  };
+
+  const selectedRow = rows.find((r) => r.name === selected);
+
+  return (
+    <div className="card cfg-card">
+      <h3>
+        🏷️ 配置分组
+        <span className="subtitle">
+          按设备握手头 Biz 归类：Biz 与分组名相同的设备用该分组的覆盖；优先级 设备覆盖 &gt; 分组覆盖 &gt; 全局；仅热生效字段支持
+        </span>
+      </h3>
+
+      <div className="cfg-device-toolbar">
+        {rows.length > 0 ? (
+          <span className="cfg-device-summary">
+            分组：
+            {rows.map((r) => {
+              const n = groupTotal(r);
+              return (
+                <button
+                  className={`cfg-device-chip ${r.name === selected ? "active" : ""}`}
+                  data-tip={(r.description ? `${r.description}；` : "") + "点击查看/编辑该分组的覆盖"}
+                  onClick={() => setSelected(r.name === selected ? "" : r.name)}
+                  key={r.name}
+                >
+                  {r.name}{n > 0 ? ` · ${n} 条` : ""}
+                </button>
+              );
+            })}
+          </span>
+        ) : (
+          <span className="cfg-device-summary muted">还没有配置分组</span>
+        )}
+        {!creating && (
+          <button className="cfg-edit-cancel" onClick={() => setCreating(true)} disabled={busy}>
+            ＋ 新建分组
+          </button>
+        )}
+      </div>
+
+      {creating && (
+        <div className="cfg-group-create">
+          <input
+            placeholder="分组名 = 设备握手头 Biz 的取值，如 KAIDISHI（字母/数字/_ . -，区分大小写）"
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") submitCreate(); }}
+            autoFocus
+            disabled={busy}
+          />
+          <input
+            placeholder="说明（可选）"
+            value={newDesc}
+            onChange={(e) => setNewDesc(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") submitCreate(); }}
+            disabled={busy}
+          />
+          <div className="cfg-edit-actions">
+            <button className="cfg-edit-save" onClick={submitCreate} disabled={busy}>
+              {busy ? <span className="spinner inline" /> : "创建"}
+            </button>
+            <button
+              className="cfg-edit-cancel"
+              onClick={() => { setCreating(false); setCreateError(null); }}
+              disabled={busy}
+            >
+              取消
+            </button>
+            {createError && <span className="cfg-error inline">❌ {createError}</span>}
+          </div>
+        </div>
+      )}
+
+      {error && <div className="cfg-error">❌ {error}</div>}
+      {loading && <div className="empty"><div className="spinner" /></div>}
+
+      {selected && selectedRow && fields && !loading && (
+        <div className="cfg-device-sections">
+          <div className="cfg-group-head">
+            <span className="cfg-group-name">{selectedRow.name}</span>
+            {selectedRow.description && <span className="cfg-group-desc">{selectedRow.description}</span>}
+            <span className="cfg-group-meta">创建于 {formatStartedAt(selectedRow.created_at)}</span>
+            <button
+              className="cfg-edit-btn revert cfg-group-delete"
+              data-tip="删除该分组及其全部覆盖，分组内设备回落到全局配置"
+              onClick={() => removeGroup(selectedRow)}
+              disabled={busy}
+            >
+              🗑️ 删除分组
+            </button>
+          </div>
+          <div className="cfg-service-tabs cfg-device-tabs">
+            {SERVICE_META.map(({ key, icon, title }) => {
+              const overridden = fields[key]?.filter((f) => f.overridden).length ?? 0;
+              return (
+                <button
+                  key={key}
+                  className={`cfg-service-tab ${svcTab === key ? "active" : ""}`}
+                  onClick={() => setSvcTab(key)}
+                >
+                  <span className="cfg-service-tab-icon">{icon}</span>
+                  {title}
+                  {overridden > 0 && (
+                    <span className="cfg-service-tab-count">{overridden}</span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+          {SERVICE_META.filter(({ key }) => key === svcTab).map(({ key, icon, title }) => {
+            const items = fields[key];
+            if (!items) {
+              return (
+                <div className="cfg-section" key={key}>
+                  <h4 className="cfg-section-title">{icon} {title}</h4>
+                  <div className="cfg-error">❌ 该服务的分组配置接口不可用</div>
+                </div>
+              );
+            }
+            const nested = buildNestedConfig(items);
+            const groupFields = new Map(items.map((f) => [f.path, f]));
+            const editFields = new Map<string, EditableField>(
+              items.map((f) => [f.path, { ...f, hot: true, device_override_count: 0, group_override_count: 0 }]),
+            );
+            const edit: EditCtx = {
+              fields: editFields,
+              deviceFields: groupFields,
+              scope: "group",
+              onSave: async (path, value) => {
+                const result = await withPassword((pw) =>
+                  putGroupConfigOverride(key, selected, path, value, pw));
+                setNotice(`✅ ${path} 已保存为分组 ${selected} 的覆盖，Biz=${selected} 的设备下一轮即生效`);
+                await afterMutation();
+                return result;
+              },
+              onRevert: async (path) => {
+                const result = await withPassword((pw) =>
+                  deleteGroupConfigOverride(key, selected, path, pw));
+                setNotice(`↩️ ${path} 已删除分组 ${selected} 的覆盖，回落到全局生效值`);
+                await afterMutation();
+                return result;
+              },
+            };
+            return (
+              <div className="cfg-section" key={key}>
+                <h4 className="cfg-section-title">
+                  {icon} {title}
+                  <span className="cfg-section-key">
+                    {items.filter((f) => f.overridden).length} / {items.length} 项被此分组覆盖
                   </span>
                 </h4>
                 <ConfigSections config={nested} edit={edit} />
@@ -1148,6 +1504,11 @@ export function ConfigView() {
         setNotice={setNotice}
         onGlobalReload={load}
         refreshSignal={deviceOverrideSignal}
+      />
+      <ConfigGroupPanel
+        withPassword={withPassword}
+        setNotice={setNotice}
+        onGlobalReload={load}
       />
       <PromptsPanel
         editFields={agentEditable ?? undefined}
