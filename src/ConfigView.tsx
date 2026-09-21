@@ -949,11 +949,14 @@ function ConfigGroupPanel({
   withPassword,
   setNotice,
   onGlobalReload,
+  refreshSignal,
 }: {
   withPassword: WithPasswordFn;
   setNotice: (msg: string) => void;
   /** 保存/删除分组覆盖后刷新全局视图（「N 个分组覆盖」计数会变） */
   onGlobalReload: () => Promise<void>;
+  /** 页面上其他入口（提示词面板）改了分组覆盖后递增，本面板静默重载列表与当前分组 */
+  refreshSignal: number;
 }) {
   const [rows, setRows] = useState<GroupRow[]>([]);
   const [selected, setSelected] = useState("");
@@ -1002,6 +1005,15 @@ function ConfigGroupPanel({
   useEffect(() => {
     loadGroup(selected);
   }, [selected, loadGroup]);
+
+  /* 外部改了分组覆盖：只在信号真的变化时静默重载，不跟着 selected 变化重复触发 */
+  const seenSignal = useRef(refreshSignal);
+  useEffect(() => {
+    if (seenSignal.current === refreshSignal) return;
+    seenSignal.current = refreshSignal;
+    loadRows();
+    loadGroup(selected, { silent: true });
+  }, [refreshSignal, loadRows, loadGroup, selected]);
 
   const afterMutation = useCallback(async () => {
     await syncSettle();
@@ -1467,6 +1479,30 @@ export function ConfigView() {
     },
     [load, withPassword],
   );
+  /* 提示词面板的分组级保存/恢复：同款流程，改完递增信号让分组面板重载 */
+  const [groupOverrideSignal, setGroupOverrideSignal] = useState(0);
+  const saveAgentGroupOverride = useCallback(
+    async (group: string, path: string, value: unknown) => {
+      const r = await withPassword((pw) => putGroupConfigOverride("agent", group, path, value, pw));
+      setNotice(`✅ ${path} 已保存为分组 ${group} 的覆盖，Biz=${group} 的设备下一轮即生效`);
+      await syncSettle();
+      await load();
+      setGroupOverrideSignal((v) => v + 1);
+      return r;
+    },
+    [load, withPassword],
+  );
+  const revertAgentGroupOverride = useCallback(
+    async (group: string, path: string) => {
+      const r = await withPassword((pw) => deleteGroupConfigOverride("agent", group, path, pw));
+      setNotice(`↩️ ${path} 已删除分组 ${group} 的覆盖，回落到全局生效值`);
+      await syncSettle();
+      await load();
+      setGroupOverrideSignal((v) => v + 1);
+      return r;
+    },
+    [load, withPassword],
+  );
 
   return (
     <div className="cfg-container">
@@ -1509,6 +1545,7 @@ export function ConfigView() {
         withPassword={withPassword}
         setNotice={setNotice}
         onGlobalReload={load}
+        refreshSignal={groupOverrideSignal}
       />
       <PromptsPanel
         editFields={agentEditable ?? undefined}
@@ -1519,6 +1556,8 @@ export function ConfigView() {
         onRevertMemoryOverride={memoryEdit?.onRevert}
         onSaveDeviceOverride={saveAgentDeviceOverride}
         onRevertDeviceOverride={revertAgentDeviceOverride}
+        onSaveGroupOverride={saveAgentGroupOverride}
+        onRevertGroupOverride={revertAgentGroupOverride}
       />
       <div className="cfg-service-tabs">
         {SERVICE_TABS.map((t) => (

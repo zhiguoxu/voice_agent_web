@@ -845,6 +845,23 @@
   outline: none;
 }
 
+/* 提示词面板的分组选择器（与设备选择器并排） */
+.cfg-group-select {
+  padding: 5px 8px;
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--text-primary);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  outline: none;
+  cursor: pointer;
+}
+
+.cfg-group-select:focus {
+  border-color: var(--purple);
+}
+
 .cfg-group-head {
   display: flex;
   flex-wrap: wrap;

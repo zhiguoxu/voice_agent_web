@@ -1949,10 +1949,14 @@ export interface PromptTemplateInfo {
   service?: "agent" | "memory";
 }
 
-/** deviceSn 非空时返回该设备视角的生效模板（叠加其设备级覆盖），空串即全局生效值；
+/** deviceSn 非空时返回该设备视角的生效模板（叠加其设备级覆盖），biz 非空时返回该配置分组
+    视角的生效模板（叠加分组覆盖），都为空即全局生效值；
     记忆服务的模板由 agent_server 从 family_memory 取来一并返回（service="memory"） */
-export async function fetchPrompts(deviceSn = ""): Promise<PromptTemplateInfo[]> {
-  const qs = deviceSn ? `?${new URLSearchParams({ device_sn: deviceSn })}` : "";
+export async function fetchPrompts(deviceSn = "", biz = ""): Promise<PromptTemplateInfo[]> {
+  const params = new URLSearchParams();
+  if (deviceSn) params.set("device_sn", deviceSn);
+  if (biz) params.set("biz", biz);
+  const qs = params.size > 0 ? `?${params}` : "";
   const res = await fetch(`/api/agent/prompts${qs}`);
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
