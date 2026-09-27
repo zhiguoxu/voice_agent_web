@@ -42,8 +42,10 @@ function statsSummary(stats: Record<string, number> | null): string {
   return parts.join(" · ");
 }
 
-function TurnList({ turns, muted, highlightTrace }: {
+function TurnList({ turns, muted, highlightTrace, skeleton }: {
   turns: IngestTurn[]; muted?: boolean; highlightTrace?: string;
+  /** 整设备清除后的骨架：只有 turn_id/trace_id，说话人与原文已抹掉 */
+  skeleton?: boolean;
 }) {
   if (turns.length === 0) return <div className="empty">（无）</div>;
   return (
@@ -56,16 +58,45 @@ function TurnList({ turns, muted, highlightTrace }: {
           data-tip={t.trace_id ? `trace: ${t.trace_id}` : undefined}
         >
           <code className="ingest-turn-id">{t.turn_id}</code>
-          <span className="ingest-turn-speaker">{t.speaker}</span>
-          <span className="ingest-turn-text">{t.text}</span>
+          {skeleton ? (
+            <span className="ingest-turn-text muted">
+              {t.is_robot ? "（机器人回复，原文已清除）" : "（用户发言，原文已清除）"}
+            </span>
+          ) : (
+            <>
+              <span className="ingest-turn-speaker">{t.speaker}</span>
+              <span className="ingest-turn-text">{t.text}</span>
+            </>
+          )}
         </div>
       ))}
     </div>
   );
 }
 
-/** 单次运行的过程回放：输入轮次 → LLM 原始输出 → 护栏后草稿 → 写入统计 */
+/** 单次运行的过程回放：输入轮次 → LLM 原始输出 → 护栏后草稿 → 写入统计。
+ *  被整设备清除过的运行只剩骨架：轮次定位信息 + 状态/触发/统计数字，原文与结果不再展示 */
 function RunDetail({ run, highlightTrace }: { run: MemoryIngestRun; highlightTrace?: string }) {
+  if (run.erased_at) {
+    return (
+      <div className="ingest-run-detail">
+        <div className="ingest-erased-notice">
+          🧹 抽取结果已于 {formatTime(run.erased_at)} 随整设备记忆清除被删除：对话原文、
+          LLM 输出与草稿已抹掉，下面只保留哪些轮次进过这一批抽取。
+        </div>
+        {run.error && <div className="roster-error">❌ {run.error}</div>}
+        <div className="ingest-section-title">新对话（抽取源，{run.new_turns.length} 轮）</div>
+        <TurnList turns={run.new_turns} highlightTrace={highlightTrace} skeleton />
+        <div className="ingest-section-title">
+          清除前的结果：模型给出 {run.model_count} 条，护栏后 {run.draft_count} 条
+          {run.stats ? `，写入 ${statsSummary(run.stats) || "全部跳过"}` : ""}
+          <span className="ingest-timing">
+            抽取 {run.extract_ms}ms · 写入 {run.apply_ms}ms
+          </span>
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="ingest-run-detail">
       {run.error && <div className="roster-error">❌ {run.error}</div>}
@@ -216,6 +247,12 @@ export function MemoryIngestDialog({ deviceSn, sessionId, traceId, onClose }: {
                         <span className="memory-badge ingest-trigger">
                           {TRIGGER_LABELS[run.trigger] || run.trigger}
                         </span>
+                        {run.erased_at && (
+                          <span className="memory-badge ingest-erased"
+                                data-tip={`整设备记忆清除于 ${formatTime(run.erased_at)}，原文与结果已抹掉`}>
+                            结果已清除
+                          </span>
+                        )}
                         <span className="ingest-summary-text">
                           {run.new_turns.length} 轮 → {run.draft_count} 条草稿
                           {run.stats ? ` · ${statsSummary(run.stats) || "全部跳过"}` : ""}

@@ -935,6 +935,33 @@ body {
     color: var(--text-muted);
 }
 
+/* 整设备记忆清除留下的两种痕迹：进过抽取但结果已抹掉 / 清除时尚未抽取被丢弃 */
+.turn-ingest-btn.erased {
+    background: rgba(251, 191, 36, 0.1);
+    color: var(--orange);
+}
+
+.turn-ingest-btn.erased:hover {
+    background: rgba(251, 191, 36, 0.25);
+}
+
+.badge.not-extracted.discarded {
+    color: var(--orange);
+    border: 1px dashed rgba(251, 191, 36, 0.5);
+}
+
+/* 轮次列表顶部的会话级提示（整设备清除说明） */
+.turn-list-notice {
+    margin: 4px 0 8px;
+    padding: 6px 10px;
+    border-radius: 8px;
+    border: 1px dashed rgba(251, 191, 36, 0.5);
+    background: rgba(251, 191, 36, 0.06);
+    color: var(--orange);
+    font-size: 11px;
+    line-height: 1.5;
+}
+
 .resize-handle {
     width: 4px;
     cursor: col-resize;

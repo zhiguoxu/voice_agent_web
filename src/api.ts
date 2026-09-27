@@ -1172,16 +1172,17 @@ export async function fetchMemoryAItems(
   return res.json();
 }
 
-/** 整设备记忆清空结果 */
+/** 整设备记忆清空结果（erased_ingest_runs：抹掉原文并标记已清除的抽取日志行数） */
 export interface DeviceMemoryEraseResult {
   ok: boolean;
   deleted_items: number;
-  deleted_ingest_runs: number;
+  erased_ingest_runs: number;
   message: string;
 }
 
-/** 清空一个设备（家庭）的全部记忆：条目 + 主体索引 + 抽取运行日志，物理删除
- *  不可恢复。花名册不动（删成员走花名册接口，有人脸底库联动）。 */
+/** 清空一个设备（家庭）的全部记忆：条目 + 主体索引物理删除不可恢复；抽取运行
+ *  日志保留骨架（哪些轮进过抽取、何时被清），对话原文/LLM 输出/草稿抹掉。
+ *  花名册不动（删成员走花名册接口，有人脸底库联动）。 */
 export async function eraseDeviceMemory(
   deviceSn: string,
 ): Promise<DeviceMemoryEraseResult> {
@@ -1203,13 +1204,13 @@ export interface UserDataEraseResult {
   deleted_members: number;
   faces_deleted: number;
   deleted_memory_items: number;
-  deleted_ingest_runs: number;
+  erased_ingest_runs: number;
   message: string;
 }
 
 /** 清空一个设备（家庭）的全部用户数据：花名册全部成员（联动删除 person_id
- *  底库人脸与声纹模板）+ 全部记忆（条目 + 主体索引 + 抽取运行日志），物理
- *  删除不可恢复。历史对话（会话与消息记录）保留。 */
+ *  底库人脸与声纹模板）+ 全部记忆（条目 + 主体索引物理删除；抽取运行日志
+ *  抹掉原文只留骨架），不可恢复。历史对话（会话与消息记录）保留。 */
 export async function eraseUserData(
   deviceSn: string,
 ): Promise<UserDataEraseResult> {
@@ -1301,6 +1302,9 @@ export interface MemoryIngestRun {
   extract_ms: number;
   apply_ms: number;
   created_at: string | null;
+  /** 整设备记忆清除时刻；非空时轮次只剩 turn_id/trace_id（text 为空），
+   *  无 LLM 输出与草稿——按「结果已清除」渲染，不是抽取失败 */
+  erased_at: string | null;
   new_turns: IngestTurn[];
   context_turns: IngestTurn[];
   llm_raw: string | null;
@@ -1366,10 +1370,17 @@ export async function fetchTrafficMetrics(
   return res.json();
 }
 
-/** 一个会话中已进入过抽取批次的轮次 trace_id 集合（轮次行「已抽取/未抽取」标记用） */
+/** 一个会话的抽取归属：trace_ids = 已进入过抽取批次的轮次；erased = 其中抽取结果
+ *  已被整设备清除的轮次 → 清除时刻（轮次行「已抽取 / 结果已清除 / 未抽取」标记用） */
+export interface ExtractedTraces {
+  enabled: boolean;
+  trace_ids: string[];
+  erased: Record<string, string>;
+}
+
 export async function fetchExtractedTraces(
   deviceSn: string, sessionId: number,
-): Promise<{ enabled: boolean; trace_ids: string[] }> {
+): Promise<ExtractedTraces> {
   const sp = new URLSearchParams({
     device_sn: deviceSn, session_id: String(sessionId),
   });

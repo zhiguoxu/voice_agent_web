@@ -58,6 +58,32 @@ function formatTime(iso: string | null) {
   return new Date(iso).toLocaleString("zh-CN");
 }
 
+/** 一个会话的抽取归属（extracted_traces 接口的前端形态） */
+interface SessionExtraction {
+  /** 已进入过抽取批次的轮次 trace_id */
+  traces: Set<string>;
+  /** 其中抽取结果已被整设备清除的轮次 → 清除时刻 */
+  erased: Record<string, string>;
+  /** 会话最晚一次整设备清除的时刻；早于它且未抽取的轮次是清除时被丢弃的，不会再抽 */
+  erasedAt: string | null;
+}
+
+function toSessionExtraction(d: { trace_ids: string[]; erased: Record<string, string> }): SessionExtraction {
+  const stamps = Object.values(d.erased);
+  return {
+    traces: new Set(d.trace_ids),
+    erased: d.erased,
+    erasedAt: stamps.length ? stamps.reduce((a, b) => (a > b ? a : b)) : null,
+  };
+}
+
+/** 轮次是否在整设备清除之前落库（两端都是产品时区的 naive 时间串，同一口径比较） */
+function turnBeforeErase(turnCreatedAt: string | null, erasedAt: string | null): boolean {
+  if (!turnCreatedAt || !erasedAt) return false;
+  const a = new Date(turnCreatedAt).getTime(), b = new Date(erasedAt).getTime();
+  return !isNaN(a) && !isNaN(b) && a < b;
+}
+
 /* conversation_turns.kind：卡片徽标与详情面板共用文案 */
 const TURN_KIND_TIPS: Record<string, string> = {
   chat: "对话轮：进 LLM 上下文，也参与记忆抽取",
@@ -332,9 +358,9 @@ export default function App() {
   const [streamDialogSn, setStreamDialogSn] = useState<string | null>(null);
   /* 当前会话设备的拉流状态（会话头部指示灯用；person_id 未启用时按钮不显示） */
   const [streamStatus, setStreamStatus] = useState<StreamStatusData | null>(null);
-  /* 当前会话中已进入过抽取批次的轮次 trace 集合（轮次行「已抽取/未抽取」标记）。
+  /* 当前会话的抽取归属（轮次行「已抽取 / 结果已清除 / 已丢弃 / 未抽取」标记）。
      记忆系统未启用时为 null，轮次行不显示任何抽取标记 */
-  const [extractedTraces, setExtractedTraces] = useState<Set<string> | null>(null);
+  const [extractedTraces, setExtractedTraces] = useState<SessionExtraction | null>(null);
   
   /* ── 从 URL 读取初始筛选条件 ── */
   const initParams = new URLSearchParams(window.location.search);
@@ -653,7 +679,7 @@ export default function App() {
     }
   }, [scrollTurnsToBottom]);
 
-  /* ── 当前会话的「已抽取」trace 集合 ──
+  /* ── 当前会话的抽取归属（已抽取 trace 集合 + 整设备清除时刻） ──
      随选中会话变化拉取；轮次重新加载（刷新按钮/实时流落库）时也会因
      loadTurns 触发的重渲染在下次切会话时更新，这里额外跟随 turns 长度刷新，
      让「静默超时抽取完成后手动刷新轮次」能看到标记变化。失败静默（调试辅助
@@ -666,7 +692,7 @@ export default function App() {
     let stale = false;
     fetchExtractedTraces(selectedSession.device_sn, selectedSession.id)
       .then((d) => {
-        if (!stale) setExtractedTraces(d.enabled ? new Set(d.trace_ids) : null);
+        if (!stale) setExtractedTraces(d.enabled ? toSessionExtraction(d) : null);
       })
       .catch(() => { if (!stale) setExtractedTraces(null); });
     return () => { stale = true; };
@@ -1427,6 +1453,13 @@ export default function App() {
               </div>
 
               <div className="turn-list" ref={turnListRef} onScroll={handleTurnListScroll}>
+                {extractedTraces?.erasedAt && (
+                  <div className="turn-list-notice"
+                       data-tip="整设备记忆清除会删掉全部记忆条目，并把该家庭抽取运行日志里的对话原文与抽取结果抹掉（只留哪些轮次进过抽取的骨架）；清除时还在缓冲中未抽取的轮次直接丢弃，不会再抽取">
+                    🧹 该会话的抽取结果已于 {formatTime(extractedTraces.erasedAt)} 随整设备记忆清除被删除；
+                    清除前未抽取的轮次已丢弃（标「已丢弃」），不是抽取没触发
+                  </div>
+                )}
                 {turnsHasMore && (
                   <div className="load-more-wrap">
                     <button
@@ -1605,21 +1638,43 @@ export default function App() {
                         trace: {t.trace_id || "-"}
                       </span>
                       {extractedTraces && (
-                        t.trace_id && extractedTraces.has(t.trace_id) ? (
-                          <button
-                            className="turn-ingest-btn"
-                            data-tip="这轮对话已进入抽取批次，点击查看对应的抽取记录（可能与同批其他轮次一起抽取）"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setIngestDialog({
-                                deviceSn: selectedSession.device_sn,
-                                sessionId: selectedSession.id,
-                                traceId: t.trace_id,
-                              });
-                            }}
-                          >
-                            📋 已抽取
-                          </button>
+                        t.trace_id && extractedTraces.traces.has(t.trace_id) ? (
+                          extractedTraces.erased[t.trace_id] ? (
+                            <button
+                              className="turn-ingest-btn erased"
+                              data-tip={`这轮对话进过抽取批次，抽取结果已于 ${formatTime(extractedTraces.erased[t.trace_id])} 随整设备记忆清除被删除；点击查看只剩骨架（无原文/结果）的抽取记录`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setIngestDialog({
+                                  deviceSn: selectedSession.device_sn,
+                                  sessionId: selectedSession.id,
+                                  traceId: t.trace_id,
+                                });
+                              }}
+                            >
+                              🧹 已抽取·结果已清除
+                            </button>
+                          ) : (
+                            <button
+                              className="turn-ingest-btn"
+                              data-tip="这轮对话已进入抽取批次，点击查看对应的抽取记录（可能与同批其他轮次一起抽取）"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setIngestDialog({
+                                  deviceSn: selectedSession.device_sn,
+                                  sessionId: selectedSession.id,
+                                  traceId: t.trace_id,
+                                });
+                              }}
+                            >
+                              📋 已抽取
+                            </button>
+                          )
+                        ) : turnBeforeErase(t.created_at, extractedTraces.erasedAt) ? (
+                          <span className="badge not-extracted discarded"
+                                data-tip={`这轮对话在 ${formatTime(extractedTraces.erasedAt)} 整设备记忆清除时尚未抽取，随清除一并丢弃，不会再进入抽取批次`}>
+                            已丢弃
+                          </span>
                         ) : (
                           <span className="badge not-extracted"
                                 data-tip="这轮对话尚未进入任何抽取批次（可能还在缓冲中，攒满批或静默超时后触发）">

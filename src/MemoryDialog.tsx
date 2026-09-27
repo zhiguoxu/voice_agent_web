@@ -369,15 +369,15 @@ export function MemoryDialog({ deviceSn, onClose }: { deviceSn: string; onClose:
               <EraseBtn
                 ctl={ctl} k="device" className="memory-erase-btn device"
                 label="清空整个设备记忆"
-                confirmLabel="确认清空？全部记忆与抽取日志将被删除"
-                tip="删除该设备所属家庭的全部记忆条目和抽取运行日志（含对话原文快照），并丢弃未抽取的对话缓冲。花名册与人脸底库不动。"
+                confirmLabel="确认清空？全部记忆将被删除，抽取日志原文抹掉"
+                tip="删除该设备所属家庭的全部记忆条目；抽取运行日志抹掉对话原文快照与抽取结果、标记清除时刻（保留哪些轮次进过抽取的骨架，供轮次列表标注）；并丢弃未抽取的对话缓冲。花名册与人脸底库不动。"
                 onRun={() => runErase("device", () => eraseDeviceMemory(deviceSn))}
               />
               <EraseBtn
                 ctl={ctl} k="user-data" className="memory-erase-btn device"
                 label="清空全部用户数据"
                 confirmLabel="确认清空？花名册（含人脸、声纹）与全部记忆将被删除"
-                tip="删除该设备所属家庭的全部用户数据：花名册全部成员（联动删除 person_id 底库人脸与声纹模板）+ 全部记忆和抽取日志。历史对话保留。"
+                tip="删除该设备所属家庭的全部用户数据：花名册全部成员（联动删除 person_id 底库人脸与声纹模板）+ 全部记忆（抽取日志抹掉原文只留骨架）。历史对话保留。"
                 onRun={() => runErase("user-data", () => eraseUserData(deviceSn))}
               />
             </div>

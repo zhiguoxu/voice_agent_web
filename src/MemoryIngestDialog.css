@@ -36,6 +36,27 @@
   background: rgba(167, 139, 250, 0.1);
 }
 
+/* 整设备清除留下的骨架行 */
+.memory-badge.ingest-erased {
+  color: var(--orange);
+  background: rgba(251, 191, 36, 0.1);
+}
+
+.ingest-erased-notice {
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px dashed rgba(251, 191, 36, 0.5);
+  background: rgba(251, 191, 36, 0.06);
+  color: var(--orange);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.ingest-turn-text.muted {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
 /* 过程回放 */
 .ingest-run-detail {
   display: flex;
