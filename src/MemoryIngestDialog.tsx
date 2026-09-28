@@ -131,6 +131,7 @@ function RunDetail({ run, highlightTrace }: { run: MemoryIngestRun; highlightTra
               {d.tag && (
                 <span className="memory-item-value">
                   <code className="memory-key-path">{d.tag.key}</code> = {d.tag.value}
+                  {d.tag.time && <span className="memory-badge" data-tip="事件发生时间（去重键）">{d.tag.time}</span>}
                   {d.tag.is_extremum && <span className="memory-badge extremum">最X</span>}
                   {d.tag.negate && <span className="memory-badge superseded-tag">撤回</span>}
                 </span>

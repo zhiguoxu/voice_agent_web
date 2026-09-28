@@ -111,6 +111,7 @@ function ItemRow({ item, ctl }: { item: MemoryItem; ctl: EraseControl }) {
       {item.value && (
         <span className="memory-item-value">
           {item.value}
+          {item.event_time && <span className="memory-badge" data-tip="事件发生时间（去重键）">{item.event_time}</span>}
           {item.is_extremum && <span className="memory-badge extremum">最X</span>}
         </span>
       )}

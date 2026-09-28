@@ -1102,6 +1102,8 @@ export interface MemoryItem {
   id: number;
   key: string | null;
   value: string | null;
+  /** 事件发生时间的原句表述（仅 event kind，与 value 一起构成去重键）；没说/非事件为 null */
+  event_time: string | null;
   is_extremum: boolean;
   content: string;        // 已把 {person_id} 渲染成名字
   content_raw: string;    // 库里原文（占位符形式），排查用
@@ -1286,7 +1288,8 @@ export interface IngestDraft {
   content_raw: string;
   mem_type: string;
   subjects: { person_id: string; name: string }[];
-  tag: { key: string; value: string; is_extremum: boolean; negate: boolean } | null;
+  /** time：事件发生时间原句（仅 event kind 非空）；升级前落库的旧运行无此字段 */
+  tag: { key: string; value: string; time?: string; is_extremum: boolean; negate: boolean } | null;
 }
 
 /** 一次记忆抽取+应用运行（一次 flush 批处理 = 一行，行内自带完整过程快照） */
