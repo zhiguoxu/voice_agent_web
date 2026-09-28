@@ -141,7 +141,7 @@ const LONG_TEXT_THRESHOLD = 120;
    后端 validator 也会拦，但下拉让操作者根本不用记方案名 */
 
 /* LLM 协议适配方案(provider)字段的候选值：与后端协议分支保持一致
-   (voice_agent_common/utils/llm.py 的 shared_llm 与 voice_server/core/moderation.py)。
+   (voice_agent_common/utils/llm.py 的 shared_llm 与 voice_server/services/moderation/guard.py)。
    空串 = 方舟/标准 OpenAI 协议（下拉里展示为可读标签，见 EMPTY_OPTION_LABEL） */
 const LLM_PROVIDERS = ["", "doubao", "gemini", "qwen"];
 
