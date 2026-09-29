@@ -1666,6 +1666,38 @@ export async function fetchKeyExtractorConfig(): Promise<ServiceConfig> {
   return res.json();
 }
 
+/** 视觉门控 BERT 服务(bert_intent_classify vision_gate, person_id 机 :10004/:10014)：
+    经 agent_server 按其当前生效配置(含在线覆盖)探活并转出服务上报的模型身份，
+    看到的就是对话真正在打的那个实例。不可达时 reachable=false + error，不抛 HTTP 错。 */
+export interface VisionGateStatus {
+  enabled: boolean;
+  base_url: string;
+  threshold: number;
+  use_context: boolean;
+  reachable: boolean;
+  latency_ms?: number | null;
+  error?: string | null;
+  /** 训练产物目录 model_<时间戳> 的时间戳；旧服务没有 model_info.json 时为 "mtime …" */
+  model_version?: string | null;
+  model_dir?: string | null;
+  labels?: Record<string, string> | null;
+  started_at?: string | null;
+  port?: number | null;
+  /** model_info.json 原文：dataset / base_model / train_samples / label_counts / trained_at / exported_at 等 */
+  model_info?: Record<string, unknown> | null;
+  /** /health 响应原文（上面各字段之外还有 model_mtime / providers 等，服务新增字段也直接透出）；不可达为空 */
+  health?: Record<string, unknown> | null;
+}
+
+export async function fetchVisionGateStatus(): Promise<VisionGateStatus> {
+  const res = await fetch("/api/agent/vision_gate/status");
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || "Failed to fetch vision_gate status");
+  }
+  return res.json();
+}
+
 /* ── 配置在线编辑（DB 覆盖层）──
    编辑后的值存数据库，删除覆盖即恢复 yaml 原值。全部叶子配置可编辑
    （锁定项除外），编辑需口令（X-Config-Edit-Password 头，后端校验）。 */

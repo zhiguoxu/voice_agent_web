@@ -20,6 +20,8 @@ import {
   GROUP_SERVICES,
   fetchEmbeddingConfig,
   fetchKeyExtractorConfig,
+  fetchVisionGateStatus,
+  type VisionGateStatus,
   type ServiceConfig,
   type ConfigService,
   type EditableField,
@@ -1240,7 +1242,89 @@ function ConfigGroupPanel({
   );
 }
 
-/** 顶部服务启动时间状态条：一眼看到 voice / agent / console / memory / person 与记忆 GPU 服务是否在线与上次启动 */
+/** base_url → host:port，与其它服务的地址展示口径一致 */
+function hostPortOf(url: string): string {
+  return url.replace(/^https?:\/\//, "").replace(/\/+$/, "");
+}
+
+/** 模型徽标的悬浮提示：门控参数一行 + /health 响应原文整体铺开（tooltip 是 pre-line，
+    靠换行分行）：一行一个字段，嵌套对象展开成缩进子行，数组/标量直接转文本，
+    服务新增字段也照样显示；模型没带 model_info.json 时提示一句怎么补 */
+function describeGate(s: VisionGateStatus): string {
+  const lines: string[] = [
+    `门控：${s.enabled ? "已开启" : "已关闭"} · 阈值 ${s.threshold}（P(vision) ≥ 阈值才带图）${s.use_context ? " · 带上文（拼上一轮对话做双句输入）" : ""}`,
+    `GET ${s.base_url.replace(/\/+$/, "")}/health${s.latency_ms != null ? `（往返 ${s.latency_ms}ms）` : ""}`,
+  ];
+  const h = s.health;
+  if (!h) return [...lines, "（无响应）"].join("\n");
+  const fmt = (v: unknown): string => {
+    if (v == null) return "-";
+    if (Array.isArray(v)) return v.map(fmt).join(", ");
+    if (typeof v === "object") return Object.entries(v as Record<string, unknown>).map(([k, x]) => `${k}=${fmt(x)}`).join(", ");
+    return String(v);
+  };
+  for (const [k, v] of Object.entries(h)) {
+    if (v != null && typeof v === "object" && !Array.isArray(v) && Object.keys(v).length > 2) {
+      lines.push(`${k}:`);
+      // 全角空格缩进：tooltip 是 pre-line，普通空格会被折叠
+      for (const [ck, cv] of Object.entries(v as Record<string, unknown>)) lines.push(`\u3000· ${ck}: ${fmt(cv)}`);
+    } else {
+      lines.push(`${k}: ${fmt(v)}`);
+    }
+  }
+  if (!s.model_info || !Object.keys(s.model_info).length) {
+    lines.push("（服务未带 model_info.json，版本退化为 model.onnx 修改时间；重新 convert 导出即有）");
+  }
+  return lines.join("\n");
+}
+
+/** 视觉门控 BERT 服务的状态项：走 agent_server 探活(含在线覆盖的 base_url)，
+    地址显示 agent 实际打的实例；只挂一个模型版本徽标(训练产物时间戳)，
+    门控参数与 /health 全部字段都在它的悬浮提示里 */
+function VisionGateStartItem({ status, error }: { status: VisionGateStatus | null; error: string | null }) {
+  const down = !!error || (status != null && status.enabled && !status.reachable);
+  const cls = down ? "down" : status ? (status.enabled && status.reachable ? "ok" : "") : "";
+  return (
+    <div className={`cfg-start-item ${cls}`}>
+      <span className="cfg-start-name">🚦 vision_gate (BERT)</span>
+      {error ? (
+        <span className="cfg-start-status" data-tip={`agent_server 状态接口失败: ${error}`}>● 不可达</span>
+      ) : status ? (
+        <>
+          {status.reachable ? (
+            <span className="cfg-start-status ok">● 在线{status.enabled ? "" : "（门控已关，服务仍在）"}</span>
+          ) : status.enabled ? (
+            <span className="cfg-start-status" data-tip={status.error ?? ""}>● 不可达</span>
+          ) : (
+            <span className="cfg-start-status" data-tip={status.error ?? "vision_gate.enabled=false"}>○ 门控已关</span>
+          )}
+          {status.base_url && (
+            <span className="cfg-start-addr" data-tip="agent_server 当前生效的 vision_gate.base_url（含在线覆盖），即对话真正在打的实例">
+              {hostPortOf(status.base_url)}
+            </span>
+          )}
+          {status.started_at && (
+            <span className="cfg-start-time" data-tip="BERT 服务进程最近一次启动时间（北京时间）">
+              启动于 {formatStartedAt(status.started_at)}
+            </span>
+          )}
+          {status.health && (
+            <span className="cfg-badges cfg-start-badges">
+              <span className="cfg-badge model" data-tip={describeGate(status)}>
+                模型 {status.model_version ?? "未知"}
+              </span>
+            </span>
+          )}
+        </>
+      ) : (
+        <span className="cfg-start-status">加载中…</span>
+      )}
+    </div>
+  );
+}
+
+/** 顶部服务启动时间状态条：一眼看到 voice / agent / console / memory / person 与记忆 GPU 服务、
+    视觉门控 BERT 服务是否在线与上次启动 */
 function ServiceStartStrip({
   voice,
   agent,
@@ -1249,6 +1333,7 @@ function ServiceStartStrip({
   person,
   emb,
   keyExt,
+  gate,
   voiceError,
   agentError,
   consoleError,
@@ -1256,6 +1341,7 @@ function ServiceStartStrip({
   personError,
   embError,
   keyExtError,
+  gateError,
 }: {
   voice: ServiceConfig | null;
   agent: ServiceConfig | null;
@@ -1264,6 +1350,7 @@ function ServiceStartStrip({
   person: ServiceConfig | null;
   emb: ServiceConfig | null;
   keyExt: ServiceConfig | null;
+  gate: VisionGateStatus | null;
   voiceError: string | null;
   agentError: string | null;
   consoleError: string | null;
@@ -1271,6 +1358,7 @@ function ServiceStartStrip({
   personError: string | null;
   embError: string | null;
   keyExtError: string | null;
+  gateError: string | null;
 }) {
   const items: {
     key: string;
@@ -1288,37 +1376,44 @@ function ServiceStartStrip({
     { key: "keyext", icon: "🗝️", title: "key-extractor", data: keyExt, error: keyExtError },
   ];
 
+  const renderItem = ({ key, icon, title, data, error }: (typeof items)[number]) => {
+    const addr = data ? formatServiceAddr(data) : null;
+    return (
+      <div className={`cfg-start-item ${error ? "down" : data ? "ok" : ""}`} key={key}>
+        <span className="cfg-start-name">{icon} {title}</span>
+        {error ? (
+          <span className="cfg-start-status" data-tip={error}>● 不可达</span>
+        ) : data ? (
+          <>
+            <span className="cfg-start-status ok">● 在线</span>
+            {addr && (
+              <span className="cfg-start-addr" data-tip="本进程服务地址（ip:port）">
+                {addr}
+              </span>
+            )}
+            <span className="cfg-start-time" data-tip="本进程最近一次启动时间（北京时间）">
+              启动于 {formatStartedAt(data.started_at)}
+            </span>
+            <span className="cfg-badges cfg-start-badges">
+              <span className="cfg-badge">v{data.version}</span>
+              <span className="cfg-badge env">env: {data.env}</span>
+            </span>
+          </>
+        ) : (
+          <span className="cfg-start-status">加载中…</span>
+        )}
+      </div>
+    );
+  };
+
+  /* 视觉门控 BERT 服务紧跟 agent_server（它的唯一调用方）；它没有 /api/config，
+     走 agent_server 的状态接口，单独渲染 */
+  const gateAfter = items.findIndex((it) => it.key === "agent") + 1;
   return (
     <div className="cfg-start-strip">
-      {items.map(({ key, icon, title, data, error }) => {
-        const addr = data ? formatServiceAddr(data) : null;
-        return (
-          <div className={`cfg-start-item ${error ? "down" : data ? "ok" : ""}`} key={key}>
-            <span className="cfg-start-name">{icon} {title}</span>
-            {error ? (
-              <span className="cfg-start-status" data-tip={error}>● 不可达</span>
-            ) : data ? (
-              <>
-                <span className="cfg-start-status ok">● 在线</span>
-                {addr && (
-                  <span className="cfg-start-addr" data-tip="本进程服务地址（ip:port）">
-                    {addr}
-                  </span>
-                )}
-                <span className="cfg-start-time" data-tip="本进程最近一次启动时间（北京时间）">
-                  启动于 {formatStartedAt(data.started_at)}
-                </span>
-                <span className="cfg-badges cfg-start-badges">
-                  <span className="cfg-badge">v{data.version}</span>
-                  <span className="cfg-badge env">env: {data.env}</span>
-                </span>
-              </>
-            ) : (
-              <span className="cfg-start-status">加载中…</span>
-            )}
-          </div>
-        );
-      })}
+      {items.slice(0, gateAfter).map(renderItem)}
+      <VisionGateStartItem status={gate} error={gateError} />
+      {items.slice(gateAfter).map(renderItem)}
     </div>
   );
 }
@@ -1341,6 +1436,9 @@ export function ConfigView() {
   const [keyExt, setKeyExt] = useState<ServiceConfig | null>(null);
   const [embError, setEmbError] = useState<string | null>(null);
   const [keyExtError, setKeyExtError] = useState<string | null>(null);
+  /* 视觉门控 BERT 服务：经 agent_server 探活 + 模型版本，仅状态条展示，无配置卡 */
+  const [gate, setGate] = useState<VisionGateStatus | null>(null);
+  const [gateError, setGateError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   /* 可编辑白名单（path → 字段状态）。接口不可用时为 null，页面退化为纯只读 */
   const [voiceEditable, setVoiceEditable] = useState<Map<string, EditableField> | null>(null);
@@ -1370,7 +1468,8 @@ export function ConfigView() {
     setMemoryError(null);
     setEmbError(null);
     setKeyExtError(null);
-    const [v, a, c, p, ve, ae, ce, pe, em, ke, m, me] = await Promise.allSettled([
+    setGateError(null);
+    const [v, a, c, p, ve, ae, ce, pe, em, ke, m, me, g] = await Promise.allSettled([
       fetchVoiceConfig(),
       fetchAgentConfig(),
       fetchConsoleConfig(),
@@ -1383,6 +1482,7 @@ export function ConfigView() {
       fetchKeyExtractorConfig(),
       fetchMemoryConfig(),
       fetchEditableConfig("memory"),
+      fetchVisionGateStatus(),
     ]);
     if (v.status === "fulfilled") setVoice(v.value);
     else setVoiceError(v.reason?.message || String(v.reason));
@@ -1403,6 +1503,8 @@ export function ConfigView() {
     if (m.status === "fulfilled") setMemory(m.value);
     else setMemoryError(m.reason?.message || String(m.reason));
     setMemoryEditable(me.status === "fulfilled" ? new Map(me.value.items.map((f) => [f.path, f])) : null);
+    if (g.status === "fulfilled") setGate(g.value);
+    else setGateError(g.reason?.message || String(g.reason));
     setLoading(false);
   }, []);
 
@@ -1523,6 +1625,7 @@ export function ConfigView() {
         person={person}
         emb={emb}
         keyExt={keyExt}
+        gate={gate}
         voiceError={voiceError}
         agentError={agentError}
         consoleError={consoleError}
@@ -1530,6 +1633,7 @@ export function ConfigView() {
         personError={personError}
         embError={embError}
         keyExtError={keyExtError}
+        gateError={gateError}
       />
       <div className="cfg-notice-anchor">
         {notice && <div className="cfg-notice">{notice}</div>}
