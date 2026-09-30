@@ -70,7 +70,7 @@ function PlanChips({ plan, extremumFallback, names }: {
       {plan.confidence === "low" && <span className="recall-chip low" data-tip="主体消解不确定">低置信</span>}
       {plan.key_candidates && plan.key_candidates.length > 0 && (
         <div className="recall-candidates"
-             data-tip={"双塔模型的原始 top5 打分，仅供调试；上方 key: 才是结论\n划线 = 不是合法 key，已被过滤\nkey 为 — 而这里有值 = 模型弃权（没找到足够相关的类别）"}>
+             data-tip={"双塔模型的原始 top5 打分（多句 query 逐句抽取，各句 top5 按最高分合并），仅供调试；上方 key: 才是结论\n划线 = 不是合法 key，已被过滤\nkey 为 — 而这里有值 = 模型弃权（没找到足够相关的类别）"}>
           双塔:
           {plan.key_candidates.map((c) => (
             <span key={c.raw} className={`recall-candidate ${c.key ? "" : "dropped"}`}>
