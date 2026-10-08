@@ -1,6 +1,6 @@
 /**
- * API 测试页：内容风控、ASR 语音识别（火山引擎/百度小度）、VAD 调参等
- * 与生产同款链路的在线探测。
+ * API 测试页：内容风控、ASR 语音识别（火山引擎/百度小度）、VAD 调参、
+ * COS 音频回放等与生产同款链路的在线探测。
  * 从系统配置拆出，避免把「测接口」和「改配置」混在同一页。
  */
 import { useState, useEffect, useCallback, useRef } from "react";
@@ -12,6 +12,7 @@ import {
   testVad,
   tuneVad,
   fetchDeviceStatus,
+  cosMediaUrl,
   type DeviceStatusResult,
   type ModerationTestResult,
   type AsrTestConfig,
@@ -24,6 +25,96 @@ import {
 } from "./api";
 import { TaskParsePanel } from "./TaskParsePanel";
 import "./ApiTestView.css";
+
+/** 从整段文本里取出 COS 音频 key。整行日志（audio=voice_enroll/…/*.wav）和单独的 key 都能过。 */
+const COS_AUDIO_KEY_RE =
+  /(?:^|[\s=])([A-Za-z0-9_.\-/]+\.(?:wav|mp3|ogg|m4a|flac|aac|opus))/i;
+
+function extractCosAudioKey(raw: string): string | null {
+  const text = raw.trim();
+  if (!text) return null;
+  const m = text.match(COS_AUDIO_KEY_RE);
+  if (m) return m[1];
+  if (!/\s/.test(text)) return text;
+  return null;
+}
+
+/** COS 留档音频回放：粘贴日志里的 key（声纹采集的 voice_enroll/… 等），
+ *  走会话媒体接口换临时链接播放，与对话轮次、声纹模板同一条链路。 */
+function CosAudioPanel() {
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const startedRef = useRef(false);
+  const [text, setText] = useState("");
+  const [key, setKey] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const play = () => {
+    const next = extractCosAudioKey(text);
+    if (!next) {
+      setKey(null);
+      setError("没有识别到音频 key，请粘贴 voice_enroll/…/*.wav 或带 audio= 的整行日志");
+      return;
+    }
+    const el = audioRef.current;
+    if (!el) return;
+    startedRef.current = true;
+    setError(null);
+    setKey(next);
+    // 同一次点击里 play()，避免控件挂上后自动播放被浏览器拦住
+    const url = new URL(cosMediaUrl(next), window.location.href).href;
+    if (el.src === url) {
+      el.currentTime = 0;
+    } else {
+      el.src = url;
+    }
+    void el.play().catch(() => {});
+  };
+
+  return (
+    <div className="card cfg-card cfg-intent-card">
+      <h3>
+        🎧 COS 音频播放
+        <span className="subtitle">
+          粘贴日志里的 COS key（如声纹采集结束的 audio=voice_enroll/…/*.wav），换临时链接播放
+        </span>
+      </h3>
+
+      <div className="cfg-intent-test cos-audio-test">
+        <input
+          type="text"
+          placeholder="voice_enroll/设备SN/20261008_163057_483314.wav，或整行日志"
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && play()}
+        />
+        <button onClick={play} disabled={!text.trim()}>
+          播放
+        </button>
+      </div>
+      {error && <div className="cfg-error">❌ {error}</div>}
+
+      <div className="cos-audio-player" hidden={key == null}>
+        {key && (
+          <div className="cos-audio-key">
+            <code>{key}</code>
+            <a className="media-download" href={cosMediaUrl(key, true)} download>
+              下载
+            </a>
+          </div>
+        )}
+        <audio
+          ref={audioRef}
+          controls
+          preload="none"
+          onError={() => {
+            if (startedRef.current) setError("播放失败：对象不存在，或临时链接无效");
+          }}
+          onLoadedData={() => setError(null)}
+        />
+      </div>
+    </div>
+  );
+}
 
 /** 设备状态查询：从 Redis 读设备上报的实时状态（电量/充电/WiFi 等），
  *  与「电量查询」意图同一个 get_device_status，只读不落库。 */
@@ -846,6 +937,7 @@ export function ApiTestView() {
       <div className="api-test-hint">
         在线 API 探测：与生产链路同一套客户端与规则，结果不落库、不影响线上播报。
       </div>
+      <CosAudioPanel />
       <TaskParsePanel />
       <DeviceStatusPanel />
       <ModerationPanel />

@@ -614,3 +614,33 @@
   max-width: 480px;
   word-break: break-all;
 }
+
+.api-test-container .cos-audio-test input {
+  max-width: none;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+}
+
+.api-test-container .cos-audio-player {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.api-test-container .cos-audio-key {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+  word-break: break-all;
+}
+
+.api-test-container .cos-audio-key code {
+  color: var(--cyan);
+}
+
+.api-test-container .cos-audio-player audio {
+  width: 100%;
+  max-width: 640px;
+  height: 36px;
+}
