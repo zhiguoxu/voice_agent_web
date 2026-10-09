@@ -46,13 +46,13 @@ function PlanChips({ plan, extremumFallback, names }: {
           主体: {plan.subjects.length ? plan.subjects.map((p) => personLabel(p, names)).join("、") : "—"}
         </span>
       )}
-      <span className="recall-chip key" data-tip="命中的 key 注册表节点（可多个；root 按子树展开，叶子取正负镜像对；空 = 本轮无可检索维度，不召回）。虚线下划线 = 上下文融合从上文继承的 key">
+      <span className="recall-chip key" data-tip="命中的 key 注册表节点（可多个；root 按子树展开，叶子取正负镜像对；空 = 本轮无可检索维度，不召回）。虚线下划线 = 上下文融合从上文继承的 key，排序后于本轮扣出的 key">
         key: {plan.keys?.length ? plan.keys.map((k, i) => (
           <Fragment key={k}>
             {i > 0 && "、"}
             <span className={keyIsOwn(plan, k) ? "" : "recall-key-inherited"}
                   data-tip={keyIsOwn(plan, k) ? undefined
-                    : "从上文继承：本轮 query 没扣出这个 key，是上下文融合并入的最近一次扣出结果（联想式过召，交模型分辨）"}>
+                    : "从上文继承：本轮 query 没扣出这个 key。检索时排在本轮扣出的 key 之后，只填本轮类别没占满的名额"}>
               {k}
             </span>
           </Fragment>
