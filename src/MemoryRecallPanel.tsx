@@ -46,6 +46,12 @@ function PlanChips({ plan, extremumFallback, names }: {
           主体: {plan.subjects.length ? plan.subjects.map((p) => personLabel(p, names)).join("、") : "—"}
         </span>
       )}
+      {plan.focus_persons && plan.focus_persons.length > 0 && (
+        <span className="recall-chip subjects"
+              data-tip={`排序优先（person_id: ${plan.focus_persons.join(", ")}）：query 提到的家人，没提到家人则为提问者本人；TA 的条目排最前，别人的同类条目在后面补位`}>
+          优先: {plan.focus_persons.map((p) => personLabel(p, names)).join("、")}
+        </span>
+      )}
       <span className="recall-chip key" data-tip="命中的 key 注册表节点（可多个；root 按子树展开，叶子取正负镜像对；空 = 本轮无可检索维度，不召回）。虚线下划线 = 上下文融合从上文继承的 key，排序后于本轮扣出的 key">
         key: {plan.keys?.length ? plan.keys.map((k, i) => (
           <Fragment key={k}>

@@ -152,6 +152,9 @@ export interface RecallPlan {
   temporal: string;
   confidence?: string;
   topic: string;
+  /** 排序最优先的成员 person_id：query 提到的家人，没提到家人则为提问者本人；
+   *  只定排序不过滤。旧 trace 无此字段 */
+  focus_persons?: string[];
 }
 
 /** 一条召回的记忆条目（family_memory RecalledMemory；succ 为变更链后继） */
