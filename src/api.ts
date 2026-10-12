@@ -667,6 +667,8 @@ export interface RosterMember {
   role: string | null;
   gender: string | null;
   birth_year: number | null;
+  birth_month: number | null;
+  birth_day: number | null;
   /** 声纹模板条数，0=未录入声纹 */
   voice_templates: number;
   created_at: string | null;
@@ -730,6 +732,8 @@ export interface RosterMemberPatch {
   role?: string | null;
   gender?: string | null;
   birth_year?: number | null;
+  birth_month?: number | null;
+  birth_day?: number | null;
 }
 
 export async function updateRosterMember(
@@ -802,14 +806,16 @@ export interface FaceRegisterResult {
  *  期间设备会语音引导用户；返回最终结果。中途退出要调 cancelFaceRegister，
  *  只放弃这条请求后端不会停。
  *  issApiUrl: ISS 推流服务地址覆盖（自动开流用，与拉流控制同一份输入）；
- *  空 = 用 person_id 配置的地址。 */
+ *  空 = 用 person_id 配置的地址。
+ *  profile: 随名字写入花名册的性别与生日（YYYY-MM-DD），null = 不写。 */
 export async function registerFace(
   deviceSn: string, name: string, issApiUrl: string,
+  profile: { gender: "male" | "female" | null; birthday: string | null },
 ): Promise<FaceRegisterResult> {
   const res = await fetch("/api/agent/face/register", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ device_sn: deviceSn, name, iss_api_url: issApiUrl }),
+    body: JSON.stringify({ device_sn: deviceSn, name, iss_api_url: issApiUrl, ...profile }),
   });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));

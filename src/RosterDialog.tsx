@@ -32,13 +32,42 @@ function formatTime(iso: string | null) {
   return new Date(iso).toLocaleString("zh-CN");
 }
 
+const pad2 = (n: number) => String(n).padStart(2, "0");
+
+/** 生日文本：年月日齐全 2016-05-03，只有年 2016，只有月日 05-03，都没有为空串 */
+function birthdayText(m: RosterMember): string {
+  const md = m.birth_month != null && m.birth_day != null
+    ? `${pad2(m.birth_month)}-${pad2(m.birth_day)}` : "";
+  if (m.birth_year != null) return md ? `${m.birth_year}-${md}` : String(m.birth_year);
+  return md;
+}
+
+type BirthdayFields = Pick<RosterMember, "birth_year" | "birth_month" | "birth_day">;
+
+/** 解析生日输入（同 birthdayText 的三种格式，空 = 全部清空）；格式或日期非法返回 null */
+function parseBirthday(text: string): BirthdayFields | null {
+  const s = text.trim();
+  if (!s) return { birth_year: null, birth_month: null, birth_day: null };
+  if (/^\d{4}$/.test(s)) return { birth_year: Number(s), birth_month: null, birth_day: null };
+  const full = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  const md = s.match(/^(\d{1,2})-(\d{1,2})$/);
+  let y: number | null, m: number, d: number;
+  if (full) [y, m, d] = [Number(full[1]), Number(full[2]), Number(full[3])];
+  else if (md) [y, m, d] = [null, Number(md[1]), Number(md[2])];
+  else return null;
+  // 只有月日时按闰年校验，2 月 29 日合法
+  const probe = new Date(y ?? 2000, m - 1, d);
+  if (probe.getMonth() !== m - 1 || probe.getDate() !== d) return null;
+  return { birth_year: y, birth_month: m, birth_day: d };
+}
+
 /** 成员行的编辑态草稿（全部用字符串承载，保存时归一） */
 interface MemberDraft {
   name: string;
   aliases: string;      // "/" 或 "," 分隔
   role: string;
   gender: string;
-  birth_year: string;
+  birthday: string;     // 见 birthdayText / parseBirthday
 }
 
 function toDraft(m: RosterMember): MemberDraft {
@@ -47,7 +76,7 @@ function toDraft(m: RosterMember): MemberDraft {
     aliases: m.aliases.join(" / "),
     role: m.role ?? "",
     gender: m.gender ?? "",
-    birth_year: m.birth_year != null ? String(m.birth_year) : "",
+    birthday: birthdayText(m),
   };
 }
 
@@ -136,9 +165,9 @@ export function RosterDialog({ deviceSn, onClose }: { deviceSn: string; onClose:
 
   const saveEdit = async () => {
     if (!editingPid || !draft) return;
-    const year = draft.birth_year.trim();
-    if (year && !/^\d{4}$/.test(year)) {
-      setError("出生年须为 4 位数字");
+    const birthday = parseBirthday(draft.birthday);
+    if (!birthday) {
+      setError("生日格式须为 2016、2016-05-03 或 05-03，且是真实存在的日期");
       return;
     }
     setSaving(true);
@@ -149,7 +178,7 @@ export function RosterDialog({ deviceSn, onClose }: { deviceSn: string; onClose:
         aliases: draft.aliases.split(/[/,，、]/).map((s) => s.trim()).filter(Boolean),
         role: draft.role.trim() || null,
         gender: draft.gender || null,
-        birth_year: year ? Number(year) : null,
+        ...birthday,
       });
       cancelEdit();
       await load();
@@ -245,8 +274,9 @@ export function RosterDialog({ deviceSn, onClose }: { deviceSn: string; onClose:
         </select>
       </td>
       <td>
-        <input className="roster-input year" value={draft!.birth_year} placeholder="如 2016"
-               onChange={(e) => setDraft({ ...draft!, birth_year: e.target.value })} />
+        <input className="roster-input birthday" value={draft!.birthday}
+               placeholder="2016 或 2016-05-03"
+               onChange={(e) => setDraft({ ...draft!, birthday: e.target.value })} />
       </td>
       <td className="roster-time">{formatTime(m.created_at)}</td>
       <td className="roster-time">{formatTime(m.updated_at)}</td>
@@ -274,7 +304,7 @@ export function RosterDialog({ deviceSn, onClose }: { deviceSn: string; onClose:
           ) : "-"}
         </td>
         <td>{m.gender ? (GENDER_LABELS[m.gender] || m.gender) : "-"}</td>
-        <td>{m.birth_year ?? "-"}</td>
+        <td>{birthdayText(m) || "-"}</td>
         <td className="roster-time">{formatTime(m.created_at)}</td>
         <td className="roster-time">{formatTime(m.updated_at)}</td>
         <td className="roster-edit-actions">
@@ -354,7 +384,7 @@ export function RosterDialog({ deviceSn, onClose }: { deviceSn: string; onClose:
                         <th>别名/小名</th>
                         <th>角色</th>
                         <th>性别</th>
-                        <th>出生年</th>
+                        <th>生日</th>
                         <th>创建时间</th>
                         <th>更新时间</th>
                         <th></th>

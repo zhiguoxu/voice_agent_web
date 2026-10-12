@@ -17,6 +17,9 @@ export function FaceRegisterDialog({ deviceSn, onClose }: {
   onClose: () => void;
 }) {
   const [name, setName] = useState("");
+  const [gender, setGender] = useState<"" | "male" | "female">("");
+  /* <input type="date"> 的值：YYYY-MM-DD，空 = 不填 */
+  const [birthday, setBirthday] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<FaceRegisterResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -51,7 +54,10 @@ export function FaceRegisterDialog({ deviceSn, onClose }: {
     try {
       // ISS 地址覆盖与拉流控制对话框/视觉页同一份输入（未拉流时后端自动开流用），
       // 空 = person_id 配置的地址
-      setResult(await registerFace(deviceSn, trimmed, loadIssApiUrl()));
+      setResult(await registerFace(deviceSn, trimmed, loadIssApiUrl(), {
+        gender: gender || null,
+        birthday: birthday || null,
+      }));
     } catch (e: any) {
       setError(e.message || String(e));
     } finally {
@@ -70,7 +76,8 @@ export function FaceRegisterDialog({ deviceSn, onClose }: {
 
         <div className="roster-dialog-body">
           <p className="face-register-hint">
-            输入要注册的人名后开始。摄像头未在拉流时会自动开启（多等约十几秒）；
+            输入要注册的人名后开始（性别、生日选填，注册成功时随名字写入花名册）。
+            摄像头未在拉流时会自动开启（多等约十几秒）；
             注册过程由设备语音引导（请让用户注视 mini 头部，每轮约 8 秒、最多
             3 轮，按更高的人脸质量标准采集底片），本页面会一直等到流程结束并
             展示结果；中途关闭本页面会取消注册。
@@ -84,6 +91,25 @@ export function FaceRegisterDialog({ deviceSn, onClose }: {
               disabled={submitting}
               onChange={(e) => setName(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") submit(); }}
+            />
+            <select
+              className="roster-input fixed"
+              value={gender}
+              disabled={submitting}
+              onChange={(e) => setGender(e.target.value as "" | "male" | "female")}
+            >
+              <option value="">性别</option>
+              <option value="male">男</option>
+              <option value="female">女</option>
+            </select>
+            <input
+              type="date"
+              className="roster-input fixed"
+              value={birthday}
+              max={new Date().toLocaleDateString("sv-SE")}
+              disabled={submitting}
+              data-tip="生日（选填）"
+              onChange={(e) => setBirthday(e.target.value)}
             />
             <button
               className="roster-save-btn"

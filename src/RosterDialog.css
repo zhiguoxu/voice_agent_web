@@ -282,8 +282,8 @@
   box-sizing: border-box;
 }
 
-.roster-input.year {
-  width: 80px;
+.roster-input.birthday {
+  width: 120px;
 }
 
 .roster-input:focus {
