@@ -25,6 +25,8 @@ const ROLE_LABELS: Record<string, string> = {
 const GENDER_LABELS: Record<string, string> = {
   male: "男",
   female: "女",
+  other: "其他",
+  undisclosed: "不愿透露",
 };
 
 function formatTime(iso: string | null) {
@@ -269,8 +271,9 @@ export function RosterDialog({ deviceSn, onClose }: { deviceSn: string; onClose:
         <select className="roster-input" value={draft!.gender}
                 onChange={(e) => setDraft({ ...draft!, gender: e.target.value })}>
           <option value="">-</option>
-          <option value="male">男</option>
-          <option value="female">女</option>
+          {Object.entries(GENDER_LABELS).map(([v, label]) => (
+            <option key={v} value={v}>{label}</option>
+          ))}
         </select>
       </td>
       <td>

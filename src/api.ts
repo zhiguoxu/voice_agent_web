@@ -810,7 +810,7 @@ export interface FaceRegisterResult {
  *  profile: 随名字写入花名册的性别与生日（YYYY-MM-DD），null = 不写。 */
 export async function registerFace(
   deviceSn: string, name: string, issApiUrl: string,
-  profile: { gender: "male" | "female" | null; birthday: string | null },
+  profile: { gender: "male" | "female" | "other" | "undisclosed" | null; birthday: string | null },
 ): Promise<FaceRegisterResult> {
   const res = await fetch("/api/agent/face/register", {
     method: "POST",

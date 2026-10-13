@@ -17,7 +17,7 @@ export function FaceRegisterDialog({ deviceSn, onClose }: {
   onClose: () => void;
 }) {
   const [name, setName] = useState("");
-  const [gender, setGender] = useState<"" | "male" | "female">("");
+  const [gender, setGender] = useState<"" | "male" | "female" | "other" | "undisclosed">("");
   /* <input type="date"> 的值：YYYY-MM-DD，空 = 不填 */
   const [birthday, setBirthday] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -96,11 +96,13 @@ export function FaceRegisterDialog({ deviceSn, onClose }: {
               className="roster-input fixed"
               value={gender}
               disabled={submitting}
-              onChange={(e) => setGender(e.target.value as "" | "male" | "female")}
+              onChange={(e) => setGender(e.target.value as "" | "male" | "female" | "other" | "undisclosed")}
             >
               <option value="">性别</option>
               <option value="male">男</option>
               <option value="female">女</option>
+              <option value="other">其他</option>
+              <option value="undisclosed">不愿透露</option>
             </select>
             <input
               type="date"
