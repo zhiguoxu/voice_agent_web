@@ -1,6 +1,6 @@
 /**
  * API 测试页：内容风控、ASR 语音识别（火山引擎/百度小度）、VAD 调参、
- * COS 音频回放等与生产同款链路的在线探测。
+ * COS 音频回放、主动交互状态清理等与生产同款链路的在线探测。
  * 从系统配置拆出，避免把「测接口」和「改配置」混在同一页。
  */
 import { useState, useEffect, useCallback, useRef } from "react";
@@ -12,8 +12,10 @@ import {
   testVad,
   tuneVad,
   fetchDeviceStatus,
+  clearProactiveState,
   cosMediaUrl,
   type DeviceStatusResult,
+  type ProactiveClearStateResult,
   type ModerationTestResult,
   type AsrTestConfig,
   type AsrTestResult,
@@ -236,6 +238,89 @@ function DeviceStatusPanel() {
               )}
             </div>
           ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** 主动交互状态清理：删掉 Redis 里的天气事实缓存、失败标记和当天窗口名额，
+ *  删完当天可以重新触发。按设备清会连带该设备花名册成员的名额。 */
+function ProactiveClearStatePanel() {
+  const [deviceSn, setDeviceSn] = useState("");
+  const [busy, setBusy] = useState<"device" | "all" | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<ProactiveClearStateResult | null>(null);
+
+  const run = async (clearAll: boolean) => {
+    const sn = deviceSn.trim();
+    if (busy) return;
+    if (!clearAll && !sn) return;
+    if (clearAll) {
+      const ok = window.confirm(
+        "清除全部设备的主动交互 Redis 状态？天气事实缓存、失败标记和当天窗口名额都会删掉，删完当天可以重新触发。",
+      );
+      if (!ok) return;
+    }
+    setBusy(clearAll ? "all" : "device");
+    setError(null);
+    try {
+      setResult(await clearProactiveState(clearAll ? { clearAll: true } : { deviceSn: sn }));
+    } catch (e: any) {
+      setError(e.message || String(e));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <div className="card cfg-card cfg-intent-card">
+      <h3>
+        🧹 主动交互状态清理
+        <span className="subtitle">
+          POST /api/agent/proactive/clear-state，删除天气事实缓存、失败标记和当天窗口名额
+        </span>
+      </h3>
+
+      <div className="cfg-intent-test proactive-clear-test">
+        <input
+          type="text"
+          placeholder="device_sn，如 PreD018；按设备清会连带该设备成员的名额"
+          value={deviceSn}
+          onChange={(e) => setDeviceSn(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && run(false)}
+          disabled={busy != null}
+        />
+        <button onClick={() => run(false)} disabled={busy != null || !deviceSn.trim()}>
+          {busy === "device" ? <span className="spinner inline" /> : "清除该设备"}
+        </button>
+        <button
+          className="proactive-clear-all"
+          onClick={() => run(true)}
+          disabled={busy != null}
+        >
+          {busy === "all" ? <span className="spinner inline" /> : "清除全部"}
+        </button>
+      </div>
+      {error && <div className="cfg-error">❌ 清除失败: {error}</div>}
+
+      {result && (
+        <div className="cfg-intent-results">
+          <div className="cfg-intent-result cfg-mod-result">
+            <div className="cfg-mod-head">
+              <span className={`cfg-badge hit ${result.ok ? "ok" : "down"}`}>
+                {result.cleared_count > 0 ? `已清除 ${result.cleared_count} 个键` : "没有可清除的键"}
+              </span>
+              <span className="cfg-intent-query">{result.message}</span>
+            </div>
+            {result.cleared_keys.length > 0 && (
+              <div className="proactive-clear-keys">
+                {result.cleared_keys.map((k) => (
+                  <code key={k}>{k}</code>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
@@ -935,11 +1020,13 @@ export function ApiTestView() {
   return (
     <div className="api-test-container">
       <div className="api-test-hint">
-        在线 API 探测：与生产链路同一套客户端与规则，结果不落库、不影响线上播报。
+        在线 API 探测走生产同款客户端与规则，探测结果不落库。「主动交互状态清理」会删除 Redis
+        里的天气事实缓存、失败标记和当天窗口名额，删完当天可以重新触发。
       </div>
       <CosAudioPanel />
       <TaskParsePanel />
       <DeviceStatusPanel />
+      <ProactiveClearStatePanel />
       <ModerationPanel />
       <AsrPanel />
       <VadPanel />

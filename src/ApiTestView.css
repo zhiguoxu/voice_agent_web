@@ -163,6 +163,30 @@
   cursor: default;
 }
 
+.api-test-container .proactive-clear-test {
+  flex-wrap: wrap;
+}
+
+.api-test-container .cfg-intent-test button.proactive-clear-all {
+  color: var(--red);
+  border-color: rgba(248, 113, 113, 0.45);
+}
+
+.api-test-container .proactive-clear-keys {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 240px;
+  overflow-y: auto;
+  margin-top: 8px;
+}
+
+.api-test-container .proactive-clear-keys code {
+  color: var(--cyan);
+  word-break: break-all;
+  font-size: 12px;
+}
+
 .api-test-container .cfg-intent-results {
   display: flex;
   flex-direction: column;

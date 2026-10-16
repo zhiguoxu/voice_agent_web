@@ -1173,7 +1173,7 @@ export default function App() {
           <button
             className={`main-tab ${activeTab === 'apiTest' ? 'active' : ''}`}
             onClick={() => setActiveTab('apiTest')}
-            data-tip="内容风控、ASR 语音识别、VAD 触发调参、COS 音频回放等与生产同款链路的在线探测"
+            data-tip="内容风控、ASR 语音识别、VAD 触发调参、COS 音频回放、主动交互状态清理等与生产同款链路的在线探测"
           >
             API 测试
           </button>

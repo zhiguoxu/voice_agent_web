@@ -2118,6 +2118,39 @@ export async function fetchDeviceStatus(deviceSn: string): Promise<DeviceStatusR
   return res.json();
 }
 
+/** 主动交互 Redis 状态清理结果（POST /api/agent/proactive/clear-state） */
+export interface ProactiveClearStateResult {
+  ok: boolean;
+  /** 实际删掉的 key 数量；没有匹配到为 0 */
+  cleared_count: number;
+  cleared_keys: string[];
+  message: string;
+}
+
+/** 删除主动交互在 Redis 里的天气事实缓存、失败标记和当天窗口名额。
+ *  clearAll 为 true 时忽略 deviceSn，清掉全部设备。 */
+export async function clearProactiveState(opts: {
+  deviceSn?: string;
+  clearAll?: boolean;
+}): Promise<ProactiveClearStateResult> {
+  const body = opts.clearAll
+    ? { clear_all: true }
+    : { device_sn: (opts.deviceSn || "").trim() };
+  const res = await fetch("/api/agent/proactive/clear-state", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    const detail = data.detail;
+    throw new Error(
+      typeof detail === "string" ? detail : detail ? JSON.stringify(detail) : "清除主动交互状态失败",
+    );
+  }
+  return res.json();
+}
+
 /** ASR 测试面板用的配置摘要（GET /api/voice/asr/test/config） */
 export interface AsrTestConfig {
   /** 生产当前使用的 ASR 提供商（asr.name）；测试的 provider 按次可选，不必等于它 */
