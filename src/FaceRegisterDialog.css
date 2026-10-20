@@ -3,6 +3,20 @@
   width: min(440px, 100%);
 }
 
+/* 设备号可能很长：副标题吃掉剩余宽度并截断，关闭按钮留在右上角 */
+.face-register-dialog h3 .subtitle {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.face-register-dialog h3 .roster-close {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
 .face-register-hint {
   font-size: 13px;
   color: var(--text-muted);
@@ -12,21 +26,40 @@
 
 .face-register-form {
   display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: stretch;
+}
+
+.face-register-row {
+  display: flex;
   gap: 8px;
-  align-items: center;
+}
+
+.face-register-field {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
 }
 
 .face-register-form .roster-input {
-  flex: 1;
+  width: 100%;
+  min-width: 0;
   padding: 8px 10px;
   font-size: 14px;
 }
 
-.face-register-form .roster-input.fixed {
-  flex: 0 0 auto;
+/* 控制台是深色底，原生日期框不声明 color-scheme 时文字和日历图标会发白发糊 */
+.face-register-form input[type="date"] {
+  color-scheme: dark;
 }
 
 .face-register-form .roster-save-btn {
+  align-self: flex-end;
   padding: 8px 16px;
   font-size: 13px;
 }

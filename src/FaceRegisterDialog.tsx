@@ -83,36 +83,46 @@ export function FaceRegisterDialog({ deviceSn, onClose }: {
             展示结果；中途关闭本页面会取消注册。
           </p>
           <div className="face-register-form">
-            <input
-              className="roster-input"
-              placeholder="要注册的人名，如：张三"
-              value={name}
-              autoFocus
-              disabled={submitting}
-              onChange={(e) => setName(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") submit(); }}
-            />
-            <select
-              className="roster-input fixed"
-              value={gender}
-              disabled={submitting}
-              onChange={(e) => setGender(e.target.value as "" | "male" | "female" | "other" | "undisclosed")}
-            >
-              <option value="">性别</option>
-              <option value="male">男</option>
-              <option value="female">女</option>
-              <option value="other">其他</option>
-              <option value="undisclosed">不愿透露</option>
-            </select>
-            <input
-              type="date"
-              className="roster-input fixed"
-              value={birthday}
-              max={new Date().toLocaleDateString("sv-SE")}
-              disabled={submitting}
-              data-tip="生日（选填）"
-              onChange={(e) => setBirthday(e.target.value)}
-            />
+            <label className="face-register-field">
+              <span>人名</span>
+              <input
+                className="roster-input"
+                placeholder="如：张三"
+                value={name}
+                autoFocus
+                disabled={submitting}
+                onChange={(e) => setName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") submit(); }}
+              />
+            </label>
+            <div className="face-register-row">
+              <label className="face-register-field">
+                <span>性别（选填）</span>
+                <select
+                  className="roster-input"
+                  value={gender}
+                  disabled={submitting}
+                  onChange={(e) => setGender(e.target.value as "" | "male" | "female" | "other" | "undisclosed")}
+                >
+                  <option value="">不填</option>
+                  <option value="male">男</option>
+                  <option value="female">女</option>
+                  <option value="other">其他</option>
+                  <option value="undisclosed">不愿透露</option>
+                </select>
+              </label>
+              <label className="face-register-field">
+                <span>生日（选填）</span>
+                <input
+                  type="date"
+                  className="roster-input"
+                  value={birthday}
+                  max={new Date().toLocaleDateString("sv-SE")}
+                  disabled={submitting}
+                  onChange={(e) => setBirthday(e.target.value)}
+                />
+              </label>
+            </div>
             <button
               className="roster-save-btn"
               disabled={submitting || !name.trim()}
