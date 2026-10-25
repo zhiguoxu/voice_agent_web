@@ -7,6 +7,7 @@ import {
   deleteSession,
   clearSessionTurns,
   deleteTurn,
+  labelTurnSpeaker,
   replayTurn,
   testSessionInput,
   forceNewSession,
@@ -15,6 +16,7 @@ import {
   rawRecordStatus,
   updateDeviceName,
   fetchRoster,
+  type RosterMember,
   fetchExtractedTraces,
   fetchStreamStatus,
   type StreamStatusData,
@@ -108,34 +110,61 @@ type ConfirmState = {
   resolve: (ok: boolean) => void;
 } | null;
 
-/** speaker_id → 展示名。名字不落库（可改名），从当前会话设备所属家庭的花名册现查
+/** speaker_id → 展示名，以及花名册成员列表（标记说话人时从这里选）。
+ *  名字不落库（可改名），从当前会话设备所属家庭的花名册现查
  *  （多家庭同库，按 device_sn 取本家）；agent_server 不可达时降级为只显示裸 id。 */
 function useSpeakerNames(deviceSn: string | null | undefined) {
   const [names, setNames] = useState<Record<string, string>>({});
-  const loadingRef = useRef(false);
+  const [members, setMembers] = useState<RosterMember[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [deviceSeen, setDeviceSeen] = useState(deviceSn);
+  const seq = useRef(0);
+  /* 换设备立刻清掉上一户的成员，避免标记菜单短暂列出别人家的人 */
+  if (deviceSn !== deviceSeen) {
+    setDeviceSeen(deviceSn);
+    setNames({});
+    setMembers([]);
+    setError(null);
+  }
   const reload = useCallback(async () => {
+    const ticket = ++seq.current;
     if (!deviceSn) {
-      setNames({});
+      setLoading(false);
       return;
     }
-    if (loadingRef.current) return;
-    loadingRef.current = true;
+    setLoading(true);
     try {
       const roster = await fetchRoster(deviceSn);
+      if (ticket !== seq.current) return;
       const map: Record<string, string> = {};
       for (const m of roster.members) {
         const n = m.name || m.aliases[0];
         if (n) map[m.person_id] = n;
       }
       setNames(map);
-    } catch {
-      /* 花名册拉不到只影响名字展示，不打扰主流程 */
+      setMembers(roster.members);
+      setError(null);
+    } catch (e: any) {
+      if (ticket !== seq.current) return;
+      /* 同一设备刷新失败时留着上次的名单；换设备时上面已经清空 */
+      setError(e?.message || String(e));
     } finally {
-      loadingRef.current = false;
+      if (ticket === seq.current) setLoading(false);
     }
   }, [deviceSn]);
   useEffect(() => { reload(); }, [reload]);
-  return { speakerNames: names, reloadSpeakerNames: reload };
+  return {
+    speakerNames: names,
+    rosterMembers: members,
+    rosterError: error,
+    rosterLoading: loading,
+    reloadSpeakerNames: reload,
+  };
+}
+
+function rosterMemberTitle(m: RosterMember): string {
+  return m.name || m.aliases[0] || m.person_id;
 }
 
 /** query 行右侧的说话人标识：名称 (speaker_id)；没名字只显示裸 id。
@@ -203,6 +232,142 @@ function SpeakerBadge({ speakerId, speakerName, kind, suspected, debug, names, o
       {marks.length > 0 && <b className="speaker-mark">{marks.join("·")}</b>}
       {text}
     </span>
+  );
+}
+
+/** 给一轮对话标「用户是谁」：从当前设备花名册选人，写入对话库。
+ *  与左侧自动识别徽章独立——标完不改 speaker_id。 */
+function TurnSpeakerLabel({
+  turnId, personId, personName, names, members, rosterError, rosterLoading, onSaved,
+}: {
+  turnId: number;
+  personId: string | null | undefined;
+  personName: string | null | undefined;
+  names: Record<string, string>;
+  members: RosterMember[];
+  rosterError: string | null;
+  rosterLoading: boolean;
+  onSaved: (turnId: number, personId: string | null, name: string | null) => void;
+}) {
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
+  const [anchor, setAnchor] = useState<DOMRect | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    /* 菜单自己的滚动不能关；对话列表滚动会让 fixed 菜单位置错位，直接关掉 */
+    const closeOnScroll = (e: Event) => {
+      if (rootRef.current?.contains(e.target as Node)) return;
+      setOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    window.addEventListener("scroll", closeOnScroll, true);
+    window.addEventListener("resize", closeOnScroll);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+      window.removeEventListener("scroll", closeOnScroll, true);
+      window.removeEventListener("resize", closeOnScroll);
+    };
+  }, [open]);
+
+  const shown = personId ? (names[personId] || personName || personId) : null;
+  const spaceBelow = anchor ? window.innerHeight - anchor.bottom : 0;
+  const above = !!anchor && spaceBelow < 280 && anchor.top > spaceBelow;
+
+  const choose = async (member: RosterMember | null) => {
+    if (saving) return;
+    setSaving(true);
+    setSaveError(null);
+    const nextId = member?.person_id ?? null;
+    const nextName = member ? rosterMemberTitle(member) : null;
+    try {
+      const saved = await labelTurnSpeaker(turnId, { person_id: nextId, name: nextName });
+      onSaved(turnId, saved.labeled_speaker_id, saved.labeled_speaker_name);
+      setOpen(false);
+    } catch (e: any) {
+      setSaveError(e?.message || String(e));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="speaker-label" ref={rootRef}>
+      <button
+        type="button"
+        className={`speaker-label-btn ${shown ? "set" : ""}`}
+        data-tip={shown
+          ? `人工标记的说话人：${shown}${personId ? `（${personId}）` : ""}。点击更改`
+          : "从花名册标记这轮对话的用户是谁"}
+        onClick={(e) => {
+          if (open) {
+            setOpen(false);
+            return;
+          }
+          setSaveError(null);
+          setAnchor(e.currentTarget.getBoundingClientRect());
+          setOpen(true);
+        }}
+      >
+        {shown ? `标记 · ${shown}` : "标记"}
+      </button>
+      {open && anchor && (
+        <div
+          className={`speaker-label-menu ${above ? "above" : ""}`}
+          style={{ top: above ? anchor.top - 4 : anchor.bottom + 4, left: anchor.right }}
+        >
+          <div className="speaker-label-menu-title">这轮用户是谁</div>
+          {rosterLoading && members.length === 0 && (
+            <div className="speaker-label-empty">花名册加载中…</div>
+          )}
+          {rosterError && members.length === 0 && (
+            <div className="speaker-label-empty">{rosterError}</div>
+          )}
+          {!rosterLoading && !rosterError && members.length === 0 && (
+            <div className="speaker-label-empty">花名册还没有成员</div>
+          )}
+          {members.map((m) => {
+            const title = rosterMemberTitle(m);
+            const selected = m.person_id === personId;
+            return (
+              <button
+                type="button"
+                key={m.person_id}
+                className={`speaker-label-item ${selected ? "selected" : ""}`}
+                disabled={saving}
+                onClick={() => choose(m)}
+              >
+                <span className="speaker-label-item-name">{title}</span>
+                {title !== m.person_id && (
+                  <span className="speaker-label-item-id">{m.person_id}</span>
+                )}
+              </button>
+            );
+          })}
+          {personId && (
+            <button
+              type="button"
+              className="speaker-label-clear"
+              disabled={saving}
+              onClick={() => choose(null)}
+            >
+              清除标记
+            </button>
+          )}
+          {saveError && <div className="speaker-label-empty">{saveError}</div>}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -517,7 +682,16 @@ export default function App() {
   const [turnScrollNonce, setTurnScrollNonce] = useState(0);
 
   /* ── 说话人名字映射（按当前会话设备的家庭花名册现查） ── */
-  const { speakerNames, reloadSpeakerNames } = useSpeakerNames(selectedSession?.device_sn);
+  const { speakerNames, rosterMembers, rosterError, rosterLoading, reloadSpeakerNames } =
+    useSpeakerNames(selectedSession?.device_sn);
+
+  const applySpeakerLabel = useCallback((
+    turnId: number, personId: string | null, name: string | null,
+  ) => {
+    const patch = { labeled_speaker_id: personId, labeled_speaker_name: name };
+    setTurns(prev => prev.map(t => t.id === turnId ? { ...t, ...patch } : t));
+    setSelectedTurn(prev => prev && prev.id === turnId ? { ...prev, ...patch } : prev);
+  }, []);
 
   /* ── Replay modal ── */
   const [replayOpen, setReplayOpen] = useState(false);
@@ -1575,6 +1749,16 @@ export default function App() {
                         kind={t.speaker_conflict_kind} suspected={t.speaker_suspected}
                         debug={t.identity_debug} names={speakerNames}
                         onShowDebug={setIdentityDebugShown} />
+                      <TurnSpeakerLabel
+                        turnId={t.id}
+                        personId={t.labeled_speaker_id}
+                        personName={t.labeled_speaker_name}
+                        names={speakerNames}
+                        members={rosterMembers}
+                        rosterError={rosterError}
+                        rosterLoading={rosterLoading}
+                        onSaved={applySpeakerLabel}
+                      />
                     </div>
                     <div className="turn-reply">
                       <span className="turn-icon">🤖</span> 
@@ -1901,6 +2085,23 @@ export default function App() {
                       )}
                     </span>
                   </div>
+                  {(selectedTurn.kind || "chat") === "chat" && (
+                    <div className="meta-intent-row">
+                      <label>人工标记</label>
+                      <span>
+                        <TurnSpeakerLabel
+                          turnId={selectedTurn.id}
+                          personId={selectedTurn.labeled_speaker_id}
+                          personName={selectedTurn.labeled_speaker_name}
+                          names={speakerNames}
+                          members={rosterMembers}
+                          rosterError={rosterError}
+                          rosterLoading={rosterLoading}
+                          onSaved={applySpeakerLabel}
+                        />
+                      </span>
+                    </div>
+                  )}
                   <div className="meta-intent-row">
                     <label>意图</label>
                     <span>

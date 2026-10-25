@@ -811,6 +811,125 @@ body {
     color: var(--orange);
 }
 
+/* 人工标记：从花名册选这轮用户是谁。绿色，和青色的自动识别徽章分开 */
+.speaker-label {
+    position: relative;
+    flex-shrink: 0;
+    align-self: flex-start;
+}
+
+.speaker-label-btn {
+    padding: 1px 8px;
+    font-size: 11px;
+    font-weight: 600;
+    font-family: inherit;
+    color: var(--text-muted);
+    background: transparent;
+    border: 1px dashed var(--border);
+    border-radius: 999px;
+    cursor: pointer;
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.speaker-label-btn:hover {
+    color: var(--green);
+    border-color: var(--green);
+}
+
+.speaker-label-btn.set {
+    color: var(--green);
+    background: rgba(52, 211, 153, 0.1);
+    border-style: solid;
+    border-color: rgba(52, 211, 153, 0.4);
+}
+
+.speaker-label-menu {
+    position: fixed;
+    z-index: 200;
+    transform: translateX(-100%);
+    min-width: 180px;
+    max-width: 280px;
+    max-height: 280px;
+    overflow-y: auto;
+    padding: 6px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.speaker-label-menu.above {
+    transform: translate(-100%, -100%);
+}
+
+.speaker-label-menu-title {
+    padding: 4px 8px 6px;
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+.speaker-label-item,
+.speaker-label-clear {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    width: 100%;
+    padding: 6px 8px;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--text-primary);
+    font: inherit;
+    font-size: 12px;
+    text-align: left;
+    cursor: pointer;
+}
+
+.speaker-label-item:hover:not(:disabled),
+.speaker-label-clear:hover:not(:disabled) {
+    background: var(--bg-card-hover);
+}
+
+.speaker-label-item.selected {
+    color: var(--green);
+}
+
+.speaker-label-item:disabled,
+.speaker-label-clear:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+.speaker-label-item-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.speaker-label-item-id {
+    flex-shrink: 0;
+    margin-left: auto;
+    font-size: 10px;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    color: var(--text-muted);
+}
+
+.speaker-label-clear {
+    margin-top: 4px;
+    border-top: 1px solid var(--border);
+    border-radius: 0;
+    color: var(--text-muted);
+}
+
+.speaker-label-empty {
+    padding: 6px 8px;
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
 .turn-footer {
     display: flex;
     align-items: center;

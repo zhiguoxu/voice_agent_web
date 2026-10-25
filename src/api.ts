@@ -255,6 +255,11 @@ export interface Turn {
   /** 疑似识别标记：speaker_id 是"最像的人"可能认错（voice_doubt 弱冲突轮并在此档），
    *  标签带「疑似」记号 */
   speaker_suspected: boolean | null;
+  /** 控制台人工标记的说话人（花名册 person_id）。与自动识别的 speaker_id 独立，
+   *  不进 LLM 历史、不参与记忆抽取。未标记为 null */
+  labeled_speaker_id?: string | null;
+  /** 标记当时的名字快照；花名册现查不到时用来展示 */
+  labeled_speaker_name?: string | null;
   /** 身份融合过程记录：点说话人标签展示；无融合过程的轮次为 null */
   identity_debug: IdentityDebug | null;
   /** 视觉门控决策快照：带图/省图、P(vision)、阈值；未评估的轮次为 null */
@@ -429,6 +434,23 @@ export async function deleteTurn(turnId: number): Promise<void> {
     method: "DELETE",
   });
   if (!res.ok) throw new Error("Failed to delete turn");
+}
+
+/** 人工标记这轮对话的用户。person_id 传 null 清除。与自动识别的 speaker_id 独立。 */
+export async function labelTurnSpeaker(
+  turnId: number,
+  label: { person_id: string | null; name: string | null },
+): Promise<{ labeled_speaker_id: string | null; labeled_speaker_name: string | null }> {
+  const res = await fetch(`${CONVERSATIONS_API_BASE}/turns/${turnId}/speaker_label`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(label),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || "标记失败");
+  }
+  return res.json();
 }
 
 /** 对话复现时重建的当时风控送审上下文（与生产 open_reply_check user 消息同构造） */
