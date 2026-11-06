@@ -198,9 +198,11 @@ export interface IdentityDebug {
   /** 视觉识别层原始结果（融合前） */
   vision: {
     person_id: string | null;
-    recognition: string;            // known / suspected / unknown
+    recognition: string;            // known / suspected / unknown（视觉层，不含融合档 multi）
     fused_score: number | null;     // person_id 服务的多模态融合匹配分
     status: string | null;          // 服务端原始置信档位 definite/confident/...
+    /** 画面里追踪到的人数；老行可能没有此键 */
+    target_num?: number;
   };
   /** 声纹比对原始结果。person_id/score/confidence 是过阈值的结论；
    *  top_person_id/top_score 是不设阈值的原始最像者 */
@@ -220,7 +222,7 @@ export interface IdentityDebug {
   /** 融合结论（本轮最终采用的身份及仲裁走向） */
   fusion: {
     person_id: string | null;
-    recognition: string;
+    recognition: string;            // known / suspected / unknown / multi
     source: string | null;          // vision / voice
     conflict_kind: string | null;   // voice_override / conflict_unknown / voice_doubt
   };

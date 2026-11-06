@@ -179,7 +179,6 @@ export interface GalleryPersonDetail {
   body_features?: Record<string, FeatureEntry[]>;
   wardrobe?: WardrobeOutfit[];
   body_proportions?: BodyProportions | null;
-  vlm_description?: string | null;
 }
 
 /** 服务端拉流消费状态（GET /api/{camera_id}/consume/status） */

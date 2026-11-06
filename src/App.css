@@ -765,6 +765,13 @@ body {
     font-family: 'SF Mono', 'Fira Code', monospace;
 }
 
+.speaker-badge.multi {
+    color: var(--text);
+    background: var(--bg-card-hover);
+    border-color: var(--border);
+    font-weight: 600;
+}
+
 /* 疑似识别轮：琥珀色（speaker_id 是"最像的人"，可能认错） */
 .speaker-badge.suspected {
     color: var(--amber, #fbbf24);
@@ -803,6 +810,11 @@ body {
 .speaker-unknown {
     color: var(--text-muted);
     font-style: italic;
+}
+
+.speaker-multi {
+    color: var(--text);
+    font-weight: 600;
 }
 
 .speaker-renamed {

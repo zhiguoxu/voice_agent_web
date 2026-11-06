@@ -25,6 +25,7 @@ function visionJudgeText(recognition: string, status: string | null): string {
     known: "已识别（可直接当作此人）",
     suspected: "疑似（像但没认准，可能认错）",
     unknown: "未识别",
+    multi: "多人（看到不止一个人，不能确定是谁）",
   };
   const base = zh[recognition] ?? recognition;
   return status ? `${base}，原始档位 ${status}` : base;
@@ -71,6 +72,7 @@ export default function IdentityDebugDialog({ debug, conflict, suspected, names,
             <div className="kv"><label>最像的人</label><span>{personText(vision.person_id, names)}</span></div>
             <div className="kv"><label>融合匹配分</label><span>{scoreText(vision.fused_score)}</span></div>
             <div className="kv"><label>判定</label><span>{visionJudgeText(vision.recognition, vision.status)}</span></div>
+            <div className="kv"><label>画面人数</label><span>{vision.target_num ?? "—"}</span></div>
           </section>
 
           <section>

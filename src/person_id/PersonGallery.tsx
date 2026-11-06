@@ -379,18 +379,6 @@ function PersonDetailModal({ person, activeTrackId, onClose, onRenamed, onDelete
                 )}
               </CollapsibleSection>
 
-              <CollapsibleSection
-                icon="🧠"
-                title="VLM Description"
-                badge={detail.vlm_description ? "Available" : "—"}
-              >
-                {!detail.vlm_description ? (
-                  <div className="gd-empty">No VLM description available</div>
-                ) : (
-                  <div className="gd-vlm-text">{detail.vlm_description}</div>
-                )}
-              </CollapsibleSection>
-
               <div className="gd-actions">
                 <button className="btn" onClick={handleRename}>✏️ Rename</button>
                 {person.present && activeTrackId != null && (

@@ -184,7 +184,8 @@ function SpeakerBadge({ speakerId, speakerName, kind, suspected, debug, names, o
   /* 没识别出人但有融合过程记录时也要能点开看"为什么没认出"，所以不能只看 speakerId */
   if (!speakerId && !debug) return null;
   const name = speakerId ? (speakerName || names[speakerId]) : null;
-  const text = speakerId ? (name ? `${name} (${speakerId})` : speakerId) : "未识别";
+  const multi = !speakerId && debug?.fusion?.recognition === "multi";
+  const text = speakerId ? (name ? `${name} (${speakerId})` : speakerId) : (multi ? "多人" : "未识别");
   /* 仲裁走向统一从 speaker_conflict_kind 取（历史形态——speaker_conflict 布尔
      旗标、字段名 kind、枚举值 mark——存量均已由 session_store 启动补丁订正,
      这里不留旧名分支）；该列早于列诞生的行退化读融合记录 */
@@ -211,14 +212,14 @@ function SpeakerBadge({ speakerId, speakerName, kind, suspected, debug, names, o
       markTip = "归属存疑";
     }
   }
-  const tip = [markTip, debug
+  const tip = [multi ? "画面里不止一个人，不能确定说话的是谁" : markTip, debug
     ? `speaker_id: ${speakerId ?? "无"}；点击查看本轮身份融合过程`
     : `speaker_id: ${speakerId}`].filter(Boolean).join("。");
   return (
     <span
       className={[
         "speaker-badge",
-        name ? "" : "unnamed",
+        multi ? "multi" : (name ? "" : "unnamed"),
         isConflict ? "conflict" : "",
         suspected ? "suspected" : "",
         debug ? "clickable" : "",
@@ -2080,6 +2081,8 @@ export default function App() {
                             </span>
                           )}
                         </>
+                      ) : selectedTurn.identity_debug?.fusion?.recognition === "multi" ? (
+                        <span className="speaker-multi">多人</span>
                       ) : (
                         <span className="speaker-unknown">未识别</span>
                       )}

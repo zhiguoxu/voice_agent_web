@@ -1360,10 +1360,6 @@
 
 .vision-view .event-card[data-type="identity_conflict"] .event-dot { background: var(--accent-orange); }
 
-.vision-view .event-card[data-type="vlm_invoked"] .event-dot { background: var(--accent-purple); }
-
-.vision-view .event-card[data-type="vlm_result"] .event-dot { background: var(--accent-purple); }
-
 .vision-view .event-card[data-type="track_lost"] .event-dot { background: var(--accent-red); }
 
 .vision-view .event-card[data-type="track_recovered"] .event-dot { background: var(--accent-orange); }
@@ -2510,18 +2506,6 @@
     font-weight: 600;
     font-variant-numeric: tabular-nums;
     color: var(--text-secondary);
-}
-
-
-/* VLM description */
-.vision-view .gd-vlm-text {
-    font-size: 11.2px;
-    color: var(--text-secondary);
-    line-height: 1.5;
-    padding: 10px;
-    background: var(--bg-glass);
-    border-radius: 6px;
-    border: 1px solid var(--border-glass);
 }
 
 
