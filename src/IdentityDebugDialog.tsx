@@ -3,7 +3,8 @@ import "./IdentityDebugDialog.css";
 
 /* ── 身份融合调试弹窗 ──
  * 点击轮次卡片右上角的说话人标签打开，展示该轮落库的 identity_debug：
- * 视觉/声纹各自的最像者与分数、声纹对全家每人的相似分、镜头者声纹分、融合结论。
+ * 视觉/声纹各自的最像者与分数、画面多人时每个人的视觉分、声纹对全家每人的相似分、
+ * 镜头者声纹分、融合结论。
  * 数据在 agent_server 融合时采集（resolve.build_identity_debug），
  * 这里只做展示，不再推导。
  */
@@ -31,6 +32,13 @@ function visionJudgeText(recognition: string, status: string | null): string {
   return status ? `${base}，原始档位 ${status}` : base;
 }
 
+/** 画面里单个人的视觉档位（列表里的短标签） */
+const TARGET_RECOGNITION_TEXT: Record<string, string> = {
+  known: "已识别",
+  suspected: "疑似",
+  unknown: "未识别",
+};
+
 /** 融合仲裁走向的中文说明 */
 const FUSION_KIND_TEXT: Record<string, string> = {
   voice_override: "声纹否决视觉：声音极像另一人，本轮身份改判给声音指向的人（疑似级）",
@@ -46,10 +54,22 @@ export default function IdentityDebugDialog({ debug, conflict, suspected, names,
   onClose: () => void;
 }) {
   const { vision, voice, fusion } = debug;
-  /* 声纹 top-1 与视觉识别的人不同时，"镜头者自己的声纹分"才有意义（后端也只在
-   * 这种仲裁场景计算它，其余为 null——null 显示为"未计算"，与 0 分区分） */
-  const visionVoiceDiffer =
-    vision.person_id && voice.top_person_id && vision.person_id !== voice.top_person_id;
+  const multi = (vision.target_num ?? 0) > 1;
+  /* 画面里每个人的视觉结果；该字段落库前的老轮次没有此键 */
+  const targets = vision.targets ?? [];
+  /* 画面里认出的人；老轮次没有 targets 时只知道注意力目标 */
+  const seenPids = new Set(
+    targets.length > 0
+      ? targets.flatMap((t) => (t.person_id ? [t.person_id] : []))
+      : vision.person_id ? [vision.person_id] : [],
+  );
+  /* 画面多人时声纹 top-1 就在画面里认出的人中、本轮归了此人 */
+  const multiPicked = multi && fusion.source === "voice" && !fusion.conflict_kind
+    && !!fusion.person_id && seenPids.has(fusion.person_id);
+  /* 单人画面里声纹 top-1 与视觉识别的人不同时，"镜头者自己的声纹分"才有意义（后端
+   * 也只在这种仲裁场景计算它，其余为 null——null 显示为"未计算"，与 0 分区分） */
+  const visionVoiceDiffer = !multi
+    && vision.person_id && voice.top_person_id && vision.person_id !== voice.top_person_id;
   /* 全家每个有声纹模板的成员的相似分，按分降序（后端已排序，这里再排一次不依赖
    * JSON 键序）；该字段落库前的老轮次没有此键，列表不显示 */
   const scoreRows = Object.entries(voice.scores ?? {}).sort((a, b) => b[1] - a[1]);
@@ -73,6 +93,25 @@ export default function IdentityDebugDialog({ debug, conflict, suspected, names,
             <div className="kv"><label>融合匹配分</label><span>{scoreText(vision.fused_score)}</span></div>
             <div className="kv"><label>判定</label><span>{visionJudgeText(vision.recognition, vision.status)}</span></div>
             <div className="kv"><label>画面人数</label><span>{vision.target_num ?? "—"}</span></div>
+            {targets.length > 1 && (
+              <div className="kv score-list">
+                <label>画面里的人</label>
+                <ul>
+                  {targets.map((t) => (
+                    <li key={t.track_id}
+                        title={`${visionJudgeText(t.recognition, t.status)}，轨迹 ${t.track_id}`}>
+                      <span className="who">
+                        {t.person_id ? personText(t.person_id, names) : "未认出"}
+                        <em>{TARGET_RECOGNITION_TEXT[t.recognition] ?? t.recognition}</em>
+                        {t.track_id === vision.track_id && <em>注意力目标</em>}
+                      </span>
+                      <i className="bar"><b style={{ width: `${Math.max(0, Math.min(1, t.fused_score ?? 0)) * 100}%` }} /></i>
+                      <span className="score">{scoreText(t.fused_score)}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </section>
 
           <section>
@@ -91,14 +130,14 @@ export default function IdentityDebugDialog({ debug, conflict, suspected, names,
             </div>
             <div className="kv"><label>净语音时长</label><span>{voice.net_speech_sec.toFixed(1)}s</span></div>
             {scoreRows.length > 0 && (
-              <div className="kv voice-scores">
+              <div className="kv score-list">
                 <label>全员相似分</label>
                 <ul>
                   {scoreRows.map(([pid, s]) => (
                     <li key={pid} className={pid === voice.top_person_id ? "top" : ""}>
                       <span className="who">
                         {personText(pid, names)}
-                        {pid === vision.person_id && <em>镜头里的人</em>}
+                        {seenPids.has(pid) && <em>在画面里</em>}
                       </span>
                       <i className="bar"><b style={{ width: `${Math.max(0, Math.min(1, s)) * 100}%` }} /></i>
                       <span className="score">{s.toFixed(3)}</span>
@@ -127,6 +166,12 @@ export default function IdentityDebugDialog({ debug, conflict, suspected, names,
             </div>
             {fusion.conflict_kind && (
               <div className="kv"><label>仲裁走向</label><span>{FUSION_KIND_TEXT[fusion.conflict_kind] ?? fusion.conflict_kind}</span></div>
+            )}
+            {multiPicked && (
+              <div className="kv">
+                <label>多人判定</label>
+                <span>画面里不止一人，声音最像的人就在画面里，本轮归此人（置信档取画面里此人的视觉档位，声纹到否决线为已识别）</span>
+              </div>
             )}
             {fusion.conflict_kind && vision.person_id && vision.person_id !== fusion.person_id && (
               <div className="kv"><label>仲裁前视觉看到</label><span>{personText(vision.person_id, names)}</span></div>

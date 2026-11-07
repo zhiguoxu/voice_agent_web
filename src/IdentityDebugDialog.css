@@ -110,8 +110,9 @@
   word-break: break-all;
 }
 
-/* 全员相似分列表：每行 = 成员 + 分数条 + 分值，top-1 加粗 */
-.identity-debug-body .voice-scores ul {
+/* 分数列表（画面里每个人的视觉分 / 全员声纹相似分）：每行 = 成员 + 分数条 + 分值，
+ * 声纹列表的 top-1 加粗 */
+.identity-debug-body .score-list ul {
   flex: 1;
   min-width: 0;
   margin: 0;
@@ -119,18 +120,18 @@
   list-style: none;
 }
 
-.identity-debug-body .voice-scores li {
+.identity-debug-body .score-list li {
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 2px 0;
 }
 
-.identity-debug-body .voice-scores li.top {
+.identity-debug-body .score-list li.top {
   font-weight: 600;
 }
 
-.identity-debug-body .voice-scores .who {
+.identity-debug-body .score-list .who {
   flex: 1;
   min-width: 0;
   text-align: left;
@@ -140,7 +141,7 @@
   word-break: normal;
 }
 
-.identity-debug-body .voice-scores .who em {
+.identity-debug-body .score-list .who em {
   margin-left: 6px;
   padding: 0 6px;
   font-size: 11px;
@@ -151,7 +152,7 @@
   border-radius: 999px;
 }
 
-.identity-debug-body .voice-scores .bar {
+.identity-debug-body .score-list .bar {
   flex-shrink: 0;
   width: 90px;
   height: 6px;
@@ -160,13 +161,13 @@
   overflow: hidden;
 }
 
-.identity-debug-body .voice-scores .bar b {
+.identity-debug-body .score-list .bar b {
   display: block;
   height: 100%;
   background: var(--accent);
 }
 
-.identity-debug-body .voice-scores .score {
+.identity-debug-body .score-list .score {
   flex-shrink: 0;
   width: 44px;
   text-align: right;

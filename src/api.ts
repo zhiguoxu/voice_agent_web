@@ -191,11 +191,20 @@ export interface MemoryRecall {
   error: string | null;
 }
 
+/** 画面里一个追踪目标的视觉识别结果（后端 VisionTarget） */
+export interface VisionTarget {
+  track_id: number;
+  recognition: string;            // known / suspected / unknown
+  person_id: string | null;       // known/suspected 时有值
+  status: string | null;          // 服务端原始置信档位
+  fused_score: number | null;     // 多模态融合匹配分
+}
+
 /** 单轮身份融合过程记录（后端 identity.IdentityDebug 的 JSON——运行时类型整体
  *  dump，这里只声明 web 实际读取的字段，后端可多不可少；
  *  点说话人标签的调试弹窗展示。person_id 未启用等无融合过程的轮次为 null。 */
 export interface IdentityDebug {
-  /** 视觉识别层原始结果（融合前） */
+  /** 视觉识别层原始结果（融合前）；person_id/recognition/fused_score/status 说的是注意力目标 */
   vision: {
     person_id: string | null;
     recognition: string;            // known / suspected / unknown（视觉层，不含融合档 multi）
@@ -203,6 +212,10 @@ export interface IdentityDebug {
     status: string | null;          // 服务端原始置信档位 definite/confident/...
     /** 画面里追踪到的人数；老行可能没有此键 */
     target_num?: number;
+    /** 注意力目标的轨迹 id（对应 targets 里的一条）；老行没有此键 */
+    track_id?: number | null;
+    /** 画面里每个追踪目标各自的视觉识别结果与分数；老行没有此键 */
+    targets?: VisionTarget[];
   };
   /** 声纹比对原始结果。person_id/score/confidence 是过阈值的结论；
    *  top_person_id/top_score 是不设阈值的原始最像者 */
