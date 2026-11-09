@@ -21,6 +21,10 @@ const PASSAGES: string[] = [
 /** 编辑过的引导文本存本地；未编辑时每次打开随机换一段 */
 const TEXT_STORAGE_KEY = "voiceEnrollText";
 
+/** 一次完整录入分三档距离，finish 的 index 从 1 起，与后端话术一致 */
+const ROUND_COUNT = 3;
+const ROUND_DISTANCE = ["1米", "1.5米", "3米"];
+
 function pickRandomPassage(): string {
   return PASSAGES[Math.floor(Math.random() * PASSAGES.length)];
 }
@@ -49,11 +53,11 @@ function formatSec(ms: number) {
  * 声纹录入对话框：从花名册成员行的「🎤」按钮打开，给该成员补录声纹
  * （须已完成人脸注册，person_id 直接取自花名册，不依赖实时视频流）。
  *
- * 三段交互：「开始录入」让设备播靠近/放低手机的准备提示（不开采集）；用户
+ * 三段交互：「开始录入」让设备播约 1 米的准备提示（不开采集）；用户
  * 就位后点「开始朗读」，设备打断准备提示、立即播「请开始朗读」并打开采集；
  * 读完点「完成朗读」由后端评估质量，无论成败本次流程即结束（设备播报结果，
- * 这里同步展示）。质量不合格时是否重试由用户决定——失败结果页点「重新录入」
- * 回到开始页再来一遍，次数不限。
+ * 这里同步展示）。一共三档（约 1 米、1.5 米、3 米）：前两次录成后点「继续录制」
+ * 进入下一档，第三次才算整段完成。某一档质量不合格时点「重新录入」还是这一档。
  *
  * 开始页与成功页下方列出该成员正在参与比对的每条声纹模板（来源、入库时间、
  * 净语音时长），每条可回放产生它的录音（朗读录入=那次采集的整段音频，
@@ -70,6 +74,7 @@ export function VoiceEnrollDialog({ deviceSn, personId, personName, voiceTemplat
   onClose: () => void;
 }) {
   const [text, setText] = useState<string>(initialText);
+  const [round, setRound] = useState(1);
   const [phase, setPhase] = useState<Phase>("idle");
   const [result, setResult] = useState<VoiceEnrollFinishResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -135,7 +140,8 @@ export function VoiceEnrollDialog({ deviceSn, personId, personName, voiceTemplat
     setText(next);
   };
 
-  /* 「开始录入」：只让设备播准备提示，不开采集；成功后等用户就位点「开始朗读」 */
+  /* 第 1 次「开始录入」只让设备播约 1 米的准备提示。后两档的距离已经由上一档
+     成功播报说过，这里不再播那句，避免又念成 1 米。 */
   const prepare = async () => {
     setPhase("preparing");
     setError(null);
@@ -177,7 +183,7 @@ export function VoiceEnrollDialog({ deviceSn, personId, personName, voiceTemplat
     setError(null);
     try {
       /* 无论成败流程都结束；质量不合格时结果页点「重新录入」再来一遍 */
-      const r = await finishVoiceEnroll(deviceSn);
+      const r = await finishVoiceEnroll(deviceSn, round);
       setResult(r);
       setPhase("done");
       if (r.success) {
@@ -264,10 +270,10 @@ export function VoiceEnrollDialog({ deviceSn, personId, personName, voiceTemplat
         <div className="roster-dialog-body">
           {phase === "idle" && (
             <p className="face-register-hint">
-              让「{personName}」本人在设备旁准备好后点「开始录入」：设备会提示
-              靠近、放低手机；TA 就位后点「开始朗读」，设备随即请 TA 用平时说话
-              的音量朗读下面的文字，读完后回到这里点「完成朗读」。质量不合格时
-              设备会播报原因，想重试就再点一次「开始录入」，次数不限。文本可
+              第 {round}/{ROUND_COUNT} 次，请在距离小乐约 {ROUND_DISTANCE[round - 1]} 处录。
+              让「{personName}」就位后点「开始录入」，再点「开始朗读」，用平时说话的
+              音量朗读下面的文字，读完后点「完成朗读」。前两次录成后设备会提示挪到
+              下一档；这一档没录上就再点一次「开始录入」，还是第 {round} 次。文本可
               直接编辑（自动保存在本浏览器），也可以换一段随机默认文本。
             </p>
           )}
@@ -287,9 +293,14 @@ export function VoiceEnrollDialog({ deviceSn, personId, personName, voiceTemplat
 
           {phase === "idle" && (
             <div className="voice-enroll-actions">
-              {templateCount > 0 && (
+              {templateCount > 0 && round === 1 && (
                 <span className="voice-enroll-existing">
-                  已有 {templateCount} 条声纹模板，重新录入会覆盖
+                  已有 {templateCount} 条声纹模板，从第 1 次重新开始会覆盖
+                </span>
+              )}
+              {round > 1 && (
+                <span className="voice-enroll-existing">
+                  第 {round} 次会再追加一条
                 </span>
               )}
               {templateCount > 0 && (deleteArmed ? (
@@ -307,7 +318,8 @@ export function VoiceEnrollDialog({ deviceSn, personId, personName, voiceTemplat
                       data-tip="随机换一段默认文本（放弃本地编辑稿）">
                 🎲 换一段
               </button>
-              <button className="roster-save-btn" onClick={prepare} disabled={!text.trim()}>
+              <button className="roster-save-btn" onClick={round === 1 ? prepare : () => setPhase("prepared")}
+                      disabled={!text.trim()}>
                 开始录入
               </button>
             </div>
@@ -324,8 +336,17 @@ export function VoiceEnrollDialog({ deviceSn, personId, personName, voiceTemplat
           {phase === "prepared" && (
             <>
               <div className="face-register-result running">
-                🔊 设备正在提示「{personName}」靠近、把手机放低。TA 就位后点
-                「开始朗读」，设备会立即打断提示并开始采集
+                {round === 1 ? (
+                  <>
+                    🔊 第 1/{ROUND_COUNT} 次，约 {ROUND_DISTANCE[0]}。设备正在提示
+                    「{personName}」就位。TA 就位后点「开始朗读」，设备会立即打断提示并开始采集
+                  </>
+                ) : (
+                  <>
+                    🔊 第 {round}/{ROUND_COUNT} 次，请到距离小乐约 {ROUND_DISTANCE[round - 1]} 处。
+                    就位后点「开始朗读」
+                  </>
+                )}
               </div>
               <div className="voice-enroll-actions">
                 <button className="roster-cancel-btn" onClick={close}>取消</button>
@@ -341,8 +362,8 @@ export function VoiceEnrollDialog({ deviceSn, personId, personName, voiceTemplat
           {listening && (
             <>
               <div className="face-register-result running">
-                🎙️ 正在聆听……请让「{personName}」用平时说话的音量朗读上面的
-                文字，读完后点「完成朗读」
+                🎙️ 第 {round}/{ROUND_COUNT} 次，约 {ROUND_DISTANCE[round - 1]}，正在聆听……
+                请让「{personName}」用平时说话的音量朗读上面的文字，读完后点「完成朗读」
               </div>
               <div className="voice-enroll-actions">
                 <button className="roster-cancel-btn" onClick={close}
@@ -366,6 +387,15 @@ export function VoiceEnrollDialog({ deviceSn, personId, personName, voiceTemplat
                 )}
               </div>
               <div className="voice-enroll-actions">
+                {result.success && round < ROUND_COUNT && (
+                  <button className="roster-save-btn" onClick={() => {
+                    setRound(round + 1);
+                    setResult(null);
+                    setPhase("prepared");
+                  }}>
+                    继续录制
+                  </button>
+                )}
                 {!result.success && (
                   <button className="roster-save-btn" onClick={() => {
                     setResult(null);

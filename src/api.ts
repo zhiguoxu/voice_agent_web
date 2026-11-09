@@ -958,8 +958,8 @@ export interface VoiceEnrollStartResult {
 }
 
 /** 声纹录入 finish 的结果。finish 之后本次流程必然结束（后端状态已清）：
- *  质量不合格时设备已播报针对性提示，是否重试由用户决定——再点「开始录入」
- *  就重新走一遍，次数不限。 */
+ *  质量不合格时设备已按当前这一档的距离播报重试提示，是否重试由用户决定——
+ *  再点「开始录入」就重新走这一档。三次都合格才算整段录入完成。 */
 export interface VoiceEnrollFinishResult {
   success: boolean;
   /** 成功: registered；质量不合格(可重新点开始录入再试): no_speech |
@@ -973,7 +973,7 @@ export interface VoiceEnrollFinishResult {
   person_id: string | null;
 }
 
-/** 播报声纹录入准备提示（靠近、放低手机）。不开采集、不占录入槽，投递即返回；
+/** 播报声纹录入准备提示（约 1 米，按手机提示）。不开采集、不占录入槽，投递即返回；
  *  之后随时可调 startVoiceEnroll，那句「请开始朗读」会打断还在播的准备提示。 */
 export async function prepareVoiceEnroll(
   deviceSn: string,
@@ -1007,12 +1007,14 @@ export async function startVoiceEnroll(
   return res.json();
 }
 
-/** 用户读完点击「完成朗读」：评估本次朗读，合格入库，不合格自动语音引导重试。 */
-export async function finishVoiceEnroll(deviceSn: string): Promise<VoiceEnrollFinishResult> {
+/** 用户读完点击「完成朗读」：评估本次朗读。index 是第几次（1 起，共 3 次）。 */
+export async function finishVoiceEnroll(
+  deviceSn: string, index: number,
+): Promise<VoiceEnrollFinishResult> {
   const res = await fetch("/api/agent/voice/enroll/finish", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ device_sn: deviceSn }),
+    body: JSON.stringify({ device_sn: deviceSn, index }),
   });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
