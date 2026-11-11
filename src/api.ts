@@ -973,7 +973,7 @@ export interface VoiceEnrollFinishResult {
   person_id: string | null;
 }
 
-/** 播报声纹录入准备提示（约 1 米，按手机提示）。不开采集、不占录入槽，投递即返回；
+/** 播报声纹录入准备提示（约 0.5 米，按手机提示）。不开采集、不占录入槽，投递即返回；
  *  之后随时可调 startVoiceEnroll，那句「请开始朗读」会打断还在播的准备提示。 */
 export async function prepareVoiceEnroll(
   deviceSn: string,

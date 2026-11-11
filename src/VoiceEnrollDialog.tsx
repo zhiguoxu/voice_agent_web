@@ -23,7 +23,7 @@ const TEXT_STORAGE_KEY = "voiceEnrollText";
 
 /** 一次完整录入分三档距离，finish 的 index 从 1 起，与后端话术一致 */
 const ROUND_COUNT = 3;
-const ROUND_DISTANCE = ["1米", "1.5米", "3米"];
+const ROUND_DISTANCE = ["0.5米", "1.5米", "3米"];
 
 function pickRandomPassage(): string {
   return PASSAGES[Math.floor(Math.random() * PASSAGES.length)];
@@ -53,10 +53,10 @@ function formatSec(ms: number) {
  * 声纹录入对话框：从花名册成员行的「🎤」按钮打开，给该成员补录声纹
  * （须已完成人脸注册，person_id 直接取自花名册，不依赖实时视频流）。
  *
- * 三段交互：「开始录入」让设备播约 1 米的准备提示（不开采集）；用户
+ * 三段交互：「开始录入」让设备播约 0.5 米的准备提示（不开采集）；用户
  * 就位后点「开始朗读」，设备打断准备提示、立即播「请开始朗读」并打开采集；
  * 读完点「完成朗读」由后端评估质量，无论成败本次流程即结束（设备播报结果，
- * 这里同步展示）。一共三档（约 1 米、1.5 米、3 米）：前两次录成后点「继续录制」
+ * 这里同步展示）。一共三档（约 0.5 米、1.5 米、3 米）：前两次录成后点「继续录制」
  * 进入下一档，第三次才算整段完成。某一档质量不合格时点「重新录入」还是这一档。
  *
  * 开始页与成功页下方列出该成员正在参与比对的每条声纹模板（来源、入库时间、
@@ -140,8 +140,8 @@ export function VoiceEnrollDialog({ deviceSn, personId, personName, voiceTemplat
     setText(next);
   };
 
-  /* 第 1 次「开始录入」只让设备播约 1 米的准备提示。后两档的距离已经由上一档
-     成功播报说过，这里不再播那句，避免又念成 1 米。 */
+  /* 第 1 次「开始录入」只让设备播约 0.5 米的准备提示。后两档的距离已经由上一档
+     成功播报说过，这里不再播那句，避免又念成 0.5 米。 */
   const prepare = async () => {
     setPhase("preparing");
     setError(null);
