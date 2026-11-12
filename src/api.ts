@@ -343,6 +343,8 @@ export interface Turn {
   t_first_token: number | null;
   t_agent_done: number | null;
   t_tts_first_audio: number | null;
+  /** 攒满 buffer 后第一次把音频帧写到设备；复现不跑 TTS，为空 */
+  t_tts_first_send: number | null;
   created_at: string | null;
 }
 

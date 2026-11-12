@@ -6,7 +6,7 @@ import type { Turn } from './api';
 const PHASE_KEY_ORDER = [
   'asr', 'history', 'identity', 'vision_gate', 'names', 'memory',
   'build_request', 'intent', 'subagent', 'emote_action',
-  'llm_tool', 'tool_execute', 'llm_first', 'first_token', 'tts',
+  'llm_tool', 'tool_execute', 'llm_first', 'first_token', 'tts', 'tts_send',
 ] as const;
 
 type PhaseKey = typeof PHASE_KEY_ORDER[number];
@@ -93,7 +93,8 @@ function buildPhases(turn: Turn): Phase[] {
   phases.push(
     { key: 'llm_first', label: "LLM首字", start: turn.t_llm_start, end: turn.t_llm_first_token, color: "var(--orange)" },
     { key: 'first_token', label: "首字回复", start: turn.t_agent_start, end: turn.t_first_token, color: "var(--cyan)" },
-    { key: 'tts', label: "TTS首包", start: ttsStart, end: turn.t_tts_first_audio, color: "var(--green)" }
+    { key: 'tts', label: "TTS首包", start: ttsStart, end: turn.t_tts_first_audio, color: "var(--green)" },
+    { key: 'tts_send', label: "TTS下发", start: ttsStart, end: turn.t_tts_first_send, color: "var(--blue)" }
   );
 
   return phases.filter(p => p.start && p.end);
@@ -112,6 +113,7 @@ export function LatencyChart({ turn, baseline }: { turn: Turn; baseline?: Turn }
   // tEnd 仅包含甘特条实际终点，不含 t_agent_done/t_agent_start 等非条形终点
   const tEnd = Math.max(
     turn.t_tts_first_audio || 0,
+    turn.t_tts_first_send || 0,
     turn.t_first_token || 0,
     turn.t_llm_first_token || 0,
     turn.t_tool_execute_done || 0,

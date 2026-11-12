@@ -2431,6 +2431,7 @@ export default function App() {
                           // 门控重算轮有真实打点与决策快照, 甘特"视觉门控"行照常渲染
                           vision_gate: replayResult.vision_gate ?? null,
                           t_tts_first_audio: null,
+                          t_tts_first_send: null,
                         }}
                         baseline={replayOriginTurn ?? undefined}
                       />
