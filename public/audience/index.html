@@ -1,0 +1,1055 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Emotion Recognition</title>
+<!--
+  观众屏。访问 /audience/?device_sn=XXX
+  只读既有接口，不开设备拉流（拉流由设备唤醒或控制台负责）：
+    WS  /person_id/ws/vision?camera_id={sn}                 预览帧 + 人脸框
+    GET /api/voice/conversations/sessions?device_sn=        定位会话
+    GET /api/voice/conversations/sessions/{id}/turns        历史对话
+    SSE /api/console/conversations/sessions/{id}/stream     实时对话
+    GET /api/agent/stream/status                            待机文案
+  表情图标由本页用 HSEmotion（enet_b0_8_best_vgaf，AffectNet 8 类）对预览帧里的人脸分类，不使用机器人下发的表情。
+-->
+<style>
+:root {
+  --cyan: #8aefff;
+  --cyan-dim: rgba(138, 239, 255, 0.55);
+  --ink: #f3fbff;
+  --muted: rgba(214, 236, 246, 0.62);
+  --line: rgba(150, 226, 255, 0.42);
+  --card: rgba(5, 22, 38, 0.42);
+  --sans: "PingFang SC", "Noto Sans SC", "Segoe UI", "Helvetica Neue", sans-serif;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  color: var(--ink);
+  font-family: var(--sans);
+  background:
+    radial-gradient(ellipse 55% 42% at 72% 8%, rgba(46, 168, 220, 0.22), transparent 62%),
+    radial-gradient(ellipse 70% 36% at 50% 115%, rgba(18, 150, 196, 0.28), transparent 58%),
+    #07131c;
+  overflow: hidden;
+}
+button, input { font-family: inherit; }
+
+.stage {
+  height: 100%;
+  padding: clamp(14px, 2.2vh, 28px) clamp(16px, 2vw, 36px);
+  display: flex;
+}
+.panel {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(12px, 1.8vh, 22px);
+  padding: clamp(16px, 2vh, 26px) clamp(16px, 1.6vw, 28px) clamp(14px, 1.8vh, 22px);
+  border-radius: 28px;
+  border: 1px solid rgba(168, 232, 255, 0.62);
+  background: linear-gradient(180deg, rgba(18, 48, 74, 0.62), rgba(6, 20, 36, 0.72));
+  box-shadow:
+    0 0 0 1px rgba(90, 190, 230, 0.12),
+    0 0 64px rgba(36, 168, 220, 0.22),
+    inset 0 0 90px rgba(70, 190, 230, 0.06);
+}
+
+header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex: none;
+}
+.mark {
+  width: 36px; height: 36px;
+  display: grid; grid-template-columns: 1fr 1fr; gap: 5px;
+  flex: none;
+}
+.mark i {
+  display: block;
+  background: var(--cyan);
+  border-radius: 7px;
+  box-shadow: 0 0 12px rgba(138, 239, 255, 0.85);
+}
+.titles { display: flex; align-items: center; gap: 14px; min-width: 0; }
+h1 {
+  font-size: clamp(22px, 2.1vw, 34px);
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+.eq { display: flex; align-items: flex-end; gap: 3px; height: 18px; }
+.eq i {
+  display: block; width: 3px; height: 35%;
+  border-radius: 99px;
+  background: var(--cyan);
+  animation: eq 1.15s ease-in-out infinite;
+}
+.eq i:nth-child(2) { animation-delay: 0.12s; }
+.eq i:nth-child(3) { animation-delay: 0.28s; }
+.eq i:nth-child(4) { animation-delay: 0.05s; }
+.eq i:nth-child(5) { animation-delay: 0.2s; }
+@keyframes eq { 0%, 100% { height: 28%; } 50% { height: 100%; } }
+.eq.hot i { animation-duration: 0.48s; }
+#userWave { opacity: 0.45; }
+#userWave.hot { opacity: 1; }
+header .spacer { flex: 1; }
+.chip {
+  display: flex; align-items: center; gap: 8px;
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid transparent;
+  border-radius: 999px;
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+}
+.chip:hover { border-color: var(--line); color: var(--ink); }
+.dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: rgba(180, 210, 220, 0.35);
+}
+.dot.on { background: #5dffa8; box-shadow: 0 0 8px #5dffa8; }
+
+.main {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(168px, 0.72fr) minmax(0, 1.42fr);
+  align-items: center;
+  gap: clamp(12px, 1.4vw, 26px);
+}
+
+.face {
+  position: relative;
+  align-self: center;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 3 / 4;
+  max-height: 100%;
+  min-height: 0;
+  border-radius: 20px;
+  overflow: hidden;
+  border: 1px solid rgba(168, 232, 255, 0.55);
+  background: #041018;
+  box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.35);
+}
+.face canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.face-name {
+  position: absolute; left: 14px; bottom: 14px; z-index: 2;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(4, 16, 28, 0.55);
+  border: 1px solid var(--line);
+  color: var(--cyan);
+  font-size: 14px;
+  letter-spacing: 0.06em;
+}
+.standby {
+  position: absolute; inset: 0; z-index: 3;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px;
+  background: rgba(4, 14, 24, 0.72);
+  transition: opacity 0.45s;
+}
+.standby.hidden { opacity: 0; pointer-events: none; }
+.ring {
+  width: 92px; height: 92px; border-radius: 50%;
+  border: 1px solid var(--line);
+  position: relative;
+}
+.ring::before {
+  content: "";
+  position: absolute; inset: 0; border-radius: 50%;
+  background: conic-gradient(from 0deg, rgba(138, 239, 255, 0.0), rgba(138, 239, 255, 0.85), rgba(138, 239, 255, 0.0) 70deg);
+  animation: spin 2.8s linear infinite;
+  -webkit-mask: radial-gradient(circle, transparent 58%, #000 60%);
+  mask: radial-gradient(circle, transparent 58%, #000 60%);
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.standby p { color: var(--muted); letter-spacing: 0.12em; font-size: 14px; }
+
+.emotion {
+  align-self: center;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 18px; min-width: 0;
+}
+.emoji {
+  width: min(24vh, 210px); height: min(24vh, 210px);
+  border-radius: 50%;
+  border: 2px solid rgba(186, 244, 255, 0.9);
+  color: #eefbff;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 0 28px rgba(80, 210, 255, 0.28), inset 0 0 24px rgba(80, 210, 255, 0.08);
+}
+.emoji.pop { animation: pop 0.35s ease; }
+@keyframes pop { from { transform: scale(0.9); opacity: 0.35; } to { transform: none; opacity: 1; } }
+.emoji svg { width: 62%; height: 62%; }
+.emotion .zh {
+  font-size: clamp(28px, 2.6vw, 44px);
+  font-weight: 650;
+  letter-spacing: 0.08em;
+}
+.emotion .en {
+  margin-top: -10px;
+  color: var(--cyan);
+  letter-spacing: 0.22em;
+  font-size: 14px;
+  text-transform: uppercase;
+}
+
+.dialog {
+  align-self: center;
+  width: 100%;
+  min-width: 0; min-height: 0;
+  max-height: 100%;
+  display: flex; flex-direction: column; justify-content: center; gap: 14px;
+}
+.dialog.has-log { align-self: stretch; justify-content: flex-start; }
+.bubble {
+  border-radius: 18px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  padding: 14px 16px 16px;
+  box-shadow: inset 0 0 24px rgba(80, 200, 255, 0.04);
+}
+.bubble-top { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+.who {
+  color: var(--cyan);
+  font-size: 13px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.bubble-top .spacer { flex: 1; }
+.bubble p {
+  font-size: clamp(16px, 1.25vw, 22px);
+  line-height: 1.5;
+  max-height: 18vh;
+  overflow: auto;
+}
+.bubble p.dim { color: var(--muted); }
+.user-body { display: flex; align-items: center; gap: 12px; }
+.user-copy { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
+.robot { width: 68px; height: 86px; flex: none; color: var(--cyan); }
+.robot .arm { transform-origin: 54px 52px; animation: wave 2.6s ease-in-out infinite; }
+@keyframes wave { 0%, 100% { transform: rotate(0deg); } 50% { transform: rotate(-14deg); } }
+.speaker { width: 22px; height: 22px; color: var(--cyan); flex: none; }
+.bubble.streaming .speaker { animation: pulse 1s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: 0.35; } }
+
+.history {
+  flex: 1; min-height: 0;
+  display: flex; flex-direction: column;
+  border-top: 1px solid rgba(150, 226, 255, 0.18);
+  padding-top: 10px;
+}
+.history[hidden] { display: none; }
+.history h2 {
+  flex: none;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+.log { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 8px; }
+.log::-webkit-scrollbar { width: 6px; }
+.log::-webkit-scrollbar-thumb { background: rgba(138, 239, 255, 0.35); border-radius: 99px; }
+.h-item {
+  display: grid;
+  grid-template-columns: 52px 1fr auto;
+  gap: 10px;
+  align-items: start;
+  padding: 8px 4px;
+}
+.h-item time { color: var(--muted); font-size: 12px; padding-top: 3px; font-variant-numeric: tabular-nums; }
+.hq, .ha {
+  font-size: 14px; line-height: 1.45;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.hq b, .ha b { font-weight: 650; margin-right: 6px; }
+.ha { color: rgba(232, 246, 255, 0.82); }
+.h-item em {
+  font-style: normal;
+  color: var(--cyan);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+
+body:has(#picker:not([hidden])) .stage { visibility: hidden; }
+.picker {
+  position: fixed; inset: 0; z-index: 20;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(4, 10, 16, 0.35);
+}
+.picker[hidden] { display: none; }
+.card {
+  width: min(480px, calc(100% - 32px));
+  padding: 28px 26px;
+  border-radius: 22px;
+  border: 1px solid rgba(168, 232, 255, 0.55);
+  background: #0c2436;
+  box-shadow: 0 0 48px rgba(36, 168, 220, 0.2);
+}
+.card h2 { font-size: 20px; letter-spacing: 0.08em; margin-bottom: 6px; }
+.card .hint { color: var(--muted); font-size: 13px; margin-bottom: 16px; }
+.card form { display: flex; gap: 8px; margin-bottom: 14px; }
+.card input {
+  flex: 1; min-width: 0;
+  background: #061018;
+  border: 1px solid var(--line);
+  color: var(--ink);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 15px;
+  outline: none;
+}
+.card input:focus { border-color: var(--cyan); }
+.card button[type="submit"] {
+  background: rgba(138, 239, 255, 0.14);
+  color: var(--cyan);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0 16px;
+  cursor: pointer;
+  letter-spacing: 0.08em;
+}
+.dev-list { display: flex; flex-direction: column; gap: 6px; max-height: 36vh; overflow: auto; }
+.dev-item {
+  display: flex; gap: 10px; align-items: center;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(150, 226, 255, 0.18);
+  cursor: pointer;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+.dev-item:hover { border-color: var(--cyan-dim); }
+.dev-item .sn { color: var(--cyan); font-weight: 650; }
+.dev-item .nm { color: var(--muted); font-size: 13px; }
+.dev-note { margin-top: 10px; color: var(--muted); font-size: 12px; letter-spacing: 0.06em; }
+
+@media (max-width: 980px) {
+  body { overflow: auto; }
+  .stage { height: auto; min-height: 100%; }
+  .panel { min-height: 100vh; }
+  .main { grid-template-columns: 1fr; grid-template-rows: 42vh auto auto; }
+  .face { min-height: 42vh; }
+  .bubble p { max-height: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .eq i, .robot .arm, .ring::before, .bubble.streaming .speaker { animation: none; }
+}
+</style>
+</head>
+<body>
+<div class="stage">
+  <section class="panel">
+    <header>
+      <div class="mark" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+      <div class="titles">
+        <h1>Emotion Recognition</h1>
+        <span class="eq" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
+      </div>
+      <div class="spacer"></div>
+      <button class="chip" id="deviceChip" type="button" title="切换设备">
+        <span class="dot" id="liveDot"></span>
+        <span id="chipSn">--</span>
+      </button>
+    </header>
+
+    <div class="main">
+      <div class="face" id="faceStage">
+        <canvas id="face"></canvas>
+        <div class="face-name" id="faceName" hidden></div>
+        <div class="standby" id="standby">
+          <div class="ring"></div>
+          <p id="standbyText">正在连接画面</p>
+        </div>
+      </div>
+
+      <div class="emotion">
+        <div class="emoji" id="emoji"></div>
+        <div class="zh" id="emoZh">识别中</div>
+        <div class="en" id="emoEn">Sensing</div>
+      </div>
+
+      <div class="dialog" id="dialog">
+        <article class="bubble" id="userCard">
+          <div class="user-body">
+            <div class="user-copy">
+              <span class="who" id="userWho" hidden></span>
+              <p id="userText" class="dim">等待你开口</p>
+              <span class="eq" id="userWave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
+            </div>
+            <svg class="robot" viewBox="0 0 80 110" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="40" cy="8" r="3" fill="currentColor" stroke="none"/>
+              <path d="M40 11 V18"/>
+              <rect x="22" y="18" width="36" height="28" rx="8"/>
+              <rect x="30" y="27" width="6" height="8" rx="1" fill="currentColor" stroke="none"/>
+              <rect x="44" y="27" width="6" height="8" rx="1" fill="currentColor" stroke="none"/>
+              <rect x="27" y="50" width="26" height="30" rx="6"/>
+              <path class="arm" d="M54 56 C70 50 74 34 66 22"/>
+              <path d="M27 60 C16 66 14 78 20 84"/>
+              <path d="M35 80 V102"/>
+              <path d="M46 80 V102"/>
+            </svg>
+          </div>
+        </article>
+
+        <article class="bubble" id="m1">
+          <div class="bubble-top">
+            <span class="who">M1 Response</span>
+            <span class="spacer"></span>
+            <svg class="speaker" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true">
+              <path d="M4 9 H8 L13 5 V19 L8 15 H4 Z"/>
+              <path d="M16 9 C17.5 10.2 17.5 13.8 16 15"/>
+              <path d="M18.5 7 C21 9.2 21 14.8 18.5 17"/>
+            </svg>
+          </div>
+          <p id="replyText" class="dim">我会在这里回应</p>
+        </article>
+
+        <section class="history" id="history" hidden>
+          <h2>对话记录</h2>
+          <div class="log" id="log"></div>
+        </section>
+      </div>
+    </div>
+  </section>
+</div>
+
+<div class="picker" id="picker" hidden>
+  <div class="card">
+    <h2>选择设备</h2>
+    <p class="hint">输入设备 SN，或点一台在线设备。地址会带上 ?device_sn= ，之后可直接打开。</p>
+    <form id="pickerForm">
+      <input id="pickerInput" placeholder="设备 SN" autocomplete="off" spellcheck="false">
+      <button type="submit">进入</button>
+    </form>
+    <div class="dev-list" id="devList"></div>
+    <p class="dev-note" id="devNote">正在查找在线设备…</p>
+  </div>
+</div>
+
+<script src="vendor/ort.min.js"></script>
+<script>
+"use strict";
+const VOICE = "/api/voice/conversations";
+const LIVE = "/api/console/conversations";
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({
+  "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+}[c]));
+
+/* enet_b0_8_best_vgaf 的输出顺序 */
+const USER_EMOTIONS = [
+  { kind: "angry", zh: "生气", en: "Anger" },
+  { kind: "serious", zh: "轻蔑", en: "Contempt" },
+  { kind: "speechless", zh: "厌恶", en: "Disgust" },
+  { kind: "fear", zh: "害怕", en: "Fear" },
+  { kind: "happy", zh: "开心", en: "Happiness" },
+  { kind: "calm", zh: "平静", en: "Neutral" },
+  { kind: "sad", zh: "难过", en: "Sadness" },
+  { kind: "surprised", zh: "惊讶", en: "Surprise" },
+];
+
+function faceSvg(kind) {
+  const eye = (cx) => `<circle cx="${cx}" cy="40" r="3.4" fill="currentColor"/>`;
+  const eyes = eye(34) + eye(66);
+  const stroke = `fill="none" stroke="currentColor" stroke-width="3.6" stroke-linecap="round"`;
+  const faces = {
+    happy: `${eyes}<path d="M30 56 Q50 80 70 56" ${stroke}/>`,
+    love: `<path d="M30 40 C30 33 39 33 39 40 C39 33 48 33 48 40 C48 49 39 54 39 54 C39 54 30 49 30 40 Z" fill="currentColor"/>
+           <path d="M52 40 C52 33 61 33 61 40 C61 33 70 33 70 40 C70 49 61 54 61 54 C61 54 52 49 52 40 Z" fill="currentColor"/>
+           <path d="M32 66 Q50 80 68 66" ${stroke}/>`,
+    sad: `${eyes}<path d="M32 70 Q50 54 68 70" ${stroke}/>`,
+    angry: `<path d="M28 32 L42 38" ${stroke}/><path d="M72 32 L58 38" ${stroke}/>${eyes}<path d="M34 68 Q50 56 66 68" ${stroke}/>`,
+    fear: `<circle cx="34" cy="40" r="5" fill="none" stroke="currentColor" stroke-width="3"/><circle cx="66" cy="40" r="5" fill="none" stroke="currentColor" stroke-width="3"/><circle cx="50" cy="66" r="5" ${stroke}/>`,
+    surprised: `${eyes}<circle cx="50" cy="66" r="7" ${stroke}/>`,
+    confused: `<path d="M28 34 Q36 28 44 36" ${stroke}/><path d="M56 34 H72" ${stroke}/>${eyes}<path d="M34 64 Q44 58 52 66 T70 62" ${stroke}/>`,
+    thinking: `${eyes}<path d="M36 66 H64" ${stroke}/>`,
+    speechless: `${eyes}<path d="M34 64 H66" ${stroke}/>`,
+    serious: `<path d="M28 34 H44" ${stroke}/><path d="M56 34 H72" ${stroke}/>${eyes}<path d="M36 66 H64" ${stroke}/>`,
+    tired: `<path d="M28 40 H42" ${stroke}/><path d="M58 40 H72" ${stroke}/><path d="M34 66 Q50 74 66 66" ${stroke}/>`,
+    calm: `${eyes}<path d="M34 62 Q50 72 66 62" ${stroke}/>`,
+  };
+  return `<svg viewBox="0 0 100 100" aria-hidden="true">${faces[kind] || faces.calm}</svg>`;
+}
+$("emoji").innerHTML = faceSvg("calm");
+
+let shownKey = "";
+function showEmotion(emo) {
+  if (!emo) return;
+  const key = emo.kind + ":" + emo.zh;
+  if (key === shownKey) return;
+  shownKey = key;
+  const icon = $("emoji");
+  icon.innerHTML = faceSvg(emo.kind);
+  icon.classList.remove("pop");
+  void icon.offsetWidth;
+  icon.classList.add("pop");
+  $("emoZh").textContent = emo.zh;
+  $("emoEn").textContent = emo.en;
+}
+
+const params = new URLSearchParams(location.search);
+const deviceSn = (params.get("device_sn") || params.get("sn") || "").trim();
+
+function go(sn) {
+  location.search = "?device_sn=" + encodeURIComponent(sn);
+}
+
+if (!deviceSn) {
+  $("picker").hidden = false;
+  $("pickerForm").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const sn = $("pickerInput").value.trim();
+    if (sn) go(sn);
+  });
+  (async () => {
+    try {
+      const res = await fetch(`${VOICE}/sessions?page_size=100`);
+      const data = await res.json();
+      const seen = new Set();
+      const online = (data.items || []).filter((s) => s.is_online && s.device_sn && !seen.has(s.device_sn) && seen.add(s.device_sn));
+      $("devNote").textContent = online.length ? `在线 ${online.length} 台` : "当前没有在线设备，可手动输入 SN。";
+      $("devList").innerHTML = online.map((s) =>
+        `<button class="dev-item" type="button" data-sn="${esc(s.device_sn)}">
+          <span class="sn">${esc(s.device_sn)}</span>
+          <span class="nm">${esc(s.device_name || "")}</span>
+        </button>`).join("");
+      $("devList").addEventListener("click", (e) => {
+        const item = e.target.closest(".dev-item");
+        if (item) go(item.dataset.sn);
+      });
+    } catch {
+      $("devNote").textContent = "在线设备暂时查不到，可手动输入 SN。";
+    }
+  })();
+} else {
+  $("chipSn").textContent = deviceSn;
+  $("deviceChip").title = deviceSn;
+  $("deviceChip").addEventListener("click", () => { location.search = ""; });
+  document.title = `Emotion Recognition · ${deviceSn}`;
+}
+
+function boot() {
+  startVision();
+  startFaceEmotion();
+  refreshStreamHint();
+  setInterval(refreshStreamHint, 8000);
+  syncSession();
+  setInterval(syncSession, 15000);
+}
+
+/* ── 画面 ── */
+const canvas = $("face");
+const ctx = canvas.getContext("2d");
+let bmp = null;
+let frame = null;
+let lastFrameAt = 0;
+let decoding = false;
+let aim = null;
+let aimUntil = 0;
+let shownName = null;
+let standbyText = "正在连接画面";
+
+function subjectOf(result) {
+  const list = result.tracked_persons || result.persons || [];
+  const people = [];
+  for (const item of list) {
+    const person = item.person || item;
+    const face = person.face_bbox_frame;
+    const body = (person.detection && person.detection.bbox) || person.bbox;
+    let box = null;
+    if (face && face.length === 4) box = face;
+    else if (body && body.length === 4) {
+      const h = body[3] - body[1];
+      box = [body[0], body[1], body[2], body[1] + h * 0.42];
+    }
+    if (!box) continue;
+    const idr = item.identity_result || {};
+    people.push({
+      box,
+      target: !!item.is_current_target,
+      name: idr.display_name || person.display_name || item.display_name || "",
+      area: Math.abs((box[2] - box[0]) * (box[3] - box[1])),
+    });
+  }
+  people.sort((a, b) => (b.target - a.target) || (b.area - a.area));
+  return people[0] || null;
+}
+
+function drawCorner(x, y, hx, hy) {
+  ctx.moveTo(x + hx, y);
+  ctx.lineTo(x, y);
+  ctx.lineTo(x, y + hy);
+}
+
+function draw() {
+  requestAnimationFrame(draw);
+  const rect = canvas.parentElement.getBoundingClientRect();
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const W = Math.max(1, Math.round(rect.width * dpr));
+  const H = Math.max(1, Math.round(rect.height * dpr));
+  if (canvas.width !== W || canvas.height !== H) {
+    canvas.width = W;
+    canvas.height = H;
+  }
+  ctx.fillStyle = "#041018";
+  ctx.fillRect(0, 0, W, H);
+  if (!bmp) return;
+
+  const fw = frame?.frame_w || bmp.width;
+  const fh = frame?.frame_h || bmp.height;
+  const scaleX = bmp.width / fw;
+  const scaleY = bmp.height / fh;
+  const sub = frame ? subjectOf(frame) : null;
+  const now = performance.now();
+  if (sub) {
+    const [x1, y1, x2, y2] = sub.box;
+    const next = {
+      cx: (x1 + x2) / 2,
+      cy: (y1 + y2) / 2,
+      span: Math.max(x2 - x1, y2 - y1) * 2.5,
+      box: sub.box,
+      name: sub.name || "",
+    };
+    if (!aim) aim = next;
+    else {
+      aim.cx += (next.cx - aim.cx) * 0.14;
+      aim.cy += (next.cy - aim.cy) * 0.14;
+      aim.span += (next.span - aim.span) * 0.14;
+      aim.box = next.box;
+      aim.name = next.name;
+    }
+    aimUntil = now + 1400;
+  } else if (aim && now > aimUntil) {
+    aim = null;
+  }
+
+  const aspect = W / H;
+  let srcX, srcY, srcW, srcH;
+  if (aim) {
+    let cropH = Math.max(aim.span, 40);
+    let cropW = cropH * aspect;
+    srcW = cropW * scaleX;
+    srcH = cropH * scaleY;
+    if (srcW > bmp.width) { srcW = bmp.width; srcH = srcW / aspect; }
+    if (srcH > bmp.height) { srcH = bmp.height; srcW = srcH * aspect; }
+    srcX = aim.cx * scaleX - srcW / 2;
+    srcY = aim.cy * scaleY - srcH / 2;
+    srcX = Math.max(0, Math.min(bmp.width - srcW, srcX));
+    srcY = Math.max(0, Math.min(bmp.height - srcH, srcY));
+  } else {
+    srcW = bmp.width;
+    srcH = bmp.width / aspect;
+    if (srcH > bmp.height) { srcH = bmp.height; srcW = srcH * aspect; }
+    srcX = (bmp.width - srcW) / 2;
+    srcY = (bmp.height - srcH) / 2;
+  }
+  ctx.drawImage(bmp, srcX, srcY, srcW, srcH, 0, 0, W, H);
+
+  const name = aim?.name || "";
+  if (name !== shownName) {
+    shownName = name;
+    $("faceName").textContent = name;
+    $("faceName").hidden = !name;
+  }
+
+  if (!aim) return;
+  const toX = (x) => ((x * scaleX - srcX) / srcW) * W;
+  const toY = (y) => ((y * scaleY - srcY) / srcH) * H;
+  const faceSize = aim.span / 2.5;
+  const bx = toX(aim.cx - faceSize / 2);
+  const by = toY(aim.cy - faceSize / 2);
+  const bw = toX(aim.cx + faceSize / 2) - bx;
+  const bh = toY(aim.cy + faceSize / 2) - by;
+  if (bw < 12 || bh < 12) return;
+  const L = Math.min(bw, bh) * 0.22;
+  ctx.beginPath();
+  ctx.strokeStyle = "#bff6ff";
+  ctx.lineWidth = Math.max(2, dpr * 1.7);
+  ctx.shadowColor = "rgba(120, 230, 255, 0.9)";
+  ctx.shadowBlur = 10;
+  drawCorner(bx, by, L, L);
+  drawCorner(bx + bw, by, -L, L);
+  drawCorner(bx, by + bh, L, -L);
+  drawCorner(bx + bw, by + bh, -L, -L);
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+}
+requestAnimationFrame(draw);
+
+setInterval(() => {
+  const on = Date.now() - lastFrameAt < 4000;
+  $("standby").classList.toggle("hidden", on);
+  $("liveDot").classList.toggle("on", on);
+  if (!on) $("standbyText").textContent = standbyText;
+}, 500);
+
+function connectVision() {
+  const proto = location.protocol === "https:" ? "wss" : "ws";
+  const ws = new WebSocket(`${proto}://${location.host}/person_id/ws/vision?camera_id=${encodeURIComponent(deviceSn)}`);
+  ws.binaryType = "arraybuffer";
+  ws.onclose = () => setTimeout(connectVision, 2500);
+  ws.onmessage = (e) => {
+    if (typeof e.data === "string") {
+      try {
+        const msg = JSON.parse(e.data);
+        if (msg.type === "frame_result") frame = msg;
+      } catch { /* 忽略坏帧 */ }
+      return;
+    }
+    if (decoding) return;
+    decoding = true;
+    createImageBitmap(new Blob([e.data], { type: "image/jpeg" }))
+      .then((next) => {
+        if (bmp) bmp.close();
+        bmp = next;
+        lastFrameAt = Date.now();
+      })
+      .catch(() => {})
+      .finally(() => { decoding = false; });
+  };
+}
+function startVision() { connectVision(); }
+
+async function refreshStreamHint() {
+  if (Date.now() - lastFrameAt < 4000) return;
+  try {
+    const status = await fetchJson(`/api/agent/stream/status?device_sn=${encodeURIComponent(deviceSn)}`);
+    if (!status.enabled || !status.reachable) {
+      standbyText = "视觉服务未接通";
+      return;
+    }
+    const running = status.status?.running;
+    const connected = status.status?.connected;
+    standbyText = running
+      ? (connected ? "等待画面" : "正在连接视频流")
+      : "视频流未开启";
+  } catch {
+    standbyText = "视觉服务未接通";
+  }
+}
+
+/* ── 对话 ── */
+let current = null;
+let evtSource = null;
+let saved = [];
+let live = null;
+let syncing = false;
+
+function fmtTime(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d)) return "";
+  return d.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false });
+}
+function isChat(t) { return t.kind !== "noise" && t.kind !== "wake"; }
+function replyOf(t) { return t.reply != null ? t.reply : (t.reply_text || ""); }
+
+function paintDialog() {
+  const featuring = !!live;
+  const featured = featuring ? live : (saved[0] || null);
+  const older = featuring ? saved : saved.slice(1);
+  const query = featured?.query || "";
+  const reply = featured ? replyOf(featured) : "";
+  const name = featured?.speaker_name || "";
+  $("userText").textContent = query || "等待你开口";
+  $("userText").classList.toggle("dim", !query);
+  $("replyText").textContent = reply || "我会在这里回应";
+  $("replyText").classList.toggle("dim", !reply);
+  $("userWho").textContent = name;
+  $("userWho").hidden = !name;
+  $("userWave").classList.toggle("hot", featuring);
+  $("m1").classList.toggle("streaming", featuring && !!reply);
+
+  const history = $("history");
+  history.hidden = older.length === 0;
+  $("dialog").classList.toggle("has-log", older.length > 0);
+  const sig = older.map((t) => `${t.trace_id || t.id}:${replyOf(t).length}`).join("|");
+  if (sig === $("log").dataset.sig) return;
+  $("log").dataset.sig = sig;
+  $("log").innerHTML = older.slice(0, 20).map((t) => {
+    const who = t.speaker_name || "你";
+    return `<article class="h-item">
+      <time>${esc(fmtTime(t.created_at))}</time>
+      <div>
+        <p class="hq"><b>${esc(who)}</b>${esc(t.query || "")}</p>
+        <p class="ha"><b>M1</b>${esc(replyOf(t))}</p>
+      </div>
+      <span></span>
+    </article>`;
+  }).join("");
+}
+
+async function fetchJson(url) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(String(res.status));
+  return res.json();
+}
+
+async function locateSession() {
+  const data = await fetchJson(`${VOICE}/sessions?device_sn=${encodeURIComponent(deviceSn)}&page_size=50`);
+  const items = data.items || [];
+  const exact = items.filter((s) => String(s.device_sn).toLowerCase() === deviceSn.toLowerCase());
+  return exact.find((s) => s.is_online) || exact[0] || null;
+}
+
+async function refreshTurns() {
+  if (!current) return;
+  const data = await fetchJson(`${VOICE}/sessions/${current.id}/turns?page_size=30`);
+  saved = (data.items || []).filter(isChat);
+}
+
+function closeSse() {
+  if (evtSource) { evtSource.close(); evtSource = null; }
+}
+
+function openSse(session) {
+  closeSse();
+  evtSource = new EventSource(`${LIVE}/sessions/${session.id}/stream?device_sn=${encodeURIComponent(session.device_sn)}`);
+  evtSource.onmessage = (e) => {
+    try { onSse(JSON.parse(e.data)); } catch { /* 忽略非 JSON */ }
+  };
+}
+
+function onSse(data) {
+    if (data.event === "query") {
+    live = {
+      trace_id: data.trace_id,
+      query: data.text || "",
+      reply: "",
+      speaker_name: "",
+    };
+    paintDialog();
+    return;
+  }
+  if (!live || (data.trace_id && live.trace_id !== data.trace_id)) return;
+  if (data.event === "reply_chunk" && !live.moderated) {
+    live.reply += data.text || "";
+    paintDialog();
+  } else if (data.event === "moderation") {
+    live.moderated = true;
+    live.reply = data.replacement_text || "";
+    paintDialog();
+  } else if (data.event === "moderation_chunk" && live.moderated) {
+    live.reply += data.text || "";
+    paintDialog();
+  } else if (data.event === "intent") {
+    if (data.speaker_name) live.speaker_name = data.speaker_name;
+    paintDialog();
+  } else if (data.event === "done" || data.event === "error") {
+    const tid = data.trace_id;
+    refreshTurns()
+      .catch(() => {})
+      .finally(() => {
+        if (live && live.trace_id === tid) live = null;
+        paintDialog();
+      });
+  }
+}
+
+async function syncSession() {
+  if (syncing) return;
+  syncing = true;
+  try {
+    const session = await locateSession();
+    if (!session) return;
+    if (session.device_name) $("chipSn").textContent = session.device_name;
+    const changed = !current || current.id !== session.id;
+    const onlineFlip = current && current.is_online !== session.is_online;
+    current = session;
+    if (changed || current.is_online) {
+      try { await refreshTurns(); } catch { /* 历史失败不挡实时流 */ }
+    }
+    paintDialog();
+    if (changed || onlineFlip) {
+      if (session.is_online) openSse(session);
+      else closeSse();
+    }
+  } catch { /* 会话接口不可达时保持当前画面 */ }
+  finally { syncing = false; }
+}
+
+const FACE_SIZE = 224;
+const emotionCanvas = document.createElement("canvas");
+emotionCanvas.width = FACE_SIZE;
+emotionCanvas.height = FACE_SIZE;
+const emotionCtx = emotionCanvas.getContext("2d", { willReadFrequently: true });
+let emotionSession = null;
+let emotionBusy = false;
+let recentEmotions = [];
+let faceSeenAt = 0;
+let modelReady = false;
+let modelFailed = false;
+const IMAGENET_MEAN = [0.485, 0.456, 0.406];
+const IMAGENET_STD = [0.229, 0.224, 0.225];
+
+function assetUrl(file) {
+  const page = new URL(location.href);
+  page.pathname = page.pathname.replace(/\/{2,}/g, "/");
+  if (!page.pathname.endsWith("/")) page.pathname = page.pathname.replace(/[^/]*$/, "");
+  page.search = "";
+  page.hash = "";
+  return new URL(file, page).href;
+}
+
+function currentFaceBox(result) {
+  if (!result) return null;
+  const list = result.tracked_persons || result.persons || [];
+  const faces = [];
+  for (const item of list) {
+    const person = item.person || item;
+    const face = person.face_bbox_frame;
+    if (!face || face.length !== 4) continue;
+    const w = face[2] - face[0];
+    const h = face[3] - face[1];
+    if (w < 8 || h < 8) continue;
+    faces.push({
+      box: face,
+      target: item.is_current_target ? 1 : 0,
+      area: Math.abs(w * h),
+    });
+  }
+  faces.sort((a, b) => b.target - a.target || b.area - a.area);
+  return faces[0] || null;
+}
+
+function faceTensor(bitmap, box, frameW, frameH) {
+  const scaleX = bitmap.width / frameW;
+  const scaleY = bitmap.height / frameH;
+  let [x1, y1, x2, y2] = box;
+  const bw = x2 - x1;
+  const bh = y2 - y1;
+  x1 -= bw * 0.15;
+  y1 -= bh * 0.15;
+  x2 += bw * 0.15;
+  y2 += bh * 0.15;
+  let srcX = x1 * scaleX;
+  let srcY = y1 * scaleY;
+  let srcW = (x2 - x1) * scaleX;
+  let srcH = (y2 - y1) * scaleY;
+  srcX = Math.max(0, srcX);
+  srcY = Math.max(0, srcY);
+  srcW = Math.min(bitmap.width - srcX, srcW);
+  srcH = Math.min(bitmap.height - srcY, srcH);
+  if (srcW < 20 || srcH < 20) return null;
+  emotionCtx.drawImage(bitmap, srcX, srcY, srcW, srcH, 0, 0, FACE_SIZE, FACE_SIZE);
+  const pixels = emotionCtx.getImageData(0, 0, FACE_SIZE, FACE_SIZE).data;
+  const data = new Float32Array(3 * FACE_SIZE * FACE_SIZE);
+  const plane = FACE_SIZE * FACE_SIZE;
+  for (let i = 0, p = 0; i < plane; i++, p += 4) {
+    const r = pixels[p] / 255;
+    const g = pixels[p + 1] / 255;
+    const b = pixels[p + 2] / 255;
+    data[i] = (b - IMAGENET_MEAN[0]) / IMAGENET_STD[0];
+    data[plane + i] = (g - IMAGENET_MEAN[1]) / IMAGENET_STD[1];
+    data[plane * 2 + i] = (r - IMAGENET_MEAN[2]) / IMAGENET_STD[2];
+  }
+  return new ort.Tensor("float32", data, [1, 3, FACE_SIZE, FACE_SIZE]);
+}
+
+function paintIdleEmotion() {
+  if (modelFailed) {
+    showEmotion({ kind: "calm", zh: "未加载", en: "Unavailable" });
+    return;
+  }
+  if (!modelReady) {
+    showEmotion({ kind: "calm", zh: "识别中", en: "Sensing" });
+    return;
+  }
+  if (Date.now() - lastFrameAt >= 4000) {
+    showEmotion({ kind: "calm", zh: "等待画面", en: "No video" });
+    return;
+  }
+  if (Date.now() - faceSeenAt > 1200) {
+    showEmotion({ kind: "calm", zh: "等待人脸", en: "No face" });
+  }
+}
+
+function softmax(values) {
+  let max = -Infinity;
+  for (const value of values) if (value > max) max = value;
+  const exps = values.map((value) => Math.exp(value - max));
+  const sum = exps.reduce((acc, value) => acc + value, 0) || 1;
+  return exps.map((value) => value / sum);
+}
+
+async function detectFaceEmotion() {
+  if (!emotionSession || emotionBusy || !bmp) {
+    if (!emotionBusy) paintIdleEmotion();
+    return;
+  }
+  const face = currentFaceBox(frame);
+  if (!face) {
+    paintIdleEmotion();
+    return;
+  }
+  const input = faceTensor(bmp, face.box, frame?.frame_w || bmp.width, frame?.frame_h || bmp.height);
+  if (!input) {
+    paintIdleEmotion();
+    return;
+  }
+  emotionBusy = true;
+  faceSeenAt = Date.now();
+  try {
+    const output = await emotionSession.run({ input });
+    const scores = softmax(output[emotionSession.outputNames[0]].data);
+    let best = 0;
+    for (let i = 1; i < scores.length && i < USER_EMOTIONS.length; i++) {
+      if (scores[i] > scores[best]) best = i;
+    }
+    recentEmotions.push(best);
+    if (recentEmotions.length > 3) recentEmotions.shift();
+    const votes = new Map();
+    for (const id of recentEmotions) votes.set(id, (votes.get(id) || 0) + 1);
+    let chosen = best;
+    let count = 0;
+    for (const [id, n] of votes) {
+      if (n > count) { chosen = id; count = n; }
+    }
+    if (count >= 2) showEmotion(USER_EMOTIONS[chosen]);
+  } catch (err) {
+    console.warn("表情识别失败", err);
+  } finally {
+    emotionBusy = false;
+  }
+}
+
+async function startFaceEmotion() {
+  if (!window.ort) {
+    modelFailed = true;
+    paintIdleEmotion();
+    return;
+  }
+  try {
+    ort.env.wasm.numThreads = 1;
+    ort.env.wasm.wasmPaths = assetUrl("vendor/");
+    emotionSession = await ort.InferenceSession.create(assetUrl("vendor/enet_b0_8_best_vgaf.onnx"), {
+      executionProviders: ["wasm"],
+    });
+    modelReady = true;
+    setInterval(detectFaceEmotion, 300);
+  } catch (err) {
+    console.warn("表情模型加载失败", err);
+    modelFailed = true;
+    paintIdleEmotion();
+  }
+}
+
+if (deviceSn) boot();
+</script>
+</body>
+</html>
