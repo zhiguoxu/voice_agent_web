@@ -308,9 +308,14 @@ export interface Turn {
   t_asr_done: number | null;
   /** query 已确定、可以交给模型；语义断句路径上晚于 t_asr_done */
   t_query_ready: number | null;
+  /** 收割说话人向量：VAD 判停时已开始，这里是 query 确定后还要等的时间 */
+  t_voice_embed_start: number | null;
+  t_voice_embed_done: number | null;
   /** 从 Redis 读取设备当前画面 */
   t_image_fetch_start: number | null;
   t_image_fetch_done: number | null;
+  /** 开始把本轮请求发给 agent；条的终点是 t_agent_start */
+  t_agent_dispatch_start: number | null;
   t_agent_start: number | null;
   t_history_done: number | null;
   t_identity_done: number | null;

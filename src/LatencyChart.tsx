@@ -4,7 +4,8 @@ import type { Turn } from './api';
 // 阶段的稳定 key 及其时序顺序: buildPhases 对任意 Turn 产出的阶段列表都是
 // 该序列的子序列, 复现图与原轮次图按 key 合并即可逐行对齐
 const PHASE_KEY_ORDER = [
-  'asr', 'query_ready', 'image_fetch', 'history', 'identity', 'vision_gate', 'names', 'memory',
+  'asr', 'query_ready', 'voice_embed', 'image_fetch', 'agent_dispatch',
+  'history', 'identity', 'vision_gate', 'names', 'memory',
   'build_request', 'intent', 'subagent', 'emote_action',
   'llm_tool', 'tool_execute', 'llm_first', 'first_token', 'tts', 'tts_send',
 ] as const;
@@ -35,8 +36,12 @@ function buildPhases(turn: Turn): Phase[] {
   };
   // ASR 出文本 → query 确定。语义断句路径上这段是端点判断与续说等待，不计入 ASR
   pushIfVisible('query_ready', "Query就绪", turn.t_asr_done, turn.t_query_ready, "var(--orange)");
+  // 向量在 VAD 判停时已抢跑，这里只画 query 确定后还要等的尾巴
+  pushIfVisible('voice_embed', "声纹提取", turn.t_voice_embed_start, turn.t_voice_embed_done, "var(--purple)");
   // Query 确定之后、请求 agent 之前：从 Redis 取设备当前画面
   pushIfVisible('image_fetch', "Redis读图", turn.t_image_fetch_start, turn.t_image_fetch_done, "var(--accent)");
+  // 请求体带到 agent 开工：含画面上传与对端解析，止于 t_agent_start
+  pushIfVisible('agent_dispatch', "请求Agent", turn.t_agent_dispatch_start, turn.t_agent_start, "var(--red)");
   // 上下文准备阶段（chat 入口 → chat_stateless 入口）：历史查询与身份识别并发，
   // 之后依次是名字查询、记忆召回。
   pushIfVisible('history', "历史查询", turn.t_agent_start, turn.t_history_done, "var(--blue)");
@@ -115,7 +120,7 @@ export function LatencyChart({ turn, baseline }: { turn: Turn; baseline?: Turn }
   const t0 = turn.t_vad_end || turn.t_asr_done || turn.t_agent_start;
   if (!t0) return null;
 
-  // tEnd 仅包含甘特条实际终点，不含 t_agent_done/t_agent_start 等非条形终点
+  // tEnd 只取甘特条的终点。t_agent_start 是「请求Agent」的终点
   const tEnd = Math.max(
     turn.t_tts_first_audio || 0,
     turn.t_tts_first_send || 0,
@@ -128,7 +133,9 @@ export function LatencyChart({ turn, baseline }: { turn: Turn; baseline?: Turn }
     turn.t_intent_done || 0,
     turn.t_asr_done || 0,
     turn.t_query_ready || 0,
+    turn.t_voice_embed_done || 0,
     turn.t_image_fetch_done || 0,
+    turn.t_agent_start || 0,
     turn.t_stateless_start || 0,
     turn.t_memory_done || 0,
     turn.t_names_done || 0,
