@@ -308,6 +308,9 @@ export interface Turn {
   t_asr_done: number | null;
   /** query 已确定、可以交给模型；语义断句路径上晚于 t_asr_done */
   t_query_ready: number | null;
+  /** 从 Redis 读取设备当前画面 */
+  t_image_fetch_start: number | null;
+  t_image_fetch_done: number | null;
   t_agent_start: number | null;
   t_history_done: number | null;
   t_identity_done: number | null;

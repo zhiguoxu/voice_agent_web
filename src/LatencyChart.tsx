@@ -4,7 +4,7 @@ import type { Turn } from './api';
 // 阶段的稳定 key 及其时序顺序: buildPhases 对任意 Turn 产出的阶段列表都是
 // 该序列的子序列, 复现图与原轮次图按 key 合并即可逐行对齐
 const PHASE_KEY_ORDER = [
-  'asr', 'query_ready', 'history', 'identity', 'vision_gate', 'names', 'memory',
+  'asr', 'query_ready', 'image_fetch', 'history', 'identity', 'vision_gate', 'names', 'memory',
   'build_request', 'intent', 'subagent', 'emote_action',
   'llm_tool', 'tool_execute', 'llm_first', 'first_token', 'tts', 'tts_send',
 ] as const;
@@ -35,6 +35,8 @@ function buildPhases(turn: Turn): Phase[] {
   };
   // ASR 出文本 → query 确定。语义断句路径上这段是端点判断与续说等待，不计入 ASR
   pushIfVisible('query_ready', "Query就绪", turn.t_asr_done, turn.t_query_ready, "var(--orange)");
+  // Query 确定之后、请求 agent 之前：从 Redis 取设备当前画面
+  pushIfVisible('image_fetch', "Redis读图", turn.t_image_fetch_start, turn.t_image_fetch_done, "var(--accent)");
   // 上下文准备阶段（chat 入口 → chat_stateless 入口）：历史查询与身份识别并发，
   // 之后依次是名字查询、记忆召回。
   pushIfVisible('history', "历史查询", turn.t_agent_start, turn.t_history_done, "var(--blue)");
@@ -126,6 +128,7 @@ export function LatencyChart({ turn, baseline }: { turn: Turn; baseline?: Turn }
     turn.t_intent_done || 0,
     turn.t_asr_done || 0,
     turn.t_query_ready || 0,
+    turn.t_image_fetch_done || 0,
     turn.t_stateless_start || 0,
     turn.t_memory_done || 0,
     turn.t_names_done || 0,
