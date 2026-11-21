@@ -42,11 +42,10 @@ function buildPhases(turn: Turn): Phase[] {
   pushIfVisible('image_fetch', "Redis读图", turn.t_image_fetch_start, turn.t_image_fetch_done, "var(--accent)");
   // 请求体带到 agent 开工：含画面上传与对端解析，止于 t_agent_start
   pushIfVisible('agent_dispatch', "请求Agent", turn.t_agent_dispatch_start, turn.t_agent_start, "var(--red)");
-  // 上下文准备阶段（chat 入口 → chat_stateless 入口）：历史查询与身份识别并发，
-  // 之后依次是名字查询、记忆召回。
+  // 上下文准备：历史、身份、视觉门控并发，名字查询等这三条都结束后才发出。
   pushIfVisible('history', "历史查询", turn.t_agent_start, turn.t_history_done, "var(--blue)");
   pushIfVisible('identity', "身份识别", turn.t_agent_start, turn.t_identity_done, "var(--purple)");
-  // 视觉门控：与历史/身份并发的第三条腿（仅带图轮才有）；决策快照见详情面板
+  // 视觉门控：与历史/身份并发（仅带图轮才有）；决策快照见详情面板
   if (turn.t_vision_gate_start && turn.t_vision_gate_done
       && turn.t_vision_gate_done - turn.t_vision_gate_start > 0.001) {
     const g = turn.vision_gate;
@@ -59,7 +58,12 @@ function buildPhases(turn: Turn): Phase[] {
     phases.push({ key: 'vision_gate', label: "视觉门控", start: turn.t_vision_gate_start,
                   end: turn.t_vision_gate_done, color: "var(--cyan)", tooltip: tip });
   }
-  const ctxGatherDone = Math.max(turn.t_history_done || 0, turn.t_identity_done || 0) || null;
+  // 名字查询的起点取这三条的最晚完成时刻。缺的腿（无图轮没有门控打点）不参与。
+  const ctxGatherDone = Math.max(
+    turn.t_history_done || 0,
+    turn.t_identity_done || 0,
+    turn.t_vision_gate_done || 0,
+  ) || null;
   pushIfVisible('names', "名字查询", ctxGatherDone, turn.t_names_done, "var(--cyan)");
   pushIfVisible('memory', "记忆召回", turn.t_names_done, turn.t_memory_done, "var(--green)");
   // 请求构造起点: 常规轮是记忆召回完成; 复现轮(无状态, 没有上下文准备打点)
